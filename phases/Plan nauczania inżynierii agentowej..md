@@ -26,4 +26,51 @@ Sprawdziłem — sklonowałem repo i przejrzałem każdą lekcję. Dwie ważne w
 
 Pominięcia bez zmian: fazy 1-10 i 12 nadal zbędne dla tej ścieżki, Phase 16 (multi-agent, 25 lekcji) na miesiąc 4+.
 
+Przeanalizowałem łańcuch zależności — każda lekcja w repo deklaruje swoje `Prerequisites`, więc dało się to prześledzić twardo, nie na wyczucie. Łańcuch wygląda tak:
+
+**Phase 10 ← Phase 7 (Transformers) ← Phase 3 (Deep Learning) + Phase 5 (NLP) ← Phase 1 (Matematyka)**
+
+Lekcja `10/04` (Pre-Training Mini GPT) to serce fazy — budujesz GPT-2 124M **w czystym NumPy**, ręcznie licząc każdy gradient. To ustawia poprzeczkę: musisz rozumieć backpropagację i architekturę transformera od środka, nie z diagramów.
+
+## Minimalna ścieżka przygotowawcza
+
+**Phase 1 — Matematyka (8 z 22 lekcji):**
+- `01` + `02` — algebra liniowa, operacje na macierzach
+- `04` — pochodne i gradienty
+- `05` — chain rule i autodiff ← bez tego backprop będzie magią
+- `06` — prawdopodobieństwo i rozkłady
+- `08` — gradient descent
+- `09` — teoria informacji (entropia, cross-entropy ← to jest loss LLM-ów!)
+- `13` — stabilność numeryczna (softmax overflow itp.)
+
+**Phase 3 — Deep Learning Core (lekcje 01-09 + 11):**
+Kurs sam mówi: kolejno `01` perceptron → `02` sieci wielowarstwowe → `03` **backpropagacja** → `04` aktywacje → `05` funkcje straty → `06` optymalizatory (Adam/AdamW — tym trenuje się LLM-y) → `07` regularyzacja → `08` inicjalizacja wag → `09` learning rate schedules i warmup (krytyczne przy pre-trainingu). Plus `11` intro do PyTorch — potrzebne od lekcji `10/05` (distributed training). Lekcję `10` (mini framework) możesz pominąć, choć to dobre utrwalenie.
+
+**Phase 5 — NLP (tylko 4 z 29 lekcji):**
+- `01` — przetwarzanie tekstu i tokenizacja ← jawny prereq `10/01`
+- `03` — Word2Vec (intuicja embeddingów)
+- `09` — seq2seq ← prereq Phase 7
+- `10` — mechanizm atencji ← prereq Phase 7
+
+**Phase 7 — Transformers (10 z 16 lekcji):**
+`01` dlaczego transformery → `02` **self-attention from scratch** → `03` multi-head → `04` positional encoding (RoPE!) → `05` pełny transformer → `06` BERT → `07` **GPT (causal LM)** ← bezpośrednia podstawa `10/04` → `08` T5/BART → `12` KV cache i Flash Attention ← prereq `10/12` → `13` scaling laws. Na koniec `14` capstone "zbuduj transformer" — kurs ostrzega przy nim wprost: nie przeskakuj wcześniejszych. Pomijasz: `09` (ViT), `10` (audio), `15-16` (warianty atencji — potrzebne dopiero do zaawansowanych lekcji 10/16-22).
+
+## Wewnątrz Phase 10 — kolejność z deklarowanych zależności
+
+Rdzeń liniowy: `01 → 02 → 03 → 04 → 05 → 06 → 07 → 08 → 09 → 10 → 11 → 12 → 13` (lekcja 13 wymaga wprost wszystkich 01-12).
+
+Zaawansowane `14-22` (DeepSeek-V3, sparse attention, DualPipe, Jamba) traktuj jako opcjonalny "miesiąc badawczy" — np. `20-deepseek-v3-walkthrough` wymaga aż czterech wcześniejszych lekcji z tej fazy (14, 17, 18, 19).
+
+## Bilans
+
+Razem: **~32 lekcje przygotowania + 13 lekcji rdzenia Phase 10** ≈ 45 lekcji. Przy deklarowanych 60-120 min/lekcję to realnie **2,5-3 miesiące** przy 8-10 h tygodniowo — czyli drugi, osobny projekt o skali Twojego planu agentowego.
+
+Szczera uwaga: do bycia ekspertem od **agentów** Phase 10 nie jest konieczna — to ścieżka "rozumiem model od środka" (badacz/inżynier ML), komplementarna, ale niezależna. Ma jednak realną wartość: po `10/04` przestaniesz traktować LLM jak czarną skrzynkę, a `10/11-12` (kwantyzacja, optymalizacja inferencji) przydają się, gdy agent ma działać na lokalnym modelu. Sensowna kolejność życiowa: najpierw ścieżka agentowa (3 mies.), potem Phase 10 jako pogłębienie.
+
+Chcesz, żebym z tych 45 lekcji ułożył tygodniowy harmonogram jak poprzednio?
+
+
+
+
+
 Jedna praktyczna uwaga: notebooki są puste (same `.gitkeep`) — nauka idzie przez `code/main.py` + `docs/en.md`, co przy Twoim stylu pracy w terminalu jest raczej zaletą niż wadą.
