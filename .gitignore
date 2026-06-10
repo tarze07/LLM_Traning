@@ -1,0 +1,19 @@
+# Editor/tool state
+phases/.obsidian/
+phases/.claude/
+phases/.antigravitycli/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Secrets
+.env
+*.key
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
