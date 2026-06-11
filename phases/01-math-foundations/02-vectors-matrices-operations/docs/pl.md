@@ -2,17 +2,17 @@
 
 > Każda sieć neuronowa to po prostu mnożenie macierzy z dodatkowymi krokami.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python, Julia
-**Wymagania wstępne:** Faza 1, Lekcja 01 (Intuicja algebry liniowej)
+**Wymagania wstępne:** Faza 1, Lekcja 01 (Intuicja liniowej algebry)
 **Czas:** ~60 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zbuduj klasę Matrix z operacjami na elementach, mnożeniem macierzy, transpozycją, wyznacznikiem i odwrotnością
-- Odróżnij mnożenie elementarne od mnożenia macierzy i wyjaśnij, kiedy każde z nich ma zastosowanie
-- Zaimplementuj pojedynczą gęstą warstwę sieci neuronowej (`relu(W @ x + b)`) używając wyłącznie od podstaw klasy Matrix
-- Wyjaśnij zasady rozgłaszania i działanie dodawania odchyleń w strukturach sieci neuronowych
+- Zbudować klasę Matrix z operacjami element po elemencie, mnożeniem macierzy, transpozycją, wyznacznikiem i odwrotnością
+- Odróżnić mnożenie element po elemencie od mnożenia macierzowego i wyjaśnić, kiedy stosuje się każde z nich
+- Zaimplementować pojedynczą gęstą warstwę sieci neuronowej (`relu(W @ x + b)`) używając wyłącznie zbudowanej od podstaw klasy Matrix
+- Wyjaśnić zasady broadcastingu i sposób, w jaki działa dodawanie biasu w frameworkach sieci neuronowych
 
 ## Problem
 
@@ -22,73 +22,73 @@ Chcesz zbudować sieć neuronową. Czytasz kod i widzisz to:
 output = activation(weights @ input + bias)
 ```
 
-To `@` to mnożenie macierzy. `weights` to macierz. `input` jest wektorem. Jeśli nie wiesz, co robią te operacje, ta linia jest magiczna. Jeśli wiesz, jest to całe przejście warstwy w przód w trzech operacjach.
+To `@` to mnożenie macierzy. `weights` to macierz. `input` to wektor. Jeśli nie wiesz, co robią te operacje, ta linijka jest magią. Jeśli wiesz, to cały przebieg w przód (forward pass) warstwy zamknięty w trzech operacjach.
 
-Każdy obraz przetwarzany przez model jest macierzą wartości pikseli. Każde osadzenie słowa jest wektorem. Każda warstwa każdej sieci neuronowej jest transformacją macierzy. Nie da się zbudować systemów AI bez biegłości w operacjach na macierzach, tak samo jak nie można pisać kodu bez zrozumienia zmiennych.
+Każdy obraz przetwarzany przez Twój model to macierz wartości pikseli. Każdy embedding słowa to wektor. Każda warstwa każdej sieci neuronowej to transformacja macierzowa. Nie da się budować systemów AI bez biegłości w operacjach macierzowych - tak samo jak nie da się pisać kodu bez rozumienia zmiennych.
 
-Ta lekcja buduje tę płynność od zera.
+Ta lekcja buduje tę biegłość od podstaw.
 
 ## Koncepcja
 
 ### Wektory: uporządkowane listy liczb
 
-Wektor to lista liczb z kierunkiem i wielkością. W sztucznej inteligencji wektory reprezentują punkty danych, cechy lub parametry.
+Wektor to lista liczb mająca kierunek i wielkość (długość). W AI wektory reprezentują punkty danych, cechy (features) lub parametry.
 
 ```
-v = [3, 4]        -- a 2D vector
-w = [1, 0, -2]    -- a 3D vector
+v = [3, 4]        -- wektor 2D
+w = [1, 0, -2]    -- wektor 3D
 ```
 
 Wektor 2D `[3, 4]` wskazuje na współrzędne (3, 4) na płaszczyźnie. Jego długość (wielkość) wynosi 5 (trójkąt 3-4-5).
 
 ### Macierze: siatki liczb
 
-Macierz to siatka 2D. Wiersze i kolumny. Macierz m x n ma m wierszy i n kolumn.
+Macierz to dwuwymiarowa siatka. Wiersze i kolumny. Macierz m x n ma m wierszy i n kolumn.
 
 ```
-A = | 1  2  3 |     -- 2x3 matrix (2 rows, 3 columns)
+A = | 1  2  3 |     -- macierz 2x3 (2 wiersze, 3 kolumny)
     | 4  5  6 |
 ```
 
-W sieciach neuronowych macierze wag przekształcają wektory wejściowe w wektory wyjściowe. Warstwa z 784 wejściami i 128 wyjściami wykorzystuje macierz wag 128x784.
+W sieciach neuronowych macierze wag transformują wektory wejściowe na wektory wyjściowe. Warstwa z 784 wejściami i 128 wyjściami używa macierzy wag 128x784.
 
 ### Dlaczego kształty mają znaczenie
 
-Mnożenie macierzy podlega ścisłej zasadzie: `(m x n) @ (n x p) = (m x p)`. Wymiary wewnętrzne muszą się zgadzać.
+Mnożenie macierzy ma ścisłą zasadę: `(m x n) @ (n x p) = (m x p)`. Wewnętrzne wymiary muszą się zgadzać.
 
 ```
 (128 x 784) @ (784 x 1) = (128 x 1)
   weights       input       output
 
-Inner dimensions: 784 = 784  -- valid
+Wymiary wewnętrzne: 784 = 784  -- poprawne
 ```
 
-Jeśli w PyTorch pojawi się błąd niedopasowania kształtu, oto dlaczego.
+Jeśli kiedykolwiek dostaniesz błąd niezgodności kształtów (shape mismatch) w PyTorchu, to właśnie dlatego.
 
 ### Mapa operacji
 
-| Operacja | Co to robi | Wykorzystanie sieci neuronowej |
-|----------|------------|--------------------------------|
-| Dodatek | Łącz elementarnie | Dodawanie odchylenia do wyjścia |
-| Skalarne mnożenie | Skaluj każdy element | Szybkość uczenia się * gradienty |
-| Pomnóż macierz | Przekształć wektory | Warstwowe podanie do przodu |
-| Transpozycja | Odwróć wiersze i kolumny | Propagacja wsteczna |
-| Wyznacznik | Podsumowanie pojedynczej liczby | Sprawdzanie odwracalności |
-| Odwrotność | Cofnij transformację | Rozwiązywanie układów liniowych |
-| Tożsamość | Macierz nic nie robienia | Inicjalizacja, pozostałe połączenia |
+| Operacja | Co robi | Zastosowanie w sieciach neuronowych |
+|-----------|-------------|-------------------|
+| Dodawanie | Łączenie element po elemencie | Dodawanie biasu do wyjścia |
+| Mnożenie przez skalar | Skalowanie każdego elementu | Learning rate * gradienty |
+| Mnożenie macierzy | Transformacja wektorów | Forward pass warstwy |
+| Transpozycja | Zamiana wierszy i kolumn miejscami | Backpropagation |
+| Wyznacznik | Pojedyncza liczba podsumowująca | Sprawdzanie odwracalności |
+| Odwrotność | Cofnięcie transformacji | Rozwiązywanie układów liniowych |
+| Macierz jednostkowa | Macierz "nic nie robiąca" | Inicjalizacja, połączenia rezydualne |
 
-### Mnożenie według elementów a mnożenie macierzy
+### Mnożenie element po elemencie a mnożenie macierzowe
 
-To rozróżnienie nieustannie spotyka początkujących.
+To rozróżnienie ciągle myli początkujących.
 
-Elementowo: pomnóż pasujące pozycje. Obie macierze muszą mieć ten sam kształt.
+Element po elemencie: mnożenie odpowiadających sobie pozycji. Obie macierze muszą mieć ten sam kształt.
 
 ```
 | 1  2 |   | 5  6 |   | 5  12 |
 | 3  4 | * | 7  8 | = | 21 32 |
 ```
 
-Mnożenie macierzy: iloczyny skalarne wierszy i kolumn. Wymiary wewnętrzne muszą się zgadzać.
+Mnożenie macierzowe: iloczyny skalarne wierszy i kolumn. Wewnętrzne wymiary muszą się zgadzać.
 
 ```
 | 1  2 |   | 5  6 |   | 1*5+2*7  1*6+2*8 |   | 19  22 |
@@ -97,25 +97,25 @@ Mnożenie macierzy: iloczyny skalarne wierszy i kolumn. Wymiary wewnętrzne musz
 
 Różne operacje, różne wyniki, różne zasady.
 
-### Nadawanie
+### Broadcasting
 
-Po dodaniu wektora odchylenia do macierzy wyników kształty nie pasują. Nadawanie rozciąga mniejszą tablicę w celu dopasowania.
+Gdy dodajesz wektor biasu do macierzy wyjść, kształty się nie zgadzają. Broadcasting rozciąga mniejszą tablicę, aby do siebie pasowały.
 
 ```
 | 1  2  3 |   +   [10, 20, 30]
 | 4  5  6 |
 
-Broadcasting stretches the vector across rows:
+Broadcasting rozciąga wektor na wszystkie wiersze:
 
 | 1  2  3 |   | 10  20  30 |   | 11  22  33 |
 | 4  5  6 | + | 10  20  30 | = | 14  25  36 |
 ```
 
-Każdy nowoczesny framework robi to automatycznie. Zrozumienie tego zapobiega nieporozumieniom, gdy kształty wydają się nieprawidłowe, ale kod działa.
+Każdy nowoczesny framework robi to automatycznie. Zrozumienie tego mechanizmu zapobiega zamieszaniu, gdy kształty wydają się nie pasować, a kod mimo to działa.
 
 ## Zbuduj to
 
-### Krok 1: Klasa wektorowa
+### Krok 1: Klasa Vector
 
 ```python
 class Vector:
@@ -142,7 +142,7 @@ class Vector:
         return sum(x ** 2 for x in self.data) ** 0.5
 ```
 
-### Krok 2: Klasa macierzowa z podstawowymi operacjami
+### Krok 2: Klasa Matrix z podstawowymi operacjami
 
 ```python
 class Matrix:
@@ -226,7 +226,7 @@ class Matrix:
         ])
 ```
 
-### Krok 3: Zobacz, jak to działa
+### Krok 3: Zobacz to w działaniu
 
 ```python
 A = Matrix([[1, 2], [3, 4]])
@@ -242,7 +242,7 @@ I = Matrix.identity(2)
 print("A @ A^-1 =", A.matmul(A.inverse_2x2()).data)
 ```
 
-### Krok 4: Połącz się z sieciami neuronowymi
+### Krok 4: Połącz to z sieciami neuronowymi
 
 ```python
 import random
@@ -266,11 +266,11 @@ print(f"Output shape: {output.shape}")
 print(f"Output: {output.data}")
 ```
 
-To jest pojedyncza gęsta warstwa: `output = relu(W @ x + b)`. Każda gęsta warstwa w każdej sieci neuronowej robi dokładnie to.
+To pojedyncza warstwa gęsta (dense layer): `output = relu(W @ x + b)`. Każda warstwa gęsta w każdej sieci neuronowej robi dokładnie to.
 
-## Użyj tego
+## Zastosuj to
 
-NumPy robi wszystko powyżej w mniejszej liczbie linii i o rzędy wielkości szybciej.
+NumPy robi wszystko powyższe w mniejszej liczbie linii i o rzędy wielkości szybciej.
 
 ```python
 import numpy as np
@@ -295,9 +295,9 @@ print(f"\nNeural network layer: {weights.shape} @ {inputs.shape} = {output.shape
 print(f"Output:\n{output}")
 ```
 
-Operator `@` w Pythonie wywołuje `__matmul__`. NumPy implementuje to za pomocą zoptymalizowanych procedur BLAS napisanych w C i Fortran. Ta sama matematyka, 100 razy szybciej.
+Operator `@` w Pythonie wywołuje `__matmul__`. NumPy implementuje go za pomocą zoptymalizowanych procedur BLAS napisanych w C i Fortranie. Ta sama matematyka, 100x szybciej.
 
-Nadawanie w NumPy:
+Broadcasting w NumPy:
 
 ```python
 matrix = np.array([[1, 2, 3], [4, 5, 6]])
@@ -305,38 +305,38 @@ bias = np.array([10, 20, 30])
 print(matrix + bias)
 ```
 
-NumPy automatycznie rozgłasza odchylenie 1D w obu wierszach. Tak działa dodawanie odchylenia w każdej strukturze sieci neuronowej.
+NumPy automatycznie rozciąga jednowymiarowy bias na oba wiersze. W ten sposób działa dodawanie biasu w każdym frameworku sieci neuronowych.
 
-## Wyślij to
+## Wykorzystaj to
 
-Lekcja ta stanowi zachętę do nauczania operacji na macierzach poprzez intuicję geometryczną. Zobacz `outputs/prompt-matrix-operations.md`.
+Ta lekcja tworzy prompt do nauczania operacji macierzowych poprzez intuicję geometryczną. Zobacz `outputs/prompt-matrix-operations.md`.
 
-Zbudowana tutaj klasa Matrix jest podstawą struktury mini sieci neuronowej, którą budujemy w fazie 3, lekcji 10.
+Klasa Matrix zbudowana tutaj jest fundamentem dla mini frameworka sieci neuronowych, który zbudujemy w Fazie 3, Lekcji 10.
 
 ## Ćwiczenia
 
-1. **Sprawdź odwrotność.** Pomnóż `A @ A.inverse_2x2()` i potwierdź, że otrzymałeś macierz tożsamości. Wypróbuj z trzema różnymi macierzami 2x2. Co się stanie, gdy wyznacznik wynosi zero?
+1. **Zweryfikuj odwrotność.** Pomnóż `A @ A.inverse_2x2()` i potwierdź, że otrzymasz macierz jednostkową. Spróbuj z trzema różnymi macierzami 2x2. Co się dzieje, gdy wyznacznik wynosi zero?
 
-2. **Zaimplementuj odwrotność 3x3.** Rozszerz klasę Matrix, aby obliczać odwrotności dla macierzy 3x3 przy użyciu metody sprzężonej. Przetestuj to w porównaniu z `np.linalg.inv` NumPy.
+2. **Zaimplementuj odwrotność 3x3.** Rozszerz klasę Matrix o obliczanie odwrotności dla macierzy 3x3 metodą macierzy dołączonej (adjugate). Przetestuj wyniki względem `np.linalg.inv` z NumPy.
 
-3. **Zbuduj sieć dwuwarstwową.** Używając tylko klasy Matrix (bez NumPy), utwórz dwuwarstwową sieć neuronową: wejście (3) -> ukryta (4) -> wyjście (2). Zainicjuj losowe ciężarki, wykonaj przejście do przodu i sprawdź, czy wszystkie kształty są prawidłowe.
+3. **Zbuduj dwuwarstwową sieć.** Używając wyłącznie swojej klasy Matrix (bez NumPy), stwórz dwuwarstwową sieć neuronową: wejście (3) -> warstwa ukryta (4) -> wyjście (2). Zainicjalizuj losowe wagi, wykonaj forward pass i zweryfikuj, że wszystkie kształty są poprawne.
 
-## Kluczowe terminy
+## Kluczowe pojęcia
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Pojęcie | Co się mówi | Co to naprawdę oznacza |
 |------|----------------|----------------------|
-| wektor | „Strzałka” | Uporządkowana lista liczb. W AI: punkt w przestrzeni wielowymiarowej. |
-| Matryca | „Tabela liczb” | Transformacja liniowa. Odwzorowuje wektory z jednej przestrzeni do drugiej. |
-| Pomnóż macierz | „Po prostu pomnóż liczby” | Iloczyny kropkowe pomiędzy każdym wierszem pierwszej macierzy i każdą kolumną drugiej. Porządek ma znaczenie. |
-| Transpozycja | „Odwróć to” | Zamień wiersze i kolumny. Zamienia macierz m x n w n x m. Krytyczny w przypadku propagacji wstecznej. |
-| Wyznacznik | „Jakaś liczba z macierzy” | Mierzy, w jakim stopniu matryca skaluje obszar (2D) lub objętość (3D). Zero oznacza, że ​​transformacja miażdży wymiar. |
-| Odwrotność | „Cofnij matrycę” | Macierz odwracająca transformację. Istnieje tylko wtedy, gdy wyznacznik nie jest zerem. |
-| Macierz tożsamości | „Nudna matryca” | Macierzowy odpowiednik mnożenia przez 1. Stosowany w połączeniach resztkowych (ResNets). |
-| Nadawanie | „Magiczne ustalanie kształtu” | Rozciąganie mniejszej tablicy, aby dopasować ją do większej, powtarzając wzdłuż brakujących wymiarów. |
-| Elementarnie | „Zwykłe mnożenie” | Pomnóż pasujące pozycje. Obie tablice muszą mieć ten sam kształt (lub umożliwiać rozgłaszanie). |
+| Wektor | "Strzałka" | Uporządkowana lista liczb. W AI: punkt w przestrzeni wielowymiarowej. |
+| Macierz | "Tabela liczb" | Transformacja liniowa. Mapuje wektory z jednej przestrzeni do drugiej. |
+| Mnożenie macierzy | "Po prostu mnożysz liczby" | Iloczyny skalarne między każdym wierszem pierwszej macierzy a każdą kolumną drugiej. Kolejność ma znaczenie. |
+| Transpozycja | "Odwróć ją" | Zamiana wierszy i kolumn miejscami. Zmienia macierz m x n w n x m. Kluczowe w backpropagation. |
+| Wyznacznik | "Jakaś liczba z macierzy" | Mierzy, jak bardzo macierz skaluje pole powierzchni (2D) lub objętość (3D). Zero oznacza, że transformacja zgniata jeden z wymiarów. |
+| Odwrotność | "Cofnij macierz" | Macierz, która odwraca transformację. Istnieje tylko wtedy, gdy wyznacznik jest różny od zera. |
+| Macierz jednostkowa | "Nudna macierz" | Macierzowy odpowiednik mnożenia przez 1. Używana w połączeniach rezydualnych (ResNet). |
+| Broadcasting | "Magiczne dopasowywanie kształtów" | Rozciąganie mniejszej tablicy, aby pasowała do większej, poprzez powtarzanie wzdłuż brakujących wymiarów. |
+| Element po elemencie | "Zwykłe mnożenie" | Mnożenie odpowiadających sobie pozycji. Obie tablice muszą mieć ten sam kształt (lub być zgodne dla broadcastingu). |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-- [3Blue1Brown: Istota algebry liniowej](https://www.3blue1brown.com/topics/linear-algebra) – intuicja wizualna dla każdej opisanej tutaj operacji
-- [Dokumentacja NumPy dotycząca nadawania](https://numpy.org/doc/stable/user/basics.broadcasting.html) - dokładne zasady, których przestrzega NumPy
-- [Stanford CS229 Linear Algebra Review](http://cs229.stanford.edu/section/cs229-linalg.pdf) - zwięzłe odniesienie do algebry liniowej specyficznej dla ML
+- [3Blue1Brown: Essence of Linear Algebra](https://www.3blue1brown.com/topics/linear-algebra) - wizualna intuicja dla każdej omówionej tu operacji
+- [NumPy documentation on broadcasting](https://numpy.org/doc/stable/user/basics.broadcasting.html) - dokładne zasady, którymi kieruje się NumPy
+- [Stanford CS229 Linear Algebra Review](http://cs229.stanford.edu/section/cs229-linalg.pdf) - zwięzłe odniesienie do algebry liniowej dla ML
