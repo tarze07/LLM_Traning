@@ -1,76 +1,76 @@
 # Docker dla AI
 
-> Kontenery sprawiają, że „praca na mojej maszynie” należy już do przeszłości.
+> Kontenery sprawiają, że problem „u mnie działa” odchodzi do przeszłości.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Docker
 **Wymagania wstępne:** Faza 0, lekcje 01 i 03
 **Czas:** ~60 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zbuduj obraz Dockera z obsługą GPU za pomocą bibliotek CUDA, PyTorch i AI z pliku Dockerfile
-- Montuj katalogi hostów jako woluminy, aby utrwalać modele, zestawy danych i kod podczas przebudowy kontenerów
-- Skonfiguruj zestaw narzędzi NVIDIA Container Toolkit, aby odsłonić procesory graficzne wewnątrz kontenerów
-- Organizuj wielousługowe aplikacje AI (serwer wnioskowania + baza danych wektorowych) za pomocą Docker Compose
+- Zbuduj obraz Dockera z obsługą GPU, zawierający CUDA, PyTorch i biblioteki AI, na podstawie Dockerfile
+- Montuj katalogi hosta jako wolumeny (volumes), aby przechowywać modele, datasety i kod między przebudowami kontenerów
+- Skonfiguruj NVIDIA Container Toolkit, aby udostępnić GPU wewnątrz kontenerów
+- Zorkiestruj wieloskładnikową aplikację AI (serwer inferencji + baza wektorowa) za pomocą Docker Compose
 
 ## Problem
 
-Trenowałeś model na swoim laptopie za pomocą PyTorch 2.3, CUDA 12.4 i Python 3.12. Twój kolega ma PyTorch 2.1, CUDA 11.8 i Python 3.10. Twój model ulega awarii na swoim komputerze. Twój plik Dockerfile działa na obu.
+Wytrenowałeś model na laptopie z PyTorch 2.3, CUDA 12.4 i Python 3.12. Twój kolega ma PyTorch 2.1, CUDA 11.8 i Python 3.10. Twój model crashuje na jego maszynie. Twój Dockerfile działa na obu.
 
-Projekty AI to koszmary zależności. Typowy stos zawiera sterowniki Python, PyTorch, CUDA, cuDNN, biblioteki C na poziomie systemu i wyspecjalizowane pakiety, takie jak flash-attn, które wymagają dokładnych wersji kompilatora. Docker pakuje to wszystko w jeden obraz, który działa wszędzie identycznie.
+Projekty AI to koszmar zależności. Typowy stos zawiera Pythona, PyTorch, sterowniki CUDA, cuDNN, biblioteki C na poziomie systemu oraz wyspecjalizowane pakiety, takie jak flash-attn, które wymagają dokładnie określonych wersji kompilatora. Docker pakuje to wszystko w jeden obraz, który działa identycznie wszędzie.
 
 ## Koncepcja
 
-Docker pakuje kod, środowisko wykonawcze, biblioteki i narzędzia systemowe w izolowaną jednostkę zwaną kontenerem. Pomyśl o niej jak o lekkiej maszynie wirtualnej, z tą różnicą, że udostępnia jądro systemu operacyjnego hosta, zamiast uruchamiać własne, więc uruchamia się w ciągu kilku sekund, a nie minut.
+Docker zamyka twój kod, runtime, biblioteki i narzędzia systemowe w izolowanej jednostce zwanej kontenerem. Pomyśl o tym jak o lekkiej maszynie wirtualnej, z tą różnicą, że dzieli ona kernel systemu operacyjnego hosta zamiast uruchamiać własny, dzięki czemu startuje w sekundy zamiast minut.
 
 ```mermaid
 graph TD
-    subgraph without["Without Docker"]
-        A1["Your machine<br/>Python 3.12<br/>CUDA 12.4<br/>PyTorch 2.3"] -->|crashes| X1["???"]
-        A2["Their machine<br/>Python 3.10<br/>CUDA 11.8<br/>PyTorch 2.1"] -->|crashes| X2["???"]
-        A3["Server<br/>Python 3.11<br/>CUDA 12.1<br/>PyTorch 2.2"] -->|crashes| X3["???"]
+    subgraph without["Bez Dockera"]
+        A1["Twoja maszyna<br/>Python 3.12<br/>CUDA 12.4<br/>PyTorch 2.3"] -->|crash| X1["???"]
+        A2["Maszyna kolegi<br/>Python 3.10<br/>CUDA 11.8<br/>PyTorch 2.1"] -->|crash| X2["???"]
+        A3["Serwer<br/>Python 3.11<br/>CUDA 12.1<br/>PyTorch 2.2"] -->|crash| X3["???"]
     end
 
-    subgraph with_docker["With Docker — Same image everywhere"]
-        B1["Your machine<br/>Python 3.12 | CUDA 12.4<br/>PyTorch 2.3 | Your code"]
-        B2["Their machine<br/>Python 3.12 | CUDA 12.4<br/>PyTorch 2.3 | Your code"]
-        B3["Server<br/>Python 3.12 | CUDA 12.4<br/>PyTorch 2.3 | Your code"]
+    subgraph with_docker["Z Dockerem — ten sam obraz wszędzie"]
+        B1["Twoja maszyna<br/>Python 3.12 | CUDA 12.4<br/>PyTorch 2.3 | Twój kod"]
+        B2["Maszyna kolegi<br/>Python 3.12 | CUDA 12.4<br/>PyTorch 2.3 | Twój kod"]
+        B3["Serwer<br/>Python 3.12 | CUDA 12.4<br/>PyTorch 2.3 | Twój kod"]
     end
 ```
 
 ### Dlaczego projekty AI potrzebują Dockera bardziej niż większość
 
-1. **Sterowniki GPU są delikatne.** Kod CUDA 12.4 nie działa na CUDA 11.8. Docker izoluje zestaw narzędzi CUDA wewnątrz kontenera, jednocześnie udostępniając sterownik procesora graficznego hosta za pośrednictwem zestawu narzędzi NVIDIA Container Toolkit.
+1. **Sterowniki GPU są kruche.** Kod CUDA 12.4 nie działa na CUDA 11.8. Docker izoluje toolkit CUDA wewnątrz kontenera, jednocześnie udostępniając sterownik GPU hosta poprzez NVIDIA Container Toolkit.
 
-2. **Waga modeli jest duża.** Model z parametrami 7B ma 14 GB w FP16. Nie chcesz go ponownie pobierać za każdym razem, gdy odbudowujesz. Woluminy Dockera umożliwiają zamontowanie katalogu modeli z hosta.
+2. **Wagi modeli są duże.** Model z 7 miliardami parametrów to 14 GB w fp16. Nie chcesz pobierać go ponownie za każdym razem, gdy przebudowujesz obraz. Wolumeny Dockera pozwalają zamontować katalog z modelami z hosta.
 
-3. **Architektury wielousługowe są powszechne.** Prawdziwa aplikacja AI to nie tylko skrypt w języku Python. Jest to serwer wnioskowania, wektorowa baza danych dla RAG, być może nakładka internetowa. Docker Compose koordynuje to wszystko za pomocą jednego polecenia.
+3. **Architektury wieloskładnikowe są powszechne.** Prawdziwa aplikacja AI to nie tylko skrypt w Pythonie. To serwer inferencji, baza wektorowa do RAG, może frontend webowy. Docker Compose orkiestruje to wszystko jednym poleceniem.
 
 ### Kluczowe słownictwo
 
-| Termin | Co to znaczy |
-|------|----------------------------|
-| Obraz | Szablon tylko do odczytu. Twój przepis. Zbudowany z pliku Dockerfile. |
-| Pojemnik | Działająca instancja obrazu. Twoja kuchnia. |
-| Plik Dockera | Instrukcje budowania wizerunku. Warstwa po warstwie. |
-| Tom | Pamięć trwała, która przetrwa ponowne uruchomienie kontenera. |
-| tworzenie dokera | Narzędzie do definiowania aplikacji wielokontenerowych w YAML. |
+| Termin | Co oznacza |
+|------|---------------|
+| Image (obraz) | Szablon tylko do odczytu. Twój przepis. Zbudowany z Dockerfile. |
+| Container (kontener) | Działająca instancja obrazu. Twoja kuchnia. |
+| Dockerfile | Instrukcje budowania obrazu. Warstwa po warstwie. |
+| Volume (wolumen) | Trwałe przechowywanie danych, które przetrwa restart kontenera. |
+| docker-compose | Narzędzie do definiowania aplikacji wielokontenerowych w YAML. |
 
 ### Typowe wzorce kontenerów w AI
 
 ```
 Dev Container
-  Full toolkit. Editor support. Jupyter. Debugging tools.
-  Used during development and experimentation.
+  Pełny zestaw narzędzi. Wsparcie edytora. Jupyter. Narzędzia debugujące.
+  Używany podczas rozwoju i eksperymentowania.
 
 Training Container
-  Minimal. Just the training script and dependencies.
-  Runs on GPU clusters. No editor, no Jupyter.
+  Minimalny. Tylko skrypt treningowy i zależności.
+  Działa na klastrach GPU. Bez edytora, bez Jupytera.
 
 Inference Container
-  Optimized for serving. Small image. Fast cold start.
-  Runs behind a load balancer in production.
+  Zoptymalizowany do serwowania. Mały obraz. Szybki cold start.
+  Działa za load balancerem w produkcji.
 ```
 
 ## Zbuduj to
@@ -85,7 +85,7 @@ open /Applications/Docker.app
 # Ubuntu
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
-# Log out and back in for group change to take effect
+# Wyloguj się i zaloguj ponownie, aby zmiana grupy zaczęła obowiązywać
 ```
 
 Zweryfikuj:
@@ -95,9 +95,9 @@ docker --version
 docker run hello-world
 ```
 
-### Krok 2: Zainstaluj zestaw narzędzi kontenerowych NVIDIA (Linux z procesorem graficznym NVIDIA)
+### Krok 2: Zainstaluj NVIDIA Container Toolkit (Linux z GPU NVIDIA)
 
-Dzięki temu kontenery Docker mają dostęp do procesora graficznego. Użytkownicy macOS i Windows (WSL2) mogą to pominąć; Docker Desktop obsługuje przekazywanie GPU w różny sposób na tych platformach.
+To pozwala kontenerom Docker na dostęp do twojego GPU. Użytkownicy macOS i Windows (WSL2) mogą pominąć ten krok; Docker Desktop obsługuje przekazywanie GPU inaczej na tych platformach.
 
 ```bash
 distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
@@ -112,43 +112,43 @@ sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
 ```
 
-Przetestuj dostęp do procesora graficznego w kontenerze:
+Przetestuj dostęp do GPU wewnątrz kontenera:
 
 ```bash
 docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
 ```
 
-Jeśli widzisz informacje o GPU, zestaw narzędzi działa.
+Jeśli widzisz informacje o swoim GPU, toolkit działa poprawnie.
 
-### Krok 3: Poznaj obrazy podstawowe
+### Krok 3: Zrozum obrazy bazowe
 
-Wybór odpowiedniego obrazu podstawowego pozwala zaoszczędzić wiele godzin debugowania.
+Wybór odpowiedniego obrazu bazowego oszczędza godziny debugowania.
 
 ```
 nvidia/cuda:12.4.1-devel-ubuntu22.04
-  Full CUDA toolkit. Compilers included.
-  Use for: building packages that need nvcc (flash-attn, bitsandbytes)
-  Size: ~4 GB
+  Pełny toolkit CUDA. Kompilatory w zestawie.
+  Użyj do: budowania pakietów wymagających nvcc (flash-attn, bitsandbytes)
+  Rozmiar: ~4 GB
 
 nvidia/cuda:12.4.1-runtime-ubuntu22.04
-  CUDA runtime only. No compilers.
-  Use for: running pre-built code
-  Size: ~1.5 GB
+  Tylko runtime CUDA. Bez kompilatorów.
+  Użyj do: uruchamiania gotowego kodu
+  Rozmiar: ~1.5 GB
 
 pytorch/pytorch:2.3.1-cuda12.4-cudnn9-runtime
-  PyTorch pre-installed on top of CUDA.
-  Use for: skipping the PyTorch install step
-  Size: ~6 GB
+  PyTorch wstępnie zainstalowany na bazie CUDA.
+  Użyj do: pominięcia kroku instalacji PyTorch
+  Rozmiar: ~6 GB
 
 python:3.12-slim
-  No CUDA. CPU only.
-  Use for: inference on CPU, lightweight tools
-  Size: ~150 MB
+  Bez CUDA. Tylko CPU.
+  Użyj do: inferencji na CPU, lekkich narzędzi
+  Rozmiar: ~150 MB
 ```
 
-### Krok 4: Napisz plik Dockerfile na potrzeby rozwoju sztucznej inteligencji
+### Krok 4: Napisz Dockerfile dla środowiska deweloperskiego AI
 
-Oto plik Dockerfile w `code/Dockerfile`. Przejdź przez to:
+Oto Dockerfile w `code/Dockerfile`. Przejdźmy przez niego krok po kroku:
 
 ```dockerfile
 FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
@@ -196,15 +196,15 @@ EXPOSE 8888
 CMD ["python"]
 ```
 
-Zbuduj to:
+Zbuduj go:
 
 ```bash
 docker build -t ai-dev -f phases/00-setup-and-tooling/07-docker-for-ai/code/Dockerfile .
 ```
 
-Za pierwszym razem zajmuje to trochę czasu (pobieranie obrazu podstawowego CUDA + PyTorch). Kolejne kompilacje korzystają z warstw buforowanych.
+Za pierwszym razem zajmuje to chwilę (pobieranie obrazu bazowego CUDA + PyTorch). Kolejne buildy korzystają z cache'owanych warstw.
 
-Uruchom to:
+Uruchom go:
 
 ```bash
 docker run --rm -it --gpus all \
@@ -213,7 +213,7 @@ docker run --rm -it --gpus all \
     ai-dev python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}')"
 ```
 
-Uruchom Jupytera w kontenerze:
+Uruchom Jupyter wewnątrz kontenera:
 
 ```bash
 docker run --rm -it --gpus all \
@@ -223,22 +223,22 @@ docker run --rm -it --gpus all \
     ai-dev jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root
 ```
 
-### Krok 5: montowanie woluminów danych i modeli
+### Krok 5: Montowanie wolumenów dla danych i modeli
 
-Zwiększanie głośności ma kluczowe znaczenie dla pracy AI. Bez nich pobrane pliki modelu 14 GB znikają po zatrzymaniu kontenera.
+Montowanie wolumenów jest krytyczne dla pracy z AI. Bez nich pobrany model o rozmiarze 14 GB znika, gdy kontener zostaje zatrzymany.
 
 ```bash
-# Mount your code
+# Zamontuj swój kod
 -v $(pwd):/workspace
 
-# Mount a shared models directory
+# Zamontuj wspólny katalog z modelami
 -v ~/models:/models
 
-# Mount datasets
+# Zamontuj datasety
 -v ~/datasets:/data
 ```
 
-Wewnątrz skryptu szkoleniowego załaduj z zamontowanej ścieżki:
+Wewnątrz skryptu treningowego, ładuj dane ze zamontowanej ścieżki:
 
 ```python
 from transformers import AutoModel
@@ -246,11 +246,11 @@ from transformers import AutoModel
 model = AutoModel.from_pretrained("/models/llama-7b")
 ```
 
-Model znajduje się w systemie plików hosta. Odbuduj kontener tak często, jak chcesz, bez ponownego pobierania.
+Model znajduje się w systemie plików hosta. Przebudowuj kontener tak często, jak chcesz, bez ponownego pobierania.
 
-### Krok 6: Docker Compose dla wielousługowych aplikacji AI
+### Krok 6: Docker Compose dla wieloskładnikowych aplikacji AI
 
-Prawdziwa aplikacja RAG wymaga serwera wnioskowania i bazy danych wektorów. Docker Compose uruchamia oba za pomocą jednego polecenia.
+Prawdziwa aplikacja RAG potrzebuje serwera inferencji oraz bazy wektorowej. Docker Compose uruchamia oba jednym poleceniem.
 
 Zobacz `code/docker-compose.yml`:
 
@@ -289,14 +289,14 @@ volumes:
   qdrant_data:
 ```
 
-Zacznij wszystko:
+Uruchom wszystko:
 
 ```bash
 cd phases/00-setup-and-tooling/07-docker-for-ai/code
 docker compose up -d
 ```
 
-Teraz Twój kontener AI może dotrzeć do bazy danych wektorów pod adresem `http://qdrant:6333` według nazwy usługi. Docker Compose automatycznie tworzy udostępnioną sieć.
+Teraz twój kontener deweloperski AI może komunikować się z bazą wektorową pod adresem `http://qdrant:6333` poprzez nazwę usługi. Docker Compose automatycznie tworzy współdzieloną sieć.
 
 Przetestuj połączenie z wnętrza kontenera AI:
 
@@ -313,60 +313,60 @@ Zatrzymaj wszystko:
 docker compose down
 ```
 
-Dodaj `-v`, aby również usunąć wolumin qdrant:
+Dodaj `-v`, aby usunąć również wolumen qdrant:
 
 ```bash
 docker compose down -v
 ```
 
-### Krok 7: Przydatne polecenia Dockera w pracy AI
+### Krok 7: Przydatne polecenia Dockera w pracy z AI
 
 ```bash
-# List running containers
+# Wyświetl listę działających kontenerów
 docker ps
 
-# List all images and their sizes
+# Wyświetl listę wszystkich obrazów i ich rozmiarów
 docker images
 
-# Remove unused images (reclaim disk space)
+# Usuń nieużywane obrazy (odzyskaj miejsce na dysku)
 docker system prune -a
 
-# Check GPU usage inside a running container
+# Sprawdź użycie GPU wewnątrz działającego kontenera
 docker exec -it <container_id> nvidia-smi
 
-# Copy a file from container to host
+# Skopiuj plik z kontenera na hosta
 docker cp <container_id>:/workspace/results.csv ./results.csv
 
-# View container logs
+# Wyświetl logi kontenera
 docker logs -f <container_id>
 ```
 
-## Użyj tego
+## Wykorzystaj to
 
-Masz teraz powtarzalne środowisko programistyczne AI. Pozostała część kursu:
+Masz teraz odtwarzalne środowisko deweloperskie AI. Przez resztę tego kursu:
 
-- Użyj `docker compose up`, aby razem uruchomić środowisko programistyczne i bazę danych wektorowych
-- Montuj swój kod, modele i dane jako woluminy, aby nic nie zostało utracone pomiędzy przebudowami
-- Kiedy lekcja wymaga nowego pakietu Pythona, dodaj go do pliku Dockerfile i odbuduj
-- Udostępnij swój plik Dockerfile członkom zespołu. Dostają dokładnie to samo środowisko.
+- Używaj `docker compose up`, aby uruchomić środowisko deweloperskie razem z bazą wektorową
+- Montuj swój kod, modele i dane jako wolumeny, aby nic nie zostało utracone między przebudowami
+- Gdy lekcja wymaga nowego pakietu Python, dodaj go do Dockerfile i przebuduj obraz
+- Udostępnij swój Dockerfile członkom zespołu. Otrzymają dokładnie to samo środowisko.
 
-### Brak procesora graficznego?
+### Brak GPU?
 
-Usuń flagę `--gpus all` i blokadę wdrażania NVIDIA. Kontener nadal działa w przypadku lekcji opartych na procesorze. PyTorch wykrywa brak CUDA i automatycznie wraca do procesora.
+Usuń flagę `--gpus all` oraz blok deploy NVIDIA. Kontener nadal będzie działał dla lekcji opartych na CPU. PyTorch wykrywa brak CUDA i automatycznie przełącza się na CPU.
 
 ## Ćwiczenia
 
-1. Zbuduj plik Dockerfile i uruchom `python -c "import torch; print(torch.__version__)"` wewnątrz kontenera
-2. Uruchom stos dokowania i sprawdź, czy Qdrant jest dostępny z kontenera AI pod adresem `http://qdrant:6333/collections`
-3. Dodaj `flask` do pliku Dockerfile, przebuduj i uruchom prosty serwer API na porcie 5000. Zamapuj port za pomocą `-p 5000:5000`
-4. Zmierz rozmiar obrazu za pomocą `docker images`. Spróbuj zmienić obraz podstawowy z `devel` na `runtime` i porównaj rozmiary
+1. Zbuduj Dockerfile i uruchom `python -c "import torch; print(torch.__version__)"` wewnątrz kontenera
+2. Uruchom stos docker-compose i zweryfikuj, że Qdrant jest dostępny z kontenera AI pod adresem `http://qdrant:6333/collections`
+3. Dodaj `flask` do Dockerfile, przebuduj obraz i uruchom prosty serwer API na porcie 5000. Zmapuj port za pomocą `-p 5000:5000`
+4. Zmierz rozmiar obrazu za pomocą `docker images`. Spróbuj zmienić obraz bazowy z `devel` na `runtime` i porównaj rozmiary
 
-## Kluczowe terminy
+## Kluczowe pojęcia
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co mówią ludzie | Co to faktycznie oznacza |
 |------|----------------|----------------------|
-| Pojemnik | „Lekka maszyna wirtualna” | Izolowany proces korzystający z jądra hosta, z własnym systemem plików i siecią |
-| Warstwa obrazu | „Krok w pamięci podręcznej” | Każda instrukcja Dockerfile tworzy warstwę. Niezmienione warstwy są buforowane, więc przebudowa jest szybka. |
-| Zestaw narzędzi kontenerowych NVIDIA | „GPU w Dockerze” | Hak środowiska wykonawczego, który udostępnia procesory graficzne hosta kontenerom za pośrednictwem flagi `--gpus` |
-| Mocowanie głośności | „Folder udostępniony” | Katalog na hoście zamapowany na kontener. Zmiany utrzymują się po zatrzymaniu kontenera. |
-| Obraz podstawowy | „Punkt wyjścia” | Obraz `FROM`, na którym opiera się Twój plik Dockerfile. Określa, co jest wstępnie zainstalowane. |
+| Container (kontener) | "Lekka VM" | Izolowany proces korzystający z kernela hosta, z własnym systemem plików i siecią |
+| Image layer (warstwa obrazu) | "Cache'owany krok" | Każda instrukcja Dockerfile tworzy warstwę. Niezmienione warstwy są cache'owane, dzięki czemu rebuildy są szybkie. |
+| NVIDIA Container Toolkit | "GPU w Dockerze" | Hook runtime, który udostępnia GPU hosta kontenerom poprzez flagę `--gpus` |
+| Volume mount (montowanie wolumenu) | "Współdzielony folder" | Katalog na hoście zmapowany do kontenera. Zmiany przetrwają zatrzymanie kontenera. |
+| Base image (obraz bazowy) | "Punkt startowy" | Obraz `FROM`, na bazie którego budowany jest twój Dockerfile. Determinuje, co jest wstępnie zainstalowane. |
