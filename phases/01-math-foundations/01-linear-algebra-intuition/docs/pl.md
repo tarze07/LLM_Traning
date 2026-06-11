@@ -1,47 +1,47 @@
 # Intuicja algebry liniowej
 
-> Każdy model sztucznej inteligencji to po prostu matematyka macierzowa w fantazyjnym kapeluszu.
+> Każdy model AI to po prostu matematyka macierzowa w eleganckim przebraniu.
 
-**Typ:** Ucz się
+**Typ:** Nauka
 **Języki:** Python, Julia
-**Wymagania:** Faza 0
+**Wymagania wstępne:** Faza 0
 **Czas:** ~60 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Implementuj operacje na wektorach i macierzach (dodawanie, iloczyn skalarny, mnożenie macierzy) od podstaw w Pythonie
-- Wyjaśnij geometrycznie, na czym polega iloczyn skalarny, projekcja i proces Grama-Schmidta
-- Wyznaczanie liniowej niezależności, rangi i podstawy zbioru wektorów za pomocą redukcji wierszy
-- Połącz koncepcje algebry liniowej z ich zastosowaniami AI: osadzanie, wyniki uwagi i LoRA
+- Zaimplementować operacje na wektorach i macierzach (dodawanie, iloczyn skalarny, mnożenie macierzy) od podstaw w Pythonie
+- Wyjaśnić geometrycznie, na czym polegają iloczyn skalarny, rzut (projekcja) i proces Grama-Schmidta
+- Określić liniową niezależność, rząd i bazę zbioru wektorów za pomocą eliminacji wierszowej
+- Połączyć pojęcia algebry liniowej z ich zastosowaniami w AI: embeddingami, wynikami uwagi (attention) i LoRA
 
 ## Problem
 
-Otwórz dowolny papier ML. Na pierwszej stronie zobaczysz wektory, macierze, iloczyny skalarne i transformacje. Bez intuicji algebry liniowej są to tylko symbole. Dzięki niemu możesz zobaczyć, co faktycznie robi sieć neuronowa – przesuwając punkty w przestrzeni.
+Otwórz dowolny artykuł naukowy o ML. Już na pierwszej stronie zobaczysz wektory, macierze, iloczyny skalarne i transformacje. Bez intuicji algebry liniowej są to tylko symbole. Z nią widzisz, co naprawdę robi sieć neuronowa -- przesuwa punkty w przestrzeni.
 
-Nie musisz być matematykiem. Musisz zobaczyć, co te operacje oznaczają geometrycznie, a następnie samodzielnie je zakodować.
+Nie musisz być matematykiem. Musisz zobaczyć, co te operacje oznaczają geometrycznie, a następnie zaimplementować je samodzielnie.
 
 ## Koncepcja
 
 ### Wektory to punkty (i kierunki)
 
-Wektor to po prostu lista liczb. Ale te liczby coś znaczą – są to współrzędne w przestrzeni.
+Wektor to po prostu lista liczb. Ale te liczby coś oznaczają -- są współrzędnymi w przestrzeni.
 
 **Wektor 2D [3, 2]:**
 
 | x | y | Punkt |
 |---|---|-------|
-| 3 | 2 | Wektor wskazuje początek (0,0) do (3, 2) na płaszczyźnie |
+| 3 | 2 | Wektor wskazuje od początku układu współrzędnych (0,0) do punktu (3, 2) na płaszczyźnie |
 
-Wektor ma wielkość sqrt(3^2 + 2^2) = sqrt(13) i jest skierowany w górę i w prawo.
+Wektor ma długość sqrt(3^2 + 2^2) = sqrt(13) i wskazuje w górę i w prawo.
 
 W AI wektory reprezentują wszystko:
-- Słowo → wektor 768 liczb (jego „znaczenie” w osadzającej się przestrzeni)
-- Obraz → wektor wartości milionów pikseli
+- Słowo → wektor 768 liczb (jego "znaczenie" w przestrzeni embeddingów)
+- Obraz → wektor milionów wartości pikseli
 - Użytkownik → wektor preferencji
 
-### Macierze są transformacjami
+### Macierze to transformacje
 
-Macierz przekształca jeden wektor w drugi. Może obracać się, skalować, rozciągać lub wyświetlać.
+Macierz przekształca jeden wektor w inny. Może obracać, skalować, rozciągać lub rzutować.
 
 ```mermaid
 graph LR
@@ -63,29 +63,29 @@ graph LR
 ```
 
 W AI macierze SĄ modelem:
-- Wagi sieci neuronowych → macierze przekształcające wejście na wyjście
-- Wyniki uwagi → matryce decydujące, na czym się skupić
-- Osadzenia → macierze odwzorowujące słowa na wektory
+- Wagi sieci neuronowej → macierze przekształcające wejście w wyjście
+- Wyniki uwagi (attention scores) → macierze decydujące, na czym się skupić
+- Embeddingi → macierze mapujące słowa na wektory
 
 ### Iloczyn skalarny mierzy podobieństwo
 
-Iloczyn skalarny dwóch wektorów mówi, jak bardzo są one podobne.
+Iloczyn skalarny dwóch wektorów mówi, jak bardzo są do siebie podobne.
 
 ```
 a · b = a₁×b₁ + a₂×b₂ + ... + aₙ×bₙ
 
-Same direction:      a · b > 0  (similar)
-Perpendicular:       a · b = 0  (unrelated)
-Opposite direction:  a · b < 0  (dissimilar)
+Ten sam kierunek:        a · b > 0  (podobne)
+Prostopadłe:              a · b = 0  (niepowiązane)
+Przeciwny kierunek:       a · b < 0  (różne)
 ```
 
-Dosłownie tak działają wyszukiwarki, systemy rekomendacji i RAG — znajdź wektory z produktami o wysokiej kropce.
+Dokładnie tak działają wyszukiwarki, systemy rekomendacji i RAG -- znajdują wektory o wysokim iloczynie skalarnym.
 
-### Niezależność liniowa
+### Liniowa niezależność
 
-Wektory są liniowo niezależne, jeśli żaden wektor w zbiorze nie może być zapisany jako kombinacja pozostałych. Jeśli v1, v2, v3 są niezależne, obejmują przestrzeń 3D. Jeśli jeden jest kombinacją pozostałych, obejmują one tylko płaszczyznę.
+Wektory są liniowo niezależne, jeśli żaden wektor ze zbioru nie może być zapisany jako kombinacja pozostałych. Jeśli v1, v2, v3 są niezależne, rozpinają przestrzeń 3D. Jeśli jeden z nich jest kombinacją pozostałych, rozpinają tylko płaszczyznę.
 
-Dlaczego ma to znaczenie dla sztucznej inteligencji: macierz funkcji powinna mieć liniowo niezależne kolumny. Jeśli dwie cechy są doskonale skorelowane (liniowo zależne), model nie jest w stanie rozróżnić ich efektów. Powoduje to wielowspółliniowość w regresji — macierz wag staje się niestabilna, a niewielkie zmiany wejściowe powodują gwałtowne wahania wyników.
+Dlaczego ma to znaczenie dla AI: macierz cech powinna mieć liniowo niezależne kolumny. Jeśli dwie cechy są ze sobą idealnie skorelowane (liniowo zależne), model nie jest w stanie odróżnić ich wpływu. Powoduje to współliniowość (multicollinearity) w regresji -- macierz wag staje się niestabilna, a małe zmiany na wejściu powodują gwałtowne zmiany na wyjściu.
 
 **Konkretny przykład:**
 
@@ -95,29 +95,29 @@ v2 = [0, 1, 0]
 v3 = [2, 1, 0]   # v3 = 2*v1 + v2
 ```
 
-v1 i v2 są niezależne - żadne z nich nie jest wielokrotnością skalarną ani kombinacją drugiego. Ale v3 = 2*v1 + v2, więc {v1, v2, v3} jest zbiorem zależnym. Wszystkie te trzy wektory leżą w płaszczyźnie xy. Bez względu na to, jak je połączysz, nie możesz osiągnąć [0, 0, 1]. Masz trzy wektory, ale tylko dwa wymiary wolności.
+v1 i v2 są niezależne -- żaden z nich nie jest wielokrotnością skalarną ani kombinacją drugiego. Ale v3 = 2*v1 + v2, więc {v1, v2, v3} jest zbiorem zależnym. Te trzy wektory leżą na płaszczyźnie xy. Bez względu na to, jak je połączysz, nie da się otrzymać [0, 0, 1]. Masz trzy wektory, ale tylko dwa wymiary swobody.
 
-W zbiorze danych: jeśli cecha_3 = 2*cecha_1 + cecha_2, dodanie cechy_3 daje modelowi zero nowych informacji. Co gorsza, równania normalne stają się osobliwe – nie ma unikalnego rozwiązania dla wag.
+W zbiorze danych: jeśli feature_3 = 2*feature_1 + feature_2, dodanie feature_3 nie wnosi do modelu żadnej nowej informacji. Co gorsza, sprawia, że równania normalne stają się osobliwe -- nie istnieje jednoznaczne rozwiązanie dla wag.
 
-### Podstawa i ranga
+### Baza i rząd
 
-Baza to minimalny zbiór liniowo niezależnych wektorów rozciągających się na całą przestrzeń. Liczba wektorów bazowych jest wymiarem przestrzeni.
+Baza to minimalny zbiór liniowo niezależnych wektorów rozpinających całą przestrzeń. Liczba wektorów bazowych to wymiar przestrzeni.
 
-Standardową podstawą przestrzeni 3D jest {[1,0,0], [0,1,0], [0,0,1]}. Ale dowolne trzy niezależne wektory w 3D stanowią ważną podstawę. Wybór podstawy jest wyborem układu współrzędnych.
+Bazą standardową dla przestrzeni 3D jest {[1,0,0], [0,1,0], [0,0,1]}. Ale dowolne trzy niezależne wektory w 3D tworzą poprawną bazę. Wybór bazy to wybór układu współrzędnych.
 
-Ranga macierzy = liczba liniowo niezależnych kolumn = liczba liniowo niezależnych wierszy. Jeśli ranga < min(wiersze, kolumny), macierz nie ma rang. To oznacza:
-- Układ ma nieskończenie wiele rozwiązań (lub nie ma ich wcale)
-- Informacje są tracone w procesie transformacji
-- Macierzy nie można odwrócić
+Rząd macierzy = liczba liniowo niezależnych kolumn = liczba liniowo niezależnych wierszy. Jeśli rząd < min(wiersze, kolumny), macierz ma niepełny rząd (rank-deficient). Oznacza to, że:
+- Układ ma nieskończenie wiele rozwiązań (lub żadnego)
+- Informacja jest tracona w transformacji
+- Macierzy nie da się odwrócić
 
-| Sytuacja | Ranga | Co to oznacza dla ML |
-|----------|------|----------|
-| Pełna ranga (ranga = min(m, n)) | Maksymalnie możliwe | Istnieje unikalne rozwiązanie metodą najmniejszych kwadratów. Model jest w dobrym stanie. |
-| Brak rangi (ranga < min(m, n)) | Poniżej maksimum | Funkcje są zbędne. Nieskończenie wiele rozwiązań wagowych. Potrzebna regularyzacja. |
-| Miejsce 1 | 1 | Każda kolumna jest skalowaną kopią jednego wektora. Wszystkie dane leżą na jednej linii. |
-| Prawie brak rangi (małe wartości pojedyncze) | Liczbowo niskie | Matryca jest źle uwarunkowana. Niewielki szum wejściowy powoduje duże zmiany wyjściowe. Użyj obcięcia SVD lub regresji grzbietu. |
+| Sytuacja | Rząd | Co to oznacza dla ML |
+|-----------|------|---------------------|
+| Pełny rząd (rząd = min(m, n)) | Maksymalny możliwy | Istnieje jednoznaczne rozwiązanie najmniejszych kwadratów. Model jest dobrze uwarunkowany. |
+| Niepełny rząd (rząd < min(m, n)) | Poniżej maksymalnego | Cechy są nadmiarowe (redundantne). Nieskończenie wiele rozwiązań dla wag. Potrzebna regularyzacja. |
+| Rząd 1 | 1 | Każda kolumna jest przeskalowaną kopią jednego wektora. Wszystkie dane leżą na linii. |
+| Bliski niepełnemu rzędowi (małe wartości osobliwe) | Numerycznie niski | Macierz jest źle uwarunkowana. Niewielki szum na wejściu powoduje duże zmiany na wyjściu. Użyj obcięcia SVD lub regresji grzbietowej (ridge). |
 
-### Projekcja
+### Rzut (projekcja)
 
 Rzutowanie wektora **a** na wektor **b** daje składową **a** w kierunku **b**:
 
@@ -125,12 +125,12 @@ Rzutowanie wektora **a** na wektor **b** daje składową **a** w kierunku **b**:
 proj_b(a) = (a dot b / b dot b) * b
 ```
 
-Reszta (a - proj_b(a)) jest prostopadła do b. Ten rozkład ortogonalny jest podstawą dopasowania metodą najmniejszych kwadratów.
+Reszta (a - proj_b(a)) jest prostopadła do b. Ten ortogonalny rozkład jest podstawą dopasowania metodą najmniejszych kwadratów.
 
-Projekcja jest wszędzie w ML:
-- Regresja liniowa minimalizuje odległość obserwacji od przestrzeni kolumn - rozwiązaniem JEST rzut
+Rzutowanie jest wszędzie w ML:
+- Regresja liniowa minimalizuje odległość obserwacji od przestrzeni kolumnowej -- rozwiązanie JEST rzutem
 - PCA rzutuje dane na kierunki maksymalnej wariancji
-- Uwaga w transformatorach oblicza projekcje zapytań na klucze
+- Mechanizm uwagi (attention) w transformerach oblicza rzuty zapytań (queries) na klucze (keys)
 
 ```mermaid
 graph LR
@@ -147,20 +147,20 @@ graph LR
 
 proj_b(a) = (3*1 + 4*0) / (1*1 + 0*0) * [1, 0] = 3 * [1, 0] = [3, 0]
 
-Rzut opuszcza składnik y. Jest to redukcja wymiarowości w najprostszej formie – wyrzuć kierunki, na których ci nie zależy.
+Rzut odrzuca składową y. To redukcja wymiarowości w najprostszej postaci -- wyrzucamy kierunki, które nas nie interesują.
 
 ### Proces Grama-Schmidta
 
-Konwersja dowolnego zbioru niezależnych wektorów na bazę ortonormalną. Ortonormalny oznacza, że ​​każdy wektor ma długość 1, a każda para jest prostopadła.
+Przekształcanie dowolnego zbioru niezależnych wektorów w bazę ortonormalną. Ortonormalna oznacza, że każdy wektor ma długość 1, a każda para jest prostopadła.
 
 Algorytm:
 1. Weź pierwszy wektor, znormalizuj go
 2. Weź drugi wektor, odejmij jego rzut na pierwszy, znormalizuj
-3. Weź trzeci wektor, odejmij jego rzuty na wszystkie poprzednie wektory, normalizuj
+3. Weź trzeci wektor, odejmij jego rzuty na wszystkie poprzednie wektory, znormalizuj
 4. Powtórz dla pozostałych wektorów
 
 ```
-Input:  v1, v2, v3, ... (linearly independent)
+Wejście:  v1, v2, v3, ... (liniowo niezależne)
 
 u1 = v1 / |v1|
 
@@ -170,13 +170,13 @@ u2 = w2 / |w2|
 w3 = v3 - (v3 dot u1) * u1 - (v3 dot u2) * u2
 u3 = w3 / |w3|
 
-Output: u1, u2, u3, ... (orthonormal basis)
+Wyjście: u1, u2, u3, ... (baza ortonormalna)
 ```
 
-Tak działa rozkład QR wewnętrznie. Q jest bazą ortonormalną, R oznacza współczynniki projekcji. Rozkład QR jest stosowany w:
-- Rozwiązywanie układów liniowych (bardziej stabilne niż eliminacja Gaussa)
-- Obliczanie wartości własnych (algorytm QR)
-- Regresja metodą najmniejszych kwadratów (standardowa metoda numeryczna)
+Tak właśnie działa wewnętrznie rozkład QR. Q to baza ortonormalna, R przechowuje współczynniki rzutów. Rozkład QR jest wykorzystywany do:
+- Rozwiązywania układów liniowych (bardziej stabilne niż eliminacja Gaussa)
+- Obliczania wartości własnych (algorytm QR)
+- Regresji metodą najmniejszych kwadratów (standardowa metoda numeryczna)
 
 ## Zbuduj to
 
@@ -209,6 +209,7 @@ class Vector:
 
     def __repr__(self):
         return f"Vector({self.components})"
+
 
 a = Vector([1, 2, 3])
 b = Vector([4, 5, 6])
@@ -253,6 +254,7 @@ class Matrix:
     def __repr__(self):
         return f"Matrix({self.rows})"
 
+
 rotation_90 = Matrix([[0, -1], [1, 0]])
 point = Vector([3, 1])
 
@@ -261,7 +263,7 @@ print(f"Original: {point}")
 print(f"Rotated 90°: {rotated}")
 ```
 
-### Krok 3: Dlaczego ma to znaczenie dla sztucznej inteligencji
+### Krok 3: Dlaczego ma to znaczenie dla AI
 
 ```python
 import random
@@ -276,7 +278,7 @@ print(f"Output (2D): {output}")
 print("This is what a neural network layer does -- matrix multiplication.")
 ```
 
-### Krok 4: Wersja dla Julii
+### Krok 4: Wersja w Julii
 
 ```julia
 a = [1.0, 2.0, 3.0]
@@ -294,7 +296,7 @@ println("Wx = ", W * x)
 println("This is a neural network layer.")
 ```
 
-### Krok 5: Niezależność liniowa i projekcja od podstaw (Python)
+### Krok 5: Liniowa niezależność i rzutowanie od podstaw (Python)
 
 ```python
 def is_linearly_independent(vectors):
@@ -321,9 +323,11 @@ def is_linearly_independent(vectors):
         rank += 1
     return rank == n
 
+
 def project(a, b):
     scalar = a.dot(b) / b.dot(b)
     return Vector([scalar * x for x in b.components])
+
 
 def gram_schmidt(vectors):
     orthonormal = []
@@ -336,6 +340,7 @@ def gram_schmidt(vectors):
             continue
         orthonormal.append(w.normalize())
     return orthonormal
+
 
 v1 = Vector([1, 0, 0])
 v2 = Vector([1, 1, 0])
@@ -350,9 +355,9 @@ print(f"u1 · u3 = {basis[0].dot(basis[2]):.6f}")
 print(f"u2 · u3 = {basis[1].dot(basis[2]):.6f}")
 ```
 
-## Użyj tego
+## Zastosuj to
 
-Teraz to samo z NumPy - czego będziesz używać w praktyce:
+Teraz to samo z NumPy -- czyli to, czego naprawdę będziesz używać w praktyce:
 
 ```python
 import numpy as np
@@ -370,7 +375,7 @@ x = np.array([1.0, 0.5, -0.3])
 print(f"Wx = {W @ x}")
 ```
 
-### Ranga, projekcja i QR za pomocą NumPy
+### Rząd, rzut i QR z NumPy
 
 ```python
 import numpy as np
@@ -388,7 +393,7 @@ print(f"Q is orthogonal: {np.allclose(Q @ Q.T, np.eye(3))}")
 print(f"R is upper triangular: {np.allclose(R, np.triu(R))}")
 ```
 
-### PyTorch — Tensory to wektory z funkcją automatycznego różnicowania
+### PyTorch -- tensory to wektory z autodiff
 
 ```python
 import torch
@@ -405,50 +410,50 @@ print(f"dot product = {similarity.item():.4f}")
 print(f"d(dot)/dx = {x.grad}")
 ```
 
-Gradient iloczynu skalarnego względem x wynosi po prostu y. PyTorch obliczył to automatycznie. Każda operacja w sieci neuronowej składa się z takich operacji – mnożenia macierzy, iloczynów skalarnych, rzutów – a funkcja automatycznego porównywania śledzi gradienty w nich wszystkich.
+Gradient iloczynu skalarnego względem x to po prostu y. PyTorch obliczył to automatycznie. Każda operacja w sieci neuronowej jest zbudowana z operacji takich jak ta -- mnożenia macierzy, iloczyny skalarne, rzuty -- a autodiff śledzi gradienty przez wszystkie z nich.
 
-Właśnie zbudowałeś od zera to, co robi NumPy w jednej linii. Teraz już wiesz, co dzieje się pod maską.
+Właśnie zbudowałeś od podstaw to, co NumPy robi w jednej linii. Teraz wiesz, co dzieje się "pod maską".
 
-## Wyślij to
+## Wdróż to
 
-Ta lekcja daje:
-- `outputs/prompt-linear-algebra-tutor.md` – zachęta dla asystentów AI, aby uczyli algebry liniowej poprzez intuicję geometryczną
+Ta lekcja tworzy:
+- `outputs/prompt-linear-algebra-tutor.md` -- prompt dla asystentów AI, uczący algebry liniowej poprzez intuicję geometryczną
 
-## Połączenia
+## Powiązania
 
-Wszystko w tej lekcji łączy się z konkretnymi częściami współczesnej sztucznej inteligencji:
+Wszystko w tej lekcji łączy się z konkretnymi elementami współczesnej AI:
 
-| Koncepcja | Gdzie się pojawia |
-|--------|--------------------------------|
-| Produkt kropkowy | Wyniki uwagi w transformatorach, podobieństwo cosinus w RAG |
-| Pomnóż macierz | Każda warstwa sieci neuronowej, każda transformacja liniowa |
-| Niezależność liniowa | Wybór cech, unikanie współliniowości |
-| Ranga | Ustalanie, czy system jest rozwiązywalny, LoRA (adaptacja niskiego rzędu) |
-| Projekcja | Regresja liniowa (rzutowanie na przestrzeń kolumn), PCA |
+| Pojęcie | Gdzie się pojawia |
+|---------|------------------|
+| Iloczyn skalarny | Wyniki uwagi (attention) w transformerach, podobieństwo kosinusowe w RAG |
+| Mnożenie macierzy | Każda warstwa sieci neuronowej, każda transformacja liniowa |
+| Liniowa niezależność | Selekcja cech, unikanie współliniowości |
+| Rząd | Określanie, czy układ jest rozwiązywalny, LoRA (low-rank adaptation) |
+| Rzut | Regresja liniowa (rzutowanie na przestrzeń kolumnową), PCA |
 | Gram-Schmidt / QR | Solwery numeryczne, obliczanie wartości własnych |
-| Baza ortonormalna | Stabilne obliczenia numeryczne, transformacje wybielające |
+| Baza ortonormalna | Stabilne obliczenia numeryczne, transformacje wybielające (whitening) |
 
-Na szczególną uwagę zasługuje LoRA. Dostraja duże modele językowe, rozkładając aktualizacje wag na macierze niskiej rangi. Zamiast aktualizować macierz wag 4096x4096 (parametry 16M), LoRA aktualizuje dwie macierze o rozmiarach 4096x16 i 16x4096 (parametry 131K). Ograniczenie rangi 16 oznacza, że ​​LoRA zakłada, że ​​aktualizacja wagi znajduje się w 16-wymiarowej podprzestrzeni pełnej 4096-wymiarowej przestrzeni. To jest algebra liniowa wykonująca prawdziwą pracę.
+LoRA zasługuje na szczególną wzmiankę. Dostraja duże modele językowe poprzez dekompozycję aktualizacji wag na macierze niskiego rzędu. Zamiast aktualizować macierz wag o wymiarach 4096x4096 (16M parametrów), LoRA aktualizuje dwie macierze o rozmiarach 4096x16 i 16x4096 (131K parametrów). Ograniczenie do rzędu 16 oznacza, że LoRA zakłada, iż aktualizacja wag mieści się w 16-wymiarowej podprzestrzeni pełnej przestrzeni 4096-wymiarowej. To algebra liniowa wykonująca realną pracę.
 
 ## Ćwiczenia
 
-1. Zaimplementuj `Vector.angle_between(other)`, który zwraca kąt w stopniach pomiędzy dwoma wektorami
-2. Utwórz macierz skalowania 2D, która podwoi współrzędną x i potroi współrzędną y, a następnie zastosuj ją do wektora [1, 1]
-3. Biorąc pod uwagę 5 losowych wektorów słów (wymiar 50), znajdź dwa najbardziej podobne, korzystając z podobieństwa cosinus
-4. Sprawdź, czy wynik Grama-Schmidta jest naprawdę ortonormalny: sprawdź, czy każda para ma iloczyn skalarny 0, a każdy wektor ma wielkość 1
-5. Utwórz macierz 3x3 o randze 2. Zweryfikuj za pomocą metody `rank()`. Następnie wyjaśnij, jaki obiekt geometryczny rozciągają się na kolumny.
-6. Rzuć wektor [1, 2, 3] na [1, 1, 1]. Co wynik reprezentuje geometrycznie?
+1. Zaimplementuj `Vector.angle_between(other)`, zwracającą kąt w stopniach między dwoma wektorami
+2. Stwórz dwuwymiarową macierz skalującą, która podwaja współrzędną x i potraja współrzędną y, a następnie zastosuj ją do wektora [1, 1]
+3. Mając 5 losowych wektorów przypominających słowa (wymiar 50), znajdź dwa najbardziej podobne za pomocą podobieństwa kosinusowego
+4. Sprawdź, czy wynik procesu Grama-Schmidta jest naprawdę ortonormalny: zweryfikuj, że każda para ma iloczyn skalarny 0, a każdy wektor ma długość 1
+5. Stwórz macierz 3x3 o rzędzie 2. Zweryfikuj to za pomocą metody `rank()`. Następnie wyjaśnij, jaki obiekt geometryczny rozpinają kolumny.
+6. Zrzutuj wektor [1, 2, 3] na [1, 1, 1]. Co reprezentuje wynik geometrycznie?
 
-## Kluczowe terminy
+## Kluczowe pojęcia
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Pojęcie | Co mówią ludzie | Co to naprawdę oznacza |
 |------|----------------|----------------------|
-| wektor | „Strzałka” | Lista liczb reprezentujących punkt lub kierunek w przestrzeni n-wymiarowej |
-| Matryca | „Tabela liczb” | Transformacja odwzorowująca wektory z jednej przestrzeni do drugiej |
-| Produkt kropkowy | „Mnożyć i sumować” | Miara tego, jak wyrównane są dwa wektory – rdzeń wyszukiwania podobieństwa |
-| Osadzanie | „Trochę magii AI” | Wektor reprezentujący znaczenie czegoś (słowa, obrazu, użytkownika) |
-| Niezależność liniowa | „Nie pokrywają się” | Żaden wektor w zestawie nie może zostać zapisany jako kombinacja pozostałych |
-| Ranga | „Ile wymiarów” | Liczba liniowo niezależnych kolumn (lub wierszy) w macierzy |
-| Projekcja | „Cień” | Składowa jednego wektora w kierunku innego |
-| Podstawa | „Osie współrzędnych” | Minimalny zbiór niezależnych wektorów rozciągających się na przestrzeń |
-| Ortonormalny | „Prostopadłe wektory jednostkowe” | Wektory, które są wzajemnie prostopadłe i każdy ma długość 1 |
+| Wektor | "Strzałka" | Lista liczb reprezentująca punkt lub kierunek w przestrzeni n-wymiarowej |
+| Macierz | "Tabela liczb" | Transformacja mapująca wektory z jednej przestrzeni do drugiej |
+| Iloczyn skalarny | "Pomnóż i zsumuj" | Miara tego, jak bardzo dwa wektory są zgodne kierunkowo -- rdzeń wyszukiwania podobieństwa |
+| Embedding | "Jakaś magia AI" | Wektor reprezentujący znaczenie czegoś (słowa, obrazu, użytkownika) |
+| Liniowa niezależność | "Nie nakładają się na siebie" | Żaden wektor ze zbioru nie może być zapisany jako kombinacja pozostałych |
+| Rząd | "Ile jest wymiarów" | Liczba liniowo niezależnych kolumn (lub wierszy) macierzy |
+| Rzut | "Cień" | Składowa jednego wektora w kierunku drugiego |
+| Baza | "Osie układu współrzędnych" | Minimalny zbiór niezależnych wektorów rozpinających przestrzeń |
+| Ortonormalny | "Prostopadłe wektory jednostkowe" | Wektory wzajemnie prostopadłe, każdy o długości 1 |
