@@ -1,24 +1,24 @@
-# Terminal i powłoka
+# Terminal i Shell
 
-> Terminal to miejsce, w którym mieszkają inżynierowie AI. Rozsiądź się tutaj wygodnie.
+> Terminal to miejsce, w którym żyją inżynierowie AI. Poczuj się tu komfortowo.
 
-**Typ:** Ucz się
+**Typ:** Nauka
 **Języki:** --
-**Wymagania:** Faza 0, Lekcja 01
+**Wymagania wstępne:** Faza 0, Lekcja 01
 **Czas:** ~35 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Użyj potoków, przekierowań i `grep` do filtrowania i przetwarzania dzienników szkoleniowych z wiersza poleceń
-- Twórz trwałe sesje tmux z wieloma okienkami do jednoczesnego szkolenia i monitorowania procesora graficznego
-- Monitoruj zasoby systemu i procesora graficznego za pomocą `htop`, `nvtop` i `nvidia-smi`
-- Przesyłaj pliki między maszynami lokalnymi i zdalnymi za pomocą SSH, `scp` i `rsync`
+- Użycie pipingu, przekierowań i `grep` do filtrowania i przetwarzania logów treningowych z poziomu wiersza poleceń
+- Tworzenie trwałych sesji tmux z wieloma panelami do równoległego treningu i monitorowania GPU
+- Monitorowanie zasobów systemu i GPU za pomocą `htop`, `nvtop` i `nvidia-smi`
+- Przesyłanie plików między maszyną lokalną a zdalną za pomocą SSH, `scp` i `rsync`
 
 ## Problem
 
-W terminalu spędzisz więcej czasu niż w jakimkolwiek edytorze. Przebiegi szkoleniowe, monitorowanie GPU, śledzenie logów, zdalne sesje SSH, zarządzanie środowiskiem. Każdy przepływ pracy AI dotyka powłoki. Jeśli jesteś wolny tutaj, jesteś wolny wszędzie.
+W terminalu spędzisz więcej czasu niż w jakimkolwiek edytorze. Treningi, monitorowanie GPU, śledzenie logów, zdalne sesje SSH, zarządzanie środowiskiem. Każdy workflow związany z AI dotyka shella. Jeśli jesteś tu wolny, jesteś wolny wszędzie.
 
-W tej lekcji omówione zostaną umiejętności końcowe, które mają znaczenie w pracy ze sztuczną inteligencją. Żadnej historii Uniksa. Żadnego zagłębiania się w skrypty Bash. Tylko to, czego potrzebujesz.
+Ta lekcja obejmuje umiejętności terminalowe, które mają znaczenie w pracy z AI. Bez historii Uniksa. Bez głębokiego nurkowania w skryptowanie Bash. Tylko to, czego potrzebujesz.
 
 ## Koncepcja
 
@@ -33,227 +33,227 @@ graph TD
     end
 ```
 
-Trzy rzeczy działające na raz. Jeden terminal. Możesz odłączyć, wrócić do domu, ponownie podłączyć SSH i podłączyć ponownie. Trening trwa.
+Trzy rzeczy działające naraz. Jeden terminal. Możesz się odłączyć (detach), wyjść do domu, połączyć się ponownie przez SSH i przyłączyć z powrotem (reattach). Trening dalej działa.
 
 ## Zbuduj to
 
-### Krok 1: Poznaj swoją powłokę
+### Krok 1: Poznaj swój shell
 
-Sprawdź, z której powłoki korzystasz:
+Sprawdź, jakiego shella używasz:
 
 ```bash
 echo $SHELL
 ```
 
-Większość systemów używa `bash` lub `zsh`. Obydwa działają dobrze. Polecenia zawarte w tym kursie działają w obu przypadkach.
+Większość systemów używa `bash` lub `zsh`. Oba działają dobrze. Polecenia w tym kursie działają w obu.
 
-Najważniejsze rzeczy, które warto wiedzieć:
+Kluczowe rzeczy do zapamiętania:
 
 ```bash
-# Move around
+# Poruszanie się
 cd ~/projects/ai-engineering-from-scratch
 pwd
 ls -la
 
-# History search (most useful shortcut you'll learn)
-# Ctrl+R then type part of a previous command
-# Press Ctrl+R again to cycle through matches
+# Wyszukiwanie w historii (najbardziej przydatny skrót, jakiego się nauczysz)
+# Ctrl+R, a następnie wpisz fragment wcześniejszego polecenia
+# Naciśnij Ctrl+R ponownie, aby przechodzić między dopasowaniami
 
-# Clear terminal
-clear   # or Ctrl+L
+# Czyszczenie terminala
+clear   # lub Ctrl+L
 
-# Cancel a running command
+# Anulowanie działającego polecenia
 # Ctrl+C
 
-# Suspend a running command (resume with fg)
+# Zawieszenie działającego polecenia (wznowienie poleceniem fg)
 # Ctrl+Z
 ```
 
-### Krok 2: Potokowanie i przekierowania
+### Krok 2: Piping i przekierowania
 
-Potoki łączą ze sobą polecenia. W ten sposób przetwarzasz dzienniki, wyniki filtrowania i narzędzia łańcuchowe. Będziesz z tego korzystał stale.
+Piping łączy polecenia ze sobą. W ten sposób przetwarza się logi, filtruje wyjście i łączy narzędzia w łańcuchy. Będziesz tego używać nieustannie.
 
 ```bash
-# Count how many times "loss" appears in a log
+# Policz, ile razy "loss" pojawia się w logu
 cat train.log | grep "loss" | wc -l
 
-# Extract just the loss values from training output
+# Wyciągnij same wartości loss z wyjścia treningu
 grep "loss:" train.log | awk '{print $NF}' > losses.txt
 
-# Watch a log file update in real time, filtering for errors
+# Obserwuj plik logu w czasie rzeczywistym, filtrując błędy
 tail -f train.log | grep --line-buffered "ERROR"
 
-# Sort experiments by final accuracy
+# Posortuj eksperymenty według końcowej dokładności
 grep "final_accuracy" results/*.log | sort -t= -k2 -n -r
 
-# Redirect stdout and stderr to separate files
+# Przekieruj stdout i stderr do osobnych plików
 python train.py > output.log 2> errors.log
 
-# Redirect both to the same file
+# Przekieruj oba do tego samego pliku
 python train.py > train_full.log 2>&1
 ```
 
 Trzy przekierowania, których potrzebujesz:
 
-| Symbol | Co to robi |
-|------------|------------|
-| `>` | Zapisz standardowe wyjście do pliku (nadpisz) |
-| `>>` | Dołącz standardowe wyjście do pliku |
-| `2>` | Zapisz stderr do pliku |
-| `2>&1` | Wyślij stderr do tego samego miejsca co stdout |
-| `\|` | Wyślij standardowe wyjście jednego polecenia jako standardowe do następnego |
+| Symbol | Co robi |
+|--------|-------------|
+| `>` | Zapisuje stdout do pliku (nadpisuje) |
+| `>>` | Dopisuje stdout do pliku |
+| `2>` | Zapisuje stderr do pliku |
+| `2>&1` | Wysyła stderr w to samo miejsce co stdout |
+| `\|` | Przekazuje stdout jednego polecenia jako stdin do następnego |
 
 ### Krok 3: Procesy w tle
 
-Treningi trwają godzinami. Nie chcesz, aby terminal był cały czas otwarty.
+Treningi trwają godzinami. Nie chcesz trzymać terminala otwartego przez cały ten czas.
 
 ```bash
-# Run in background (output still goes to terminal)
+# Uruchom w tle (wyjście nadal trafia do terminala)
 python train.py &
 
-# Run in background, immune to hangup (closing terminal won't kill it)
+# Uruchom w tle, odporne na rozłączenie (zamknięcie terminala go nie zabije)
 nohup python train.py > train.log 2>&1 &
 
-# Check what's running in background
+# Sprawdź, co działa w tle
 jobs
 ps aux | grep train.py
 
-# Bring a background job to foreground
+# Przenieś zadanie z tła na pierwszy plan
 fg %1
 
-# Kill a background process
+# Zabij proces działający w tle
 kill %1
-# or find its PID and kill that
+# albo znajdź jego PID i zabij ten
 kill $(pgrep -f "train.py")
 ```
 
 Różnica między `&`, `nohup` i `screen`/`tmux`:
 
-| Metoda | Przetrwa blisko terminalu? | Czy można ponownie podłączyć? |
-|------------|------------------------------|-------------|
+| Metoda | Przetrwa zamknięcie terminala? | Można się przyłączyć ponownie? |
+|--------|-------------------------|---------------|
 | `command &` | Nie | Nie |
-| `nohup command &` | Tak | Nie (sprawdź plik dziennika) |
+| `nohup command &` | Tak | Nie (sprawdź plik logu) |
 | `screen` / `tmux` | Tak | Tak |
 
-Na dłużej niż kilka minut użyj tmux.
+Do wszystkiego, co trwa dłużej niż kilka minut, używaj tmux.
 
 ### Krok 4: tmux
 
-tmux umożliwia tworzenie trwałych sesji terminalowych z wieloma panelami. Jest to najbardziej przydatne narzędzie do zarządzania przebiegami treningowymi.
+tmux pozwala tworzyć trwałe sesje terminala z wieloma panelami. To pojedyncze najbardziej przydatne narzędzie do zarządzania treningami.
 
 ```bash
-# Install
+# Instalacja
 # macOS
 brew install tmux
 # Ubuntu
 sudo apt install tmux
 
-# Start a named session
+# Uruchom nazwaną sesję
 tmux new -s training
 
-# Split horizontally
-# Ctrl+B then "
+# Podziel poziomo
+# Ctrl+B, a potem "
 
-# Split vertically
-# Ctrl+B then %
+# Podziel pionowo
+# Ctrl+B, a potem %
 
-# Navigate between panes
-# Ctrl+B then arrow keys
+# Nawigacja między panelami
+# Ctrl+B, a potem klawisze strzałek
 
-# Detach (session keeps running)
-# Ctrl+B then d
+# Odłącz (sesja nadal działa)
+# Ctrl+B, a potem d
 
-# Reattach
+# Przyłącz ponownie
 tmux attach -t training
 
-# List sessions
+# Lista sesji
 tmux ls
 
-# Kill a session
+# Zakończ sesję
 tmux kill-session -t training
 ```
 
-Typowa sesja przepływu pracy AI:
+Typowa sesja workflow AI:
 
 ```bash
 tmux new -s train
 
-# Pane 1: start training
+# Panel 1: uruchom trening
 python train.py --epochs 100 --lr 1e-4
 
-# Ctrl+B, " to split, then run GPU monitor
+# Ctrl+B, " aby podzielić, następnie uruchom monitor GPU
 watch -n1 nvidia-smi
 
-# Ctrl+B, % to split vertically, tail the logs
+# Ctrl+B, % aby podzielić pionowo, śledź logi
 tail -f logs/experiment.log
 
-# Now detach with Ctrl+B, d
-# SSH out, go get coffee, come back
+# Teraz odłącz się Ctrl+B, d
+# Wyloguj się przez SSH, idź na kawę, wróć
 # tmux attach -t train
 ```
 
 ### Krok 5: Monitorowanie za pomocą htop i nvtop
 
 ```bash
-# System processes (better than top)
+# Procesy systemowe (lepsze niż top)
 htop
 
-# GPU processes (if you have NVIDIA GPU)
-# Install: sudo apt install nvtop (Ubuntu) or brew install nvtop (macOS)
+# Procesy GPU (jeśli masz GPU NVIDIA)
+# Instalacja: sudo apt install nvtop (Ubuntu) lub brew install nvtop (macOS)
 nvtop
 
-# Quick GPU check without nvtop
+# Szybkie sprawdzenie GPU bez nvtop
 nvidia-smi
 
-# Watch GPU usage update every second
+# Obserwuj wykorzystanie GPU aktualizowane co sekundę
 watch -n1 nvidia-smi
 
-# See which processes are using the GPU
+# Zobacz, które procesy korzystają z GPU
 nvidia-smi --query-compute-apps=pid,name,used_memory --format=csv
 ```
 
-`htop` skróty klawiszowe, których będziesz używać:
-- `F6` lub `>` do sortowania według kolumn (sortowanie według pamięci w celu znalezienia wycieków pamięci)
+Skróty klawiszowe `htop`, których będziesz używać:
+- `F6` lub `>`, aby sortować według kolumny (sortuj według pamięci, by znaleźć wycieki pamięci)
 - `F5`, aby przełączyć widok drzewa (zobacz procesy potomne)
-- `F9`, aby zakończyć proces
+- `F9`, aby zabić proces
 - `/`, aby wyszukać nazwę procesu
 
-### Krok 6: SSH dla zdalnych urządzeń GPU
+### Krok 6: SSH dla zdalnych maszyn z GPU
 
-Wynajmując procesor graficzny w chmurze (Lambda, RunPod, Vast.ai), łączysz się przez SSH.
+Gdy wynajmujesz GPU w chmurze (Lambda, RunPod, Vast.ai), łączysz się przez SSH.
 
 ```bash
-# Basic connection
+# Podstawowe połączenie
 ssh user@gpu-box-ip
 
-# With a specific key
+# Z konkretnym kluczem
 ssh -i ~/.ssh/my_gpu_key user@gpu-box-ip
 
-# Copy files to remote
+# Skopiuj pliki na zdalną maszynę
 scp model.pt user@gpu-box-ip:~/models/
 
-# Copy files from remote
+# Skopiuj pliki ze zdalnej maszyny
 scp user@gpu-box-ip:~/results/metrics.json ./
 
-# Sync a whole directory (faster for many files)
+# Synchronizuj cały katalog (szybsze przy wielu plikach)
 rsync -avz ./data/ user@gpu-box-ip:~/data/
 
-# Port forward (access remote Jupyter/TensorBoard locally)
+# Przekierowanie portu (dostęp do zdalnego Jupyter/TensorBoard lokalnie)
 ssh -L 8888:localhost:8888 user@gpu-box-ip
-# Now open localhost:8888 in your browser
+# Teraz otwórz localhost:8888 w przeglądarce
 
-# SSH config for convenience
-# Add to ~/.ssh/config:
+# Konfiguracja SSH dla wygody
+# Dodaj do ~/.ssh/config:
 # Host gpu
 #     HostName 192.168.1.100
 #     User ubuntu
 #     IdentityFile ~/.ssh/gpu_key
 #
-# Then just:
+# Następnie po prostu:
 # ssh gpu
 ```
 
-### Krok 7: Przydatne aliasy w pracy AI
+### Krok 7: Przydatne aliasy do pracy z AI
 
 Dodaj je do swojego `~/.bashrc` lub `~/.zshrc`:
 
@@ -261,84 +261,84 @@ Dodaj je do swojego `~/.bashrc` lub `~/.zshrc`:
 source phases/00-setup-and-tooling/10-terminal-and-shell/code/shell_aliases.sh
 ```
 
-Lub skopiuj te, które chcesz. Kluczowe aliasy:
+Albo skopiuj te, które chcesz. Kluczowe aliasy:
 
 ```bash
-# GPU status at a glance
+# Status GPU na pierwszy rzut oka
 alias gpu='nvidia-smi --query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader'
 
-# Kill all Python training processes
+# Zabij wszystkie procesy treningowe Pythona
 alias killtraining='pkill -f "python.*train"'
 
-# Quick virtual environment activate
+# Szybka aktywacja środowiska wirtualnego
 alias ae='source .venv/bin/activate'
 
-# Watch training loss
+# Obserwuj loss treningu
 alias watchloss='tail -f logs/*.log | grep --line-buffered "loss"'
 ```
 
-Pełen zestaw znajdziesz w `code/shell_aliases.sh`.
+Pełny zestaw znajdziesz w `code/shell_aliases.sh`.
 
-### Krok 8: Typowe wzorce terminali AI
+### Krok 8: Typowe wzorce terminalowe w AI
 
-W praktyce pojawiają się one wielokrotnie:
+Pojawiają się wielokrotnie w praktyce:
 
 ```bash
-# Run training, log everything, notify when done
+# Uruchom trening, zaloguj wszystko, powiadom po zakończeniu
 python train.py 2>&1 | tee train.log; echo "DONE" | mail -s "Training complete" you@email.com
 
-# Compare two experiment logs side by side
+# Porównaj dwa logi eksperymentów obok siebie
 diff <(grep "accuracy" exp1.log) <(grep "accuracy" exp2.log)
 
-# Find the largest model files (clean up disk space)
+# Znajdź największe pliki modeli (zwolnij miejsce na dysku)
 find . -name "*.pt" -o -name "*.safetensors" | xargs du -h | sort -rh | head -20
 
-# Download a model from Hugging Face
+# Pobierz model z Hugging Face
 wget https://huggingface.co/model/resolve/main/model.safetensors
 
-# Untar a dataset
+# Rozpakuj dataset
 tar xzf dataset.tar.gz -C ./data/
 
-# Count lines in all Python files (see how big your project is)
+# Policz linie we wszystkich plikach Python (zobacz, jak duży jest projekt)
 find . -name "*.py" | xargs wc -l | tail -1
 
-# Check disk space (training data fills disks fast)
+# Sprawdź miejsce na dysku (dane treningowe szybko zapełniają dyski)
 df -h
 du -sh ./data/*
 
-# Environment variable check before training
+# Sprawdzenie zmiennych środowiskowych przed treningiem
 env | grep -i cuda
 env | grep -i torch
 ```
 
-## Użyj tego
+## Zastosowanie
 
 Oto, kiedy każde narzędzie wchodzi w grę podczas tego kursu:
 
-| Narzędzie | Kiedy go użyjesz |
+| Narzędzie | Kiedy go używasz |
 |------|----------------|
-| tmux | Każdy bieg treningowy (faza 3+) |
-| `tail -f` + `grep` | Monitorowanie dzienników treningowych |
+| tmux | Każdy trening (Fazy 3+) |
+| `tail -f` + `grep` | Monitorowanie logów treningowych |
 | `nohup` / `&` | Szybkie zadania w tle |
-| `htop` / `nvtop` | Debugowanie powolnego szkolenia, błędy OOM |
-| SSH + `rsync` | Praca nad procesorami graficznymi w chmurze |
-| Rurociągi + przekierowania | Przetwarzanie wyników eksperymentu |
-| Aliasy | Oszczędność czasu na powtarzalnych poleceniach |
+| `htop` / `nvtop` | Diagnozowanie wolnego treningu, błędów OOM |
+| SSH + `rsync` | Praca na GPU w chmurze |
+| Piping i przekierowania | Przetwarzanie wyników eksperymentów |
+| Aliasy | Oszczędność czasu przy powtarzalnych poleceniach |
 
 ## Ćwiczenia
 
-1. Zainstaluj tmux, utwórz sesję z trzema panelami i uruchom `htop` w jednym, `watch -n1 date` w drugim i skrypt Pythona w trzecim. Odłącz i podłącz ponownie.
-2. Dodaj aliasy z `code/shell_aliases.sh` do konfiguracji powłoki i załaduj ponownie za pomocą `source ~/.zshrc` (lub `~/.bashrc`).
-3. Utwórz fałszywy dziennik treningowy za pomocą `for i in $(seq 1 100); do echo "epoch $i loss: $(echo "scale=4; 1/$i" | bc)"; sleep 0.1; done > fake_train.log`, a następnie użyj `grep`, `tail` i `awk`, aby wyodrębnić tylko wartości strat.
-4. Skonfiguruj wpis konfiguracyjny SSH dla serwera, do którego masz dostęp (lub użyj `localhost`, aby przećwiczyć składnię).
+1. Zainstaluj tmux, utwórz sesję z trzema panelami i uruchom `htop` w jednym, `watch -n1 date` w drugim oraz skrypt Pythona w trzecim. Odłącz się i przyłącz ponownie.
+2. Dodaj aliasy z `code/shell_aliases.sh` do konfiguracji swojego shella i przeładuj ją poleceniem `source ~/.zshrc` (lub `~/.bashrc`).
+3. Stwórz fałszywy log treningowy poleceniem `for i in $(seq 1 100); do echo "epoch $i loss: $(echo "scale=4; 1/$i" | bc)"; sleep 0.1; done > fake_train.log`, a następnie użyj `grep`, `tail` i `awk`, aby wyciągnąć same wartości loss.
+4. Skonfiguruj wpis SSH dla serwera, do którego masz dostęp (lub użyj `localhost`, aby przećwiczyć składnię).
 
-## Kluczowe terminy
+## Kluczowe pojęcia
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Pojęcie | Co mówią ludzie | Co to naprawdę oznacza |
 |------|----------------|----------------------|
-| Powłoka | „Terminal” | Program interpretujący Twoje polecenia (bash, zsh, fish) |
-| tmux | „Multiplekser terminali” | Program, który umożliwia uruchamianie wielu sesji terminalowych w jednym oknie i odłączanie/ponowne podłączanie |
-| Rura | „Sprawa w barze” | Operator `\|`, który wysyła dane wyjściowe jednego polecenia jako dane wejściowe do innego |
-| PID | „Identyfikator procesu” | Unikalny numer przypisany do każdego działającego procesu, używany do jego monitorowania lub zakończenia |
-| nieee | „Brak rozłączania się” | Uruchamia polecenie odporne na sygnał rozłączenia, więc zamknięcie terminala go nie zabije |
-| SSH | „Łączenie z serwerem” | Secure Shell, szyfrowany protokół do uruchamiania poleceń na zdalnym komputerze |
+| Shell | "Terminal" | Program interpretujący twoje polecenia (bash, zsh, fish) |
+| tmux | "Terminal multiplexer" | Program, który pozwala uruchamiać wiele sesji terminala w jednym oknie oraz odłączać/przyłączać je |
+| Pipe | "Ten kreseczka" | Operator `\|`, który wysyła wyjście jednego polecenia jako wejście do drugiego |
+| PID | "Process ID" | Unikalny numer przypisany każdemu działającemu procesowi, używany do jego monitorowania lub zabicia |
+| nohup | "No hangup" | Uruchamia polecenie odporne na sygnał rozłączenia, więc zamknięcie terminala go nie zabije |
+| SSH | "Łączenie się z serwerem" | Secure Shell, szyfrowany protokół do uruchamiania poleceń na zdalnej maszynie |
