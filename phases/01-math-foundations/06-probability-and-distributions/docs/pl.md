@@ -1,258 +1,258 @@
 # Prawdopodobieństwo i rozkłady
 
-> Prawdopodobieństwo to język, którego sztuczna inteligencja używa do wyrażania niepewności.
+> Prawdopodobieństwo to język, którym AI wyraża niepewność.
 
-**Typ:** Ucz się
+**Typ:** Nauka
 **Język:** Python
-**Wymagania wstępne:** Faza 1, lekcje 01-04
+**Wymagania wstępne:** Faza 1, Lekcje 01-04
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Implementuj od podstaw pliki PMF i PDF dla rozkładów Bernoulliego, kategorycznych, Poissona, jednolitych i normalnych
-- Oblicz wartość oczekiwaną, wariancję i użyj centralnego twierdzenia granicznego, aby wyjaśnić, dlaczego dominują Gaussa
-- Twórz funkcje softmax i log-softmax za pomocą sztuczki ze stabilnością numeryczną (odejmij max logit)
-- Oblicz stratę entropii krzyżowej na podstawie logitów i połącz ją z ujemnym logarytmem wiarygodności
+- Zaimplementuj od podstaw PMF i PDF dla rozkładów Bernoulliego, kategorycznego, Poissona, jednostajnego i normalnego
+- Oblicz wartość oczekiwaną, wariancję i wykorzystaj centralne twierdzenie graniczne, by wyjaśnić, dlaczego rozkłady Gaussa dominują
+- Zbuduj funkcje softmax i log-softmax z trikiem zapewniającym stabilność numeryczną (odejmowanie maksymalnego logitu)
+- Oblicz stratę cross-entropy z logitów i powiąż ją z ujemnym logarytmem wiarygodności (negative log-likelihood)
 
 ## Problem
 
-Klasyfikator generuje wynik `[0.03, 0.91, 0.06]`. Model językowy wybiera następne słowo spośród 50 000 kandydatów. Model dyfuzji generuje obrazy poprzez próbkowanie z wyuczonych rozkładów. Wszystko to jest prawdopodobieństwo w działaniu.
+Klasyfikator zwraca `[0.03, 0.91, 0.06]`. Model językowy wybiera kolejne słowo spośród 50 000 kandydatów. Model dyfuzyjny generuje obrazy, próbkując z wyuczonych rozkładów. Wszystko to jest prawdopodobieństwem w działaniu.
 
-Każda prognoza dokonywana przez model jest rozkładem prawdopodobieństwa. Każda funkcja straty mierzy, jak daleko przewidywany rozkład jest od prawdziwego. Każdy etap uczenia dostosowuje parametry, aby jedna dystrybucja bardziej przypominała inną. Bez prawdopodobieństwa nie można przeczytać pojedynczego artykułu dotyczącego uczenia maszynowego, debugować pojedynczego modelu ani zrozumieć, dlaczego strata szkoleniowa wynosi NaN.
+Każda predykcja modelu jest rozkładem prawdopodobieństwa. Każda funkcja straty mierzy, jak bardzo przewidywany rozkład różni się od prawdziwego. Każdy krok treningu dostosowuje parametry tak, aby jeden rozkład bardziej przypominał drugi. Bez prawdopodobieństwa nie da się przeczytać ani jednego artykułu z dziedziny ML, zdebugować ani jednego modelu, ani zrozumieć, dlaczego strata treningowa wynosi NaN.
 
 ## Koncepcja
 
-### Zdarzenia, przestrzenie próbek i prawdopodobieństwo
+### Zdarzenia, przestrzenie zdarzeń elementarnych i prawdopodobieństwo
 
-Przestrzeń próbek S jest zbiorem wszystkich możliwych wyników. Zdarzenie jest podzbiorem przestrzeni próbki. Prawdopodobieństwo przypisuje zdarzenia do liczb z zakresu od 0 do 1.
+Przestrzeń zdarzeń elementarnych S to zbiór wszystkich możliwych wyników. Zdarzenie to podzbiór przestrzeni zdarzeń elementarnych. Prawdopodobieństwo przypisuje zdarzeniom liczby z przedziału od 0 do 1.
 
 ```
-Coin flip:
+Rzut monetą:
   S = {H, T}
   P(H) = 0.5,  P(T) = 0.5
 
-Single die roll:
+Rzut pojedynczą kostką:
   S = {1, 2, 3, 4, 5, 6}
-  P(even) = P({2, 4, 6}) = 3/6 = 0.5
+  P(parzysta) = P({2, 4, 6}) = 3/6 = 0.5
 ```
 
-Trzy aksjomaty definiują całe prawdopodobieństwo:
+Trzy aksjomaty definiują całą teorię prawdopodobieństwa:
 1. P(A) >= 0 dla dowolnego zdarzenia A
-2. P(S) = 1 (zawsze coś się dzieje)
+2. P(S) = 1 (coś zawsze się zdarza)
 3. P(A lub B) = P(A) + P(B), gdy A i B nie mogą wystąpić jednocześnie
 
-Wszystko inne (twierdzenie Bayesa, oczekiwania, rozkłady) wynika z tych trzech zasad.
+Wszystko inne (twierdzenie Bayesa, wartości oczekiwane, rozkłady) wynika z tych trzech reguł.
 
 ### Prawdopodobieństwo warunkowe i niezależność
 
-P(A|B) to prawdopodobieństwo zdarzenia A, przy założeniu, że wydarzyło się B.
+P(A|B) to prawdopodobieństwo zajścia A pod warunkiem, że zaszło B.
 
 ```
-P(A|B) = P(A and B) / P(B)
+P(A|B) = P(A i B) / P(B)
 
-Example: deck of cards
-  P(King | Face card) = P(King and Face card) / P(Face card)
+Przykład: talia kart
+  P(Król | Karta figurowa) = P(Król i Karta figurowa) / P(Karta figurowa)
                       = (4/52) / (12/52)
                       = 4/12 = 1/3
 ```
 
-Dwa zdarzenia są niezależne, jeśli wiedza o jednym nie mówi nic o drugim:
+Dwa zdarzenia są niezależne, gdy znajomość jednego nic nie mówi o drugim:
 
 ```
-Independent:   P(A|B) = P(A)
-Equivalent to: P(A and B) = P(A) * P(B)
+Niezależność:   P(A|B) = P(A)
+Równoważnie:    P(A i B) = P(A) * P(B)
 ```
 
-Rzuty monetą są niezależne. Karty do rysowania bez wymiany nie są.
+Rzuty monetą są niezależne. Losowanie kart bez zwracania - nie.
 
-### Funkcje masy prawdopodobieństwa a funkcje gęstości prawdopodobieństwa
+### Funkcje masy prawdopodobieństwa (PMF) a funkcje gęstości prawdopodobieństwa (PDF)
 
-Dyskretne zmienne losowe mają funkcję masy prawdopodobieństwa (PMF). Każdy wynik ma określone prawdopodobieństwo, które można bezpośrednio odczytać.
+Dyskretne zmienne losowe mają funkcję masy prawdopodobieństwa (PMF). Każdy wynik ma konkretne prawdopodobieństwo, które można odczytać bezpośrednio.
 
 ```
 PMF: P(X = k)
 
-Fair die:
+Uczciwa kostka:
   P(X = 1) = 1/6
   P(X = 2) = 1/6
   ...
   P(X = 6) = 1/6
 
-  Sum of all probabilities = 1
+  Suma wszystkich prawdopodobieństw = 1
 ```
 
-Ciągłe zmienne losowe mają funkcję gęstości prawdopodobieństwa (PDF). Gęstość w jednym punkcie nie jest prawdopodobieństwem. Prawdopodobieństwo wynika z całkowania gęstości w przedziale.
+Ciągłe zmienne losowe mają funkcję gęstości prawdopodobieństwa (PDF). Gęstość w pojedynczym punkcie nie jest prawdopodobieństwem. Prawdopodobieństwo otrzymuje się, całkując gęstość po przedziale.
 
 ```
 PDF: f(x)
 
-P(a <= X <= b) = integral of f(x) from a to b
+P(a <= X <= b) = całka z f(x) od a do b
 
-f(x) can be greater than 1 (density, not probability)
-integral from -inf to +inf of f(x) dx = 1
+f(x) może być większe niż 1 (gęstość, nie prawdopodobieństwo)
+całka od -inf do +inf z f(x) dx = 1
 ```
 
-To rozróżnienie ma znaczenie w ML. Wynikiem klasyfikacji są PMF (wybory dyskretne). Ukryte przestrzenie VAE wykorzystują pliki PDF (ciągłe).
+To rozróżnienie ma znaczenie w ML. Wyniki klasyfikacji to PMF (wybory dyskretne). Przestrzenie ukryte VAE wykorzystują PDF (ciągłe).
 
-### Wspólne dystrybucje
+### Popularne rozkłady
 
-**Bernoulli:** jedno badanie, dwa wyniki. Modele klasyfikacji binarnej.
+**Bernoulliego:** jedna próba, dwa wyniki. Modeluje klasyfikację binarną.
 
 ```
 P(X = 1) = p
 P(X = 0) = 1 - p
-Mean = p,  Variance = p(1-p)
+Średnia = p,  Wariancja = p(1-p)
 ```
 
-**Kategoryczne:** jedno badanie, k wyników. Modele klasyfikacji wieloklasowej (wyjście softmax).
+**Kategoryczny:** jedna próba, k wyników. Modeluje klasyfikację wieloklasową (wynik softmax).
 
 ```
-P(X = i) = p_i,  where sum of p_i = 1
-Example: P(cat) = 0.7,  P(dog) = 0.2,  P(bird) = 0.1
+P(X = i) = p_i,  gdzie suma p_i = 1
+Przykład: P(kot) = 0.7,  P(pies) = 0.2,  P(ptak) = 0.1
 ```
 
-**Jednolity:** wszystkie wyniki są jednakowo prawdopodobne. Używany do losowej inicjalizacji.
+**Jednostajny:** wszystkie wyniki jednakowo prawdopodobne. Wykorzystywany do losowej inicjalizacji.
 
 ```
-Discrete: P(X = k) = 1/n for k in {1, ..., n}
-Continuous: f(x) = 1/(b-a) for x in [a, b]
+Dyskretny: P(X = k) = 1/n dla k z {1, ..., n}
+Ciągły: f(x) = 1/(b-a) dla x z [a, b]
 ```
 
-**Normalna (Gaussa):** krzywa dzwonowa. Sparametryzowany za pomocą średniej (mu) i wariancji (sigma^2).
+**Normalny (Gaussa):** krzywa dzwonowa. Parametryzowany przez średnią (mu) i wariancję (sigma^2).
 
 ```
 f(x) = (1 / sqrt(2*pi*sigma^2)) * exp(-(x - mu)^2 / (2*sigma^2))
 
-Standard normal: mu = 0, sigma = 1
-  68% of data within 1 sigma
-  95% within 2 sigma
-  99.7% within 3 sigma
+Standardowy rozkład normalny: mu = 0, sigma = 1
+  68% danych w przedziale 1 sigma
+  95% w przedziale 2 sigma
+  99.7% w przedziale 3 sigma
 ```
 
-**Poisson:** liczba rzadkich zdarzeń w ustalonych odstępach czasu. Modeluje wskaźniki zdarzeń.
+**Poissona:** liczba rzadkich zdarzeń w ustalonym przedziale. Modeluje tempo występowania zdarzeń.
 
 ```
 P(X = k) = (lambda^k * e^(-lambda)) / k!
-Mean = lambda,  Variance = lambda
+Średnia = lambda,  Wariancja = lambda
 ```
 
-### Oczekiwana wartość i wariancja
+### Wartość oczekiwana i wariancja
 
-Wartość oczekiwana to średni ważony wynik.
+Wartość oczekiwana to średnia ważona wynikami.
 
 ```
-Discrete:   E[X] = sum of x_i * P(X = x_i)
-Continuous: E[X] = integral of x * f(x) dx
+Dyskretna:  E[X] = suma x_i * P(X = x_i)
+Ciągła:     E[X] = całka z x * f(x) dx
 ```
 
-Miary wariancji rozłożone są wokół średniej.
+Wariancja mierzy rozrzut wokół średniej.
 
 ```
 Var(X) = E[(X - E[X])^2] = E[X^2] - (E[X])^2
-Standard deviation = sqrt(Var(X))
+Odchylenie standardowe = sqrt(Var(X))
 ```
 
-W ML wartość oczekiwana pojawia się jako funkcja straty (średnia strata w rozkładzie danych). Wariancja mówi o stabilności modelu. Duża zmienność nachyleń oznacza hałaśliwy trening.
+W ML wartość oczekiwana pojawia się jako funkcja straty (średnia strata po rozkładzie danych). Wariancja mówi o stabilności modelu. Wysoka wariancja gradientów oznacza zaszumiony trening.
 
-### Podziały łączne i krańcowe
+### Rozkłady łączne i brzegowe
 
-Rozkład łączny P(X, Y) opisuje łącznie dwie zmienne losowe.
+Rozkład łączny P(X, Y) opisuje dwie zmienne losowe razem.
 
-Wspólny przykład PMF (X = pogoda, Y = parasol):
+Przykład łącznego PMF (X = pogoda, Y = parasol):
 
-| | Y=0 (bez parasola) | Y=1 (parasol) | Marginalny P(X) |
+| | Y=0 (bez parasola) | Y=1 (parasol) | Brzegowy P(X) |
 |---|---|---|---|
-| X=0 (słońce) | 0,40 | 0,10 | P(X=0) = 0,50 |
-| X=1 (deszcz) | 0,05 | 0,45 | P(X=1) = 0,50 |
-| **Marginalny P(Y)** | P(Y=0) = 0,45 | P(Y=1) = 0,55 | 1,00 |
+| X=0 (słońce) | 0.40 | 0.10 | P(X=0) = 0.50 |
+| X=1 (deszcz) | 0.05 | 0.45 | P(X=1) = 0.50 |
+| **Brzegowy P(Y)** | P(Y=0) = 0.45 | P(Y=1) = 0.55 | 1.00 |
 
-Rozkład krańcowy sumuje drugą zmienną:
+Rozkład brzegowy sumuje po drugiej zmiennej:
 
 ```
-P(X = x) = sum over all y of P(X = x, Y = y)
+P(X = x) = suma po wszystkich y z P(X = x, Y = y)
 ```
 
-Sumy wierszy i kolumn w powyższej tabeli są marginesami.
+Sumy wierszy i kolumn w powyższej tabeli to rozkłady brzegowe.
 
 ### Dlaczego rozkład normalny pojawia się wszędzie
 
-Centralne twierdzenie graniczne: suma (lub średnia) wielu niezależnych zmiennych losowych zbiega się do rozkładu normalnego, niezależnie od rozkładu pierwotnego.
+Centralne twierdzenie graniczne (CTG): suma (lub średnia) wielu niezależnych zmiennych losowych zbiega do rozkładu normalnego, niezależnie od rozkładu wyjściowego.
 
 ```
-Roll 1 die:  uniform distribution (flat)
-Average of 2 dice:  triangular (peaked)
-Average of 30 dice: nearly perfect bell curve
+Rzut 1 kostką:  rozkład jednostajny (płaski)
+Średnia z 2 kostek:  trójkątny (ze szczytem)
+Średnia z 30 kostek: niemal idealna krzywa dzwonowa
 
-This works for ANY starting distribution.
+Działa to dla DOWOLNEGO rozkładu początkowego.
 ```
 
-Oto dlaczego:
+Dlatego:
 - Błędy pomiarowe są w przybliżeniu normalne (wiele małych, niezależnych źródeł)
-- Inicjalizacja wag w sieciach neuronowych wykorzystuje rozkłady normalne
-- Szum gradientowy w SGD jest w przybliżeniu normalny (suma wielu gradientów próbek)
-- Rozkład normalny to maksymalny rozkład entropii dla danej średniej i wariancji
+- Inicjalizacje wag w sieciach neuronowych wykorzystują rozkłady normalne
+- Szum gradientu w SGD jest w przybliżeniu normalny (suma wielu gradientów próbkowych)
+- Rozkład normalny to rozkład o maksymalnej entropii dla danej średniej i wariancji
 
-### Zapisz prawdopodobieństwa
+### Logarytmy prawdopodobieństw
 
-Surowe prawdopodobieństwa powodują problemy numeryczne. Mnożenie razem wielu małych prawdopodobieństw szybko prowadzi do zera.
-
-```
-P(sentence) = P(word1) * P(word2) * ... * P(word_n)
-            = 0.01 * 0.003 * 0.02 * ...
-            -> 0.0 (underflow after ~30 terms)
-```
-
-Prawdopodobieństwa dziennika naprawiają to. Mnożenia stają się dodawaniami.
+Surowe prawdopodobieństwa powodują problemy numeryczne. Mnożenie wielu małych prawdopodobieństw szybko prowadzi do underflow do zera.
 
 ```
-log P(sentence) = log P(word1) + log P(word2) + ... + log P(word_n)
-                = -4.6 + -5.8 + -3.9 + ...
-                -> finite number (no underflow)
+P(zdanie) = P(słowo1) * P(słowo2) * ... * P(słowo_n)
+          = 0.01 * 0.003 * 0.02 * ...
+          -> 0.0 (underflow po ~30 czynnikach)
 ```
 
-Zasady:
+Logarytmy prawdopodobieństw rozwiązują ten problem. Mnożenia stają się dodawaniami.
+
+```
+log P(zdanie) = log P(słowo1) + log P(słowo2) + ... + log P(słowo_n)
+              = -4.6 + -5.8 + -3.9 + ...
+              -> liczba skończona (brak underflow)
+```
+
+Reguły:
 - log(a * b) = log(a) + log(b)
-- prawdopodobieństwa logarytmiczne są zawsze <= 0 (ponieważ 0 < P <= 1)
-- Bardziej negatywne = mniej prawdopodobne
-- Strata entropii krzyżowej to ujemny logarytm prawdopodobieństwa właściwej klasy
+- logarytmy prawdopodobieństw są zawsze <= 0 (ponieważ 0 < P <= 1)
+- Bardziej ujemna wartość = mniej prawdopodobne
+- Strata cross-entropy to ujemny logarytm prawdopodobieństwa poprawnej klasy
 
 ### Softmax jako rozkład prawdopodobieństwa
 
-Sieci neuronowe generują surowe wyniki (logity). Softmax przekształca je w prawidłowy rozkład prawdopodobieństwa.
+Sieci neuronowe zwracają surowe wyniki (logity). Softmax przekształca je w prawidłowy rozkład prawdopodobieństwa.
 
 ```
-softmax(z_i) = exp(z_i) / sum(exp(z_j) for all j)
+softmax(z_i) = exp(z_i) / suma(exp(z_j) dla wszystkich j)
 
-Properties:
-  - All outputs are in (0, 1)
-  - All outputs sum to 1
-  - Preserves relative ordering of inputs
-  - exp() amplifies differences between logits
+Właściwości:
+  - Wszystkie wyniki należą do (0, 1)
+  - Wszystkie wyniki sumują się do 1
+  - Zachowuje względną kolejność wejść
+  - exp() wzmacnia różnice między logitami
 ```
 
-Sztuczka softmax: odejmij maksymalny logit przed potęgowaniem, aby zapobiec przepełnieniu.
+Trik softmax: odejmij maksymalny logit przed eksponencjacją, aby zapobiec przepełnieniu (overflow).
 
 ```
 z = [100, 101, 102]
 exp(102) = overflow
 
 z_shifted = z - max(z) = [-2, -1, 0]
-exp(0) = 1  (safe)
+exp(0) = 1  (bezpieczne)
 
-Same result, no overflow.
+Ten sam wynik, brak overflow.
 ```
 
-Log-softmax łączy softmax i log w celu zapewnienia stabilności numerycznej. PyTorch używa tego wewnętrznie do utraty entropii krzyżowej.
+Log-softmax łączy softmax i logarytm dla stabilności numerycznej. PyTorch wykorzystuje to wewnętrznie do straty cross-entropy.
 
 ### Próbkowanie
 
 Próbkowanie oznacza losowanie wartości z rozkładu. W ML:
-- Rezygnacja losowo pobiera próbki, które neurony należy wyzerować
-- Zwiększanie danych próbek losowych przekształceń
-- Modele językowe próbkują następny token z przewidywanej dystrybucji
-- Modele dyfuzyjne próbkują szum i stopniowo go odszumiają
+- Dropout losowo próbkuje, które neurony wyzerować
+- Augmentacja danych próbkuje losowe transformacje
+- Modele językowe próbkują kolejny token z przewidywanego rozkładu
+- Modele dyfuzyjne próbkują szum i stopniowo go usuwają
 
-Próbkowanie z dowolnych rozkładów wymaga technik takich jak próbkowanie z odwrotną transformacją, próbkowanie przez odrzucenie lub sztuczka reparametryzacyjna (stosowana w VAE).
+Próbkowanie z dowolnych rozkładów wymaga technik takich jak próbkowanie metodą odwrotnej dystrybuanty (inverse transform sampling), próbkowanie eliminacyjne (rejection sampling) lub trik reparametryzacji (wykorzystywany w VAE).
 
 ## Zbuduj to
 
@@ -278,7 +278,7 @@ p_king_given_face = conditional_probability(4/52, 12/52)
 print(f"P(King | Face card) = {p_king_given_face:.4f}")
 ```
 
-### Krok 2: PMF i PDF od zera
+### Krok 2: PMF i PDF od podstaw
 
 ```python
 def bernoulli_pmf(k, p):
@@ -349,7 +349,7 @@ def sample_normal_box_muller(mu, sigma, n=1):
     return samples
 ```
 
-### Krok 5: Softmax i log prawdopodobieństwa
+### Krok 5: Softmax i logarytmy prawdopodobieństw
 
 ```python
 def softmax(logits):
@@ -391,11 +391,11 @@ ys = [normal_pdf(x, mu, sigma) for x, mu, sigma in ...]
 plt.plot(xs, ys)
 ```
 
-Pełne wdrożenia wraz ze wszystkimi wizualizacjami znajdują się w `code/probability.py`.
+Pełne implementacje ze wszystkimi wizualizacjami znajdują się w `code/probability.py`.
 
-## Użyj tego
+## Wykorzystaj to
 
-W przypadku NumPy i SciPy wszystko powyżej jest jednowierszowe:
+Z NumPy i SciPy wszystko powyższe sprowadza się do jednolinijkowców:
 
 ```python
 import numpy as np
@@ -414,41 +414,41 @@ print(f"Softmax: {probs}")
 print(f"Log-softmax: {log_probs}")
 ```
 
-Zbudowałeś je od zera. Teraz już wiesz, co robią wezwania do biblioteki.
+Zbudowałeś to wszystko od podstaw. Teraz wiesz, co robią wywołania bibliotek.
 
 ## Ćwiczenia
 
-1. Zaimplementuj próbkowanie z odwrotną transformacją dla rozkładu wykładniczego. Sprawdź, próbkując 10 000 wartości i porównując histogram z prawdziwym plikiem PDF.
+1. Zaimplementuj próbkowanie metodą odwrotnej dystrybuanty (inverse transform sampling) dla rozkładu wykładniczego. Zweryfikuj, próbkując 10 000 wartości i porównując histogram z prawdziwym PDF.
 
-2. Zbuduj wspólną tabelę rozkładu dla dwóch załadowanych kości. Oblicz rozkłady krańcowe i sprawdź, czy kostki są niezależne.
+2. Zbuduj tabelę rozkładu łącznego dla dwóch obciążonych kostek. Oblicz rozkłady brzegowe i sprawdź, czy kostki są niezależne.
 
-3. Oblicz stratę entropii krzyżowej dla klasyfikatora 5-klasowego, który generuje logity `[2.0, 0.5, -1.0, 3.0, 0.1]`, gdy poprawną klasą jest indeks 3. Następnie zweryfikuj swoją odpowiedź za pomocą `nn.CrossEntropyLoss` PyTorcha.
+3. Oblicz stratę cross-entropy dla 5-klasowego klasyfikatora, który zwraca logity `[2.0, 0.5, -1.0, 3.0, 0.1]`, gdy poprawną klasą jest indeks 3. Następnie zweryfikuj swój wynik za pomocą `nn.CrossEntropyLoss` z PyTorch.
 
-4. Napisz funkcję, która pobiera listę logarytmów prawdopodobieństw i zwraca najbardziej prawdopodobną sekwencję, całkowite prawdopodobieństwo logarytmiczne i równoważne prawdopodobieństwo surowe. Przetestuj to za pomocą zdania składającego się z 50 słów, gdzie każde słowo ma prawdopodobieństwo 0,01.
+4. Napisz funkcję, która przyjmuje listę logarytmów prawdopodobieństw i zwraca najbardziej prawdopodobną sekwencję, całkowity logarytm prawdopodobieństwa oraz odpowiadające mu surowe prawdopodobieństwo. Przetestuj ją na zdaniu złożonym z 50 słów, z których każde ma prawdopodobieństwo 0.01.
 
-## Kluczowe terminy
+## Kluczowe pojęcia
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się potocznie mówi | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Przykładowa przestrzeń | „Wszystkie możliwości” | Zbiór S każdego możliwego wyniku eksperymentu |
-| PMF | „Funkcja prawdopodobieństwa” | Funkcja określająca dokładne prawdopodobieństwo każdego dyskretnego wyniku, sumując do 1 |
-| PDF | „Krzywa prawdopodobieństwa” | Funkcja gęstości dla zmiennych ciągłych. Całkuj po przedziale, aby uzyskać prawdopodobieństwo |
-| Prawdopodobieństwo warunkowe | „Prawdopodobieństwo przy danym czymś” | P(A\|B) = P(A i B) / P(B). Podstawy myślenia bayesowskiego i twierdzenie Bayesa |
-| Niepodległość | „Nie wpływają na siebie” | P(A i B) = P(A) * P(B). Znajomość jednego wydarzenia nic nie mówi o drugim |
-| Oczekiwana wartość | „Średnia” | Suma wszystkich wyników ważona prawdopodobieństwem. Funkcja straty jest wartością oczekiwaną |
-| Wariancja | „Jak rozproszeni” | Oczekiwane kwadratowe odchylenie od średniej. Wysoka wariancja = zaszumione, niestabilne szacunki |
-| Rozkład normalny | „Krzywa dzwonowa” | f(x) = (1/sqrt(2*pi*sigma^2)) * exp(-(x-mu)^2/(2*sigma^2)). Pojawia się wszędzie dzięki CLT |
-| Centralne twierdzenie graniczne | „Średnie stają się normalne” | Średnia wielu niezależnych próbek zbiega się do rozkładu normalnego niezależnie od źródła |
-| Wspólna dystrybucja | „Dwie zmienne razem” | P(X, Y) opisuje prawdopodobieństwo każdej kombinacji wyników X i Y |
-| Dystrybucja krańcowa | „Podsumuj drugą zmienną” | P(X) = suma_y P(X, Y). Odzyskuje rozkład jednej zmiennej ze złącza |
-| Zaloguj prawdopodobieństwo | „Dziennik prawdopodobieństwa” | log P(x). Zamienia produkty w sumy, zapobiegając niedoborom liczbowym w długich sekwencjach |
-| Softmax | „Zamień wyniki na prawdopodobieństwa” | softmax(z_i) = exp(z_i) / suma(exp(z_j)). Odwzorowuje logity o wartościach rzeczywistych na prawidłowy rozkład prawdopodobieństwa |
-| Entropia krzyżowa | „Funkcja straty” | -sum(p_true * log(p_przewidywana)). Mierzy, jak różne są dwa rozkłady. Niżej jest lepiej |
-| Logity | „Wyniki modelu surowego” | Nieznormalizowane wyniki przed softmax. Nazwany na cześć funkcji logistycznej |
-| Próbkowanie | „Rysowanie wartości losowych” | Generowanie wartości na podstawie rozkładu prawdopodobieństwa. Jak modele generują dane wyjściowe |
+| Przestrzeń zdarzeń elementarnych | "Wszystkie możliwości" | Zbiór S wszystkich możliwych wyników eksperymentu |
+| PMF | "Funkcja prawdopodobieństwa" | Funkcja podająca dokładne prawdopodobieństwo każdego dyskretnego wyniku, sumująca się do 1 |
+| PDF | "Krzywa prawdopodobieństwa" | Funkcja gęstości dla zmiennych ciągłych. Aby uzyskać prawdopodobieństwo, należy ją scałkować po przedziale |
+| Prawdopodobieństwo warunkowe | "Prawdopodobieństwo pod warunkiem czegoś" | P(A\|B) = P(A i B) / P(B). Podstawa myślenia bayesowskiego i twierdzenia Bayesa |
+| Niezależność | "One na siebie nie wpływają" | P(A i B) = P(A) * P(B). Znajomość jednego zdarzenia nic nie mówi o drugim |
+| Wartość oczekiwana | "Średnia" | Ważona prawdopodobieństwami suma wszystkich wyników. Funkcja straty jest wartością oczekiwaną |
+| Wariancja | "Jak bardzo rozproszone" | Oczekiwane kwadratowe odchylenie od średniej. Wysoka wariancja = zaszumione, niestabilne estymaty |
+| Rozkład normalny | "Krzywa dzwonowa" | f(x) = (1/sqrt(2*pi*sigma^2)) * exp(-(x-mu)^2/(2*sigma^2)). Pojawia się wszędzie dzięki CTG |
+| Centralne twierdzenie graniczne | "Średnie stają się normalne" | Średnia z wielu niezależnych próbek zbiega do rozkładu normalnego niezależnie od źródła |
+| Rozkład łączny | "Dwie zmienne razem" | P(X, Y) opisuje prawdopodobieństwo każdej kombinacji wyników X i Y |
+| Rozkład brzegowy | "Wysumuj drugą zmienną" | P(X) = suma_y P(X, Y). Odzyskuje rozkład jednej zmiennej z rozkładu łącznego |
+| Logarytm prawdopodobieństwa | "Logarytm z prawdopodobieństwa" | log P(x). Zamienia iloczyny na sumy, zapobiegając numerycznemu underflow w długich sekwencjach |
+| Softmax | "Zamień wyniki na prawdopodobieństwa" | softmax(z_i) = exp(z_i) / suma(exp(z_j)). Przekształca rzeczywiste logity w prawidłowy rozkład prawdopodobieństwa |
+| Cross-entropy | "Funkcja straty" | -suma(p_true * log(p_predicted)). Mierzy, jak bardzo różnią się dwa rozkłady. Mniej znaczy lepiej |
+| Logity | "Surowe wyjścia modelu" | Nieznormalizowane wyniki przed softmax. Nazwa pochodzi od funkcji logistycznej |
+| Próbkowanie | "Losowanie wartości" | Generowanie wartości zgodnie z rozkładem prawdopodobieństwa. Tak modele generują wyniki |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-- [3Blue1Brown: Ale czym jest Centralne Twierdzenie Graniczne?](https://www.youtube.com/watch?v=zeJD6dqJ5lo) – wizualny dowód, dlaczego średnie stają się normalne
-– [Stanford CS229 Probability Review](https://cs229.stanford.edu/section/cs229-prob.pdf) – zwięzłe odniesienie obejmujące wszystko tutaj i nie tylko
-- [Sztuczka log-sum-exp/](https://gregorygundersen.com/blog/2020/02/09/log-sum-exp/) - dlaczego stabilność numeryczna ma znaczenie i jak ją osiągnąć
+- [3Blue1Brown: But what is the Central Limit Theorem?](https://www.youtube.com/watch?v=zeJD6dqJ5lo) - wizualny dowód, dlaczego średnie stają się normalne
+- [Stanford CS229 Probability Review](https://cs229.stanford.edu/section/cs229-prob.pdf) - zwięzłe opracowanie obejmujące to wszystko i więcej
+- [The Log-Sum-Exp Trick](https://gregorygundersen.com/blog/2020/02/09/log-sum-exp/) - dlaczego stabilność numeryczna ma znaczenie i jak ją osiągnąć
