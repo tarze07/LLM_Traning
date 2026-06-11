@@ -1,24 +1,24 @@
 # Git i współpraca
 
-> Kontrola wersji nie jest opcjonalna. Każdy eksperyment, każdy model i każda lekcja, którą tu zbudujesz, są śledzone.
+> Kontrola wersji nie jest opcjonalna. Każdy eksperyment, każdy model, każda lekcja, którą tu zbudujesz, jest śledzona.
 
-**Typ:** Ucz się
+**Typ:** Nauka
 **Języki:** --
-**Wymagania:** Faza 0, Lekcja 01
+**Wymagania wstępne:** Faza 0, Lekcja 01
 **Czas:** ~30 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Skonfiguruj tożsamość git i korzystaj z codziennego przepływu pracy polegającego na dodawaniu, zatwierdzaniu i wypychaniu
-- Twórz i łącz gałęzie dla izolowanych eksperymentów bez przerywania głównego
-- Napisz `.gitignore`, który wyklucza punkty kontrolne modelu i duże pliki binarne
-- Nawiguj po historii zatwierdzeń za pomocą `git log`, aby zrozumieć ewolucję projektu
+- Skonfiguruj tożsamość git i poznaj codzienny workflow add, commit i push
+- Twórz i scalaj branche dla izolowanych eksperymentów bez psucia main
+- Napisz `.gitignore`, który wyklucza checkpointy modeli i duże pliki binarne
+- Poruszaj się po historii commitów za pomocą `git log`, aby zrozumieć ewolucję projektu
 
 ## Problem
 
-Za chwilę napiszesz setki plików kodu w 20 fazach. Bez kontroli wersji stracisz pracę, zepsujesz rzeczy, których nie można cofnąć, i nie będziesz mieć możliwości współpracy z innymi.
+Za chwilę napiszesz setki plików kodu w 20 fazach. Bez kontroli wersji stracisz pracę, zepsujesz coś, czego nie da się cofnąć, i nie będziesz mieć możliwości współpracy z innymi.
 
-Git jest narzędziem. GitHub to miejsce, w którym znajduje się kod. Ta lekcja obejmuje wszystko, czego potrzebujesz do tego kursu i nic więcej.
+Git to narzędzie. GitHub to miejsce, gdzie żyje kod. Ta lekcja obejmuje to, czego potrzebujesz na potrzeby tego kursu, i nic więcej.
 
 ## Koncepcja
 
@@ -36,9 +36,9 @@ sequenceDiagram
 ```
 
 Trzy rzeczy do zapamiętania:
-1. Często zapisuj (`git commit`)
-2. Prześlij do pilota (`git push`)
-3. Oddział eksperymentów (`git checkout -b experiment`)
+1. Zapisuj często (`git commit`)
+2. Wypychaj do zdalnego repozytorium (`git push`)
+3. Twórz branche dla eksperymentów (`git checkout -b experiment`)
 
 ## Zbuduj to
 
@@ -49,7 +49,7 @@ git config --global user.name "Your Name"
 git config --global user.email "you@example.com"
 ```
 
-### Krok 2: Codzienny przepływ pracy
+### Krok 2: Codzienny workflow
 
 ```bash
 git status
@@ -58,53 +58,53 @@ git commit -m "Add perceptron implementation"
 git push origin main
 ```
 
-### Krok 3: Rozgałęzianie eksperymentów
+### Krok 3: Branchowanie do eksperymentów
 
 ```bash
 git checkout -b experiment/new-optimizer
 
-# ... make changes, commit ...
+# ... wprowadź zmiany, zrób commit ...
 
 git checkout main
 git merge experiment/new-optimizer
 ```
 
-### Krok 4: Praca z repozytorium kursu
+### Krok 4: Praca z repozytorium tego kursu
 
 ```bash
 git clone https://github.com/rohitg00/ai-engineering-from-scratch.git
 cd ai-engineering-from-scratch
 
 git checkout -b my-progress
-# work through lessons, commit your code
+# przerabiaj lekcje, commituj swój kod
 git push origin my-progress
 ```
 
-## Użyj tego
+## Zastosowanie
 
-Do tego kursu potrzebne będą dokładnie te polecenia:
+Na potrzeby tego kursu potrzebujesz dokładnie tych poleceń:
 
 | Polecenie | Kiedy |
-|--------|------|
-| `git clone` | Pobierz repozytorium kursu |
-| `git add` + `git commit` | Zapisz swoją pracę |
-| `git push` | Utwórz kopię zapasową w GitHub |
-| `git checkout -b` | Spróbuj czegoś bez przerywania głównego |
-| `git log --oneline` | Zobacz co zrobiłeś |
+|---------|------|
+| `git clone` | Pobranie repozytorium kursu |
+| `git add` + `git commit` | Zapisanie swojej pracy |
+| `git push` | Zrobienie kopii zapasowej na GitHub |
+| `git checkout -b` | Wypróbowanie czegoś bez psucia main |
+| `git log --oneline` | Sprawdzenie, co już zrobiłeś |
 
-To wszystko. Do tego kursu nie potrzebujesz rebase, cherry-pick ani submodułów.
+To wszystko. Nie potrzebujesz rebase, cherry-pick ani submodułów na potrzeby tego kursu.
 
 ## Ćwiczenia
 
-1. Sklonuj to repozytorium, utwórz gałąź o nazwie `my-progress`, utwórz plik, zatwierdź go, wypchnij
-2. Utwórz `.gitignore`, który wyklucza pliki punktów kontrolnych modelu (`.pt`, `.pth`, `.safetensors`)
-3. Przejrzyj historię zatwierdzeń tego repozytorium za pomocą `git log --oneline` i przeczytaj, jak dodano lekcje
+1. Sklonuj to repozytorium, utwórz branch o nazwie `my-progress`, stwórz plik, zrób commit i wypchnij go (push)
+2. Stwórz `.gitignore`, który wyklucza pliki checkpointów modeli (`.pt`, `.pth`, `.safetensors`)
+3. Przejrzyj historię commitów tego repozytorium za pomocą `git log --oneline` i zobacz, jak dodawane były lekcje
 
-## Kluczowe terminy
+## Kluczowe pojęcia
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co mówią ludzie | Co to faktycznie oznacza |
 |------|----------------|----------------------|
-| Zobowiąż się | „Oszczędzanie” | Migawka całego projektu w danym momencie |
-| Oddział | „Kopia” | Wskaźnik do zatwierdzenia, który postępuje w miarę pracy |
-| Połącz | „Łączenie kodu” | Pobieranie zmian z jednej gałęzi i stosowanie ich w innej |
-| Zdalny | „Chmura” | Kopia Twojego repozytorium hostowana gdzie indziej (GitHub, GitLab) |
+| Commit | „Zapisywanie" | Migawka (snapshot) całego projektu w danym momencie |
+| Branch (gałąź) | „Kopia" | Wskaźnik na commit, który przesuwa się do przodu w miarę pracy |
+| Merge (scalenie) | „Łączenie kodu" | Przeniesienie zmian z jednego brancha i zastosowanie ich na innym |
+| Remote (zdalne repozytorium) | „Chmura" | Kopia twojego repozytorium hostowana gdzie indziej (GitHub, GitLab) |
