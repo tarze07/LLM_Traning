@@ -1,43 +1,43 @@
 # Debugowanie i profilowanie
 
-> Najgorsze błędy AI nie ulegają awarii. Trenują po cichu na śmieciach i zgłaszają piękną krzywą strat.
+> Najgorsze błędy w AI nie powodują awarii. Trenują się w ciszy na śmieciowych danych i raportują piękną krzywą strat.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Język:** Python
 **Wymagania wstępne:** Lekcja 1 (Środowisko deweloperskie), podstawowa znajomość PyTorch
 **Czas:** ~60 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Użyj warunkowego `breakpoint()` i `debug_print`, aby sprawdzić kształty tensora, typy d i wartości NaN w trakcie szkolenia
-- Pętle szkoleniowe profili z `cProfile`, `line_profiler` i `tracemalloc` do wyszukiwania wąskich gardeł
-- Wykrywaj typowe błędy AI: niedopasowanie kształtu, utratę NaN, wyciek danych i tensory nieprawidłowego urządzenia
-- Skonfiguruj TensorBoard, aby wizualizować krzywe strat, histogramy wag i rozkłady gradientów
+- Użycie warunkowego `breakpoint()` oraz `debug_print` do inspekcji kształtów tensorów, typów danych (dtype) i wartości NaN w trakcie treningu
+- Profilowanie pętli treningowych za pomocą `cProfile`, `line_profiler` i `tracemalloc` w celu znalezienia wąskich gardeł
+- Wykrywanie typowych błędów AI: niezgodności kształtów, NaN w stracie, wycieku danych (data leakage) oraz tensorów na niewłaściwym urządzeniu
+- Skonfigurowanie TensorBoard do wizualizacji krzywych strat, histogramów wag i rozkładów gradientów
 
 ## Problem
 
-Kod AI zawodzi inaczej niż zwykły kod. Aplikacja internetowa ulega awarii z powodu śledzenia stosu. Źle skonfigurowana pętla treningowa działa przez 8 godzin, pochłania 200 dolarów czasu procesora graficznego i tworzy model, który przewiduje średnią każdego sygnału wejściowego. Kod nigdy nie zawierał błędów. Błąd polegał na tensorze na niewłaściwym urządzeniu, zapomnianym `.detach()` lub etykietach wyciekających do funkcji.
+Kod AI zawodzi inaczej niż zwykły kod. Aplikacja webowa pada ze stack trace'em. Źle skonfigurowana pętla treningowa działa przez 8 godzin, spala 200 dolarów czasu GPU i produkuje model, który przewiduje średnią z każdego wejścia. Kod nigdy nie zgłosił błędu. Problemem był tensor na niewłaściwym urządzeniu, zapomniane `.detach()` albo etykiety przeciekające do cech.
 
-Potrzebujesz narzędzi do debugowania, które wyłapią te ciche awarie, zanim zmarnują Twój czas i obliczenia.
+Potrzebujesz narzędzi do debugowania, które wyłapią te ciche błędy, zanim zmarnują twój czas i moc obliczeniową.
 
 ## Koncepcja
 
-Debugowanie AI działa na trzech poziomach:
+Debugowanie AI odbywa się na trzech poziomach:
 
 ```mermaid
 graph TD
-    L3["3. Training Dynamics<br/>Loss curves, gradient norms, activations"] --> L2
-    L2["2. Tensor Operations<br/>Shapes, dtypes, devices, NaN/Inf values"] --> L1
-    L1["1. Standard Python<br/>Breakpoints, logging, profiling, memory"]
+    L3["3. Dynamika treningu<br/>Krzywe strat, normy gradientów, aktywacje"] --> L2
+    L2["2. Operacje na tensorach<br/>Kształty, dtypes, urządzenia, wartości NaN/Inf"] --> L1
+    L1["1. Standardowy Python<br/>Breakpointy, logowanie, profilowanie, pamięć"]
 ```
 
-Większość ludzi od razu przechodzi na poziom 3 (wpatrując się w TensorBoard). Ale 80% błędów AI żyje na poziomach 1 i 2.
+Większość osób od razu przeskakuje do poziomu 3 (wpatrywanie się w TensorBoard). Ale 80% błędów AI żyje na poziomach 1 i 2.
 
 ## Zbuduj to
 
-### Część 1: Debugowanie wydruku (tak, to działa)
+### Część 1: Debugowanie przez printy (tak, to działa)
 
-Debugowanie drukowania zostaje odrzucone. Nie powinno. W przypadku kodu tensorowego ukierunkowana instrukcja print jest lepsza od przechodzenia przez debuger, ponieważ trzeba jednocześnie zobaczyć kształty, typy i zakresy wartości.
+Debugowanie przez printy jest lekceważone. Niesłusznie. W przypadku kodu z tensorami, celowany print bije krokowe przechodzenie przez debugger, ponieważ musisz zobaczyć kształty, typy danych i zakresy wartości naraz.
 
 ```python
 def debug_print(name, tensor):
@@ -48,11 +48,11 @@ def debug_print(name, tensor):
           f"has_nan={tensor.isnan().any().item()}")
 ```
 
-Nazwij to po każdej podejrzanej operacji. Po znalezieniu błędu usuń odciski. Prosty.
+Wywołuj to po każdej podejrzanej operacji. Gdy błąd zostanie znaleziony, usuń printy. Proste.
 
-### Część 2: Debuger Pythona (pdb i punkt przerwania)
+### Część 2: Debugger Pythona (pdb i breakpoint)
 
-Wbudowany debuger jest niedoceniany w pracy z AI. Wrzuć `breakpoint()` do swojej pętli treningowej i interaktywnie sprawdź tensory.
+Wbudowany debugger jest niedoceniany w pracy z AI. Wstaw `breakpoint()` do swojej pętli treningowej i interaktywnie sprawdzaj tensory.
 
 ```python
 def training_step(model, batch, criterion, optimizer):
@@ -67,19 +67,19 @@ def training_step(model, batch, criterion, optimizer):
     optimizer.step()
 ```
 
-Kiedy debuger cię wrzuci, przydatne polecenia:
+Kiedy debugger cię zatrzyma, przydatne komendy:
 
-- `p outputs.shape`, aby sprawdzić kształty
-- `p loss.item()`, aby zobaczyć wartość straty
-- `p torch.isnan(outputs).sum()` do zliczania NaN
-- `p model.fc1.weight.grad`, aby sprawdzić gradienty
-- `c`, aby kontynuować, `q`, aby zakończyć
+- `p outputs.shape` aby sprawdzić kształty
+- `p loss.item()` aby zobaczyć wartość straty
+- `p torch.isnan(outputs).sum()` aby policzyć NaN-y
+- `p model.fc1.weight.grad` aby sprawdzić gradienty
+- `c` aby kontynuować, `q` aby wyjść
 
-To jest debugowanie warunkowe. Zatrzymujesz się tylko wtedy, gdy coś wygląda nie tak. Ma to znaczenie w przypadku biegu treningowego obejmującego 10 000 kroków.
+To jest debugowanie warunkowe. Zatrzymujesz się tylko wtedy, gdy coś wygląda podejrzanie. Przy treningu trwającym 10 000 kroków ma to znaczenie.
 
-### Część 3: Rejestrowanie w Pythonie
+### Część 3: Logowanie w Pythonie
 
-Zastąp instrukcje drukowania logowaniem, gdy debugowanie wykracza poza szybkie sprawdzenie.
+Zastąp instrukcje print logowaniem, gdy twoje debugowanie wykracza poza szybkie sprawdzenie.
 
 ```python
 import logging
@@ -99,11 +99,11 @@ logger.warning("Loss spike detected: %.4f at step %d", loss.item(), step)
 logger.error("NaN loss at step %d, stopping", step)
 ```
 
-Rejestrowanie udostępnia znaczniki czasu, poziomy ważności i dane wyjściowe w plikach. Gdy przebieg treningowy nie powiedzie się o 3 nad ranem, potrzebujesz pliku dziennika, a nie danych wyjściowych terminala, które przewijały się poza ekranem.
+Logowanie daje ci znaczniki czasu, poziomy ważności (severity levels) i zapis do pliku. Gdy trening padnie o 3 nad ranem, chcesz mieć plik logu, a nie wyjście z terminala, które przewinęło się poza ekran.
 
-### Część 4: Sekcje kodu synchronizacji
+### Część 4: Pomiar czasu fragmentów kodu
 
-Wiedza o tym, gdzie płynie czas, jest pierwszym krokiem do optymalizacji.
+Wiedza o tym, gdzie ucieka czas, to pierwszy krok do optymalizacji.
 
 ```python
 import time
@@ -130,17 +130,17 @@ with Timer("backward pass"):
     loss.backward()
 ```
 
-Powszechny wniosek: ładowanie danych zajmuje 60% czasu szkolenia. Rozwiązaniem jest `num_workers > 0` w programie DataLoader, a nie szybszy procesor graficzny.
+Częste odkrycie: ładowanie danych zajmuje 60% czasu treningu. Rozwiązaniem jest `num_workers > 0` w twoim DataLoaderze, a nie szybsze GPU.
 
 ### Część 5: cProfile i line_profiler
 
-Kiedy potrzebujesz czegoś więcej niż ręczne timery:
+Gdy potrzebujesz czegoś więcej niż ręcznych timerów:
 
 ```bash
 python -m cProfile -s cumtime train.py
 ```
 
-To pokazuje każde wywołanie funkcji posortowane według skumulowanego czasu. W przypadku profilowania linia po linii:
+To pokazuje każde wywołanie funkcji posortowane według czasu skumulowanego (cumulative time). Do profilowania linia po linii:
 
 ```bash
 pip install line_profiler
@@ -159,7 +159,7 @@ def train_step(model, data, target):
 
 ### Część 6: Profilowanie pamięci
 
-#### Pamięć procesora z funkcją śledzenia
+#### Pamięć CPU za pomocą tracemalloc
 
 ```python
 import tracemalloc
@@ -176,7 +176,7 @@ for stat in top_stats[:10]:
     print(stat)
 ```
 
-#### Pamięć procesora z profilem pamięci
+#### Pamięć CPU za pomocą memory_profiler
 
 ```bash
 pip install memory_profiler
@@ -192,9 +192,9 @@ def load_data():
     return processed
 ```
 
-Uruchom z `python -m memory_profiler your_script.py`, aby zobaczyć użycie pamięci linia po linii.
+Uruchom za pomocą `python -m memory_profiler your_script.py`, aby zobaczyć zużycie pamięci linia po linii.
 
-#### Pamięć GPU z PyTorch
+#### Pamięć GPU za pomocą PyTorch
 
 ```python
 import torch
@@ -206,19 +206,19 @@ if torch.cuda.is_available():
     print(f"Cached: {torch.cuda.memory_reserved() / 1e9:.2f} GB")
 ```
 
-Kiedy naciśniesz OOM (brak pamięci):
+Gdy trafisz na OOM (Out of Memory):
 
-1. Zmniejsz wielkość partii (zawsze należy spróbować jako pierwsza)
-2. Użyj `torch.cuda.empty_cache()`, aby zwolnić pamięć podręczną
-3. Użyj `del tensor`, a następnie `torch.cuda.empty_cache()` w przypadku dużych półproduktów
-4. Użyj mieszanej precyzji (`torch.cuda.amp`), aby zmniejszyć o połowę zużycie pamięci
-5. Używaj punktów kontrolnych gradientu w przypadku bardzo głębokich modeli
+1. Zmniejsz rozmiar batcha (zawsze pierwsza rzecz do wypróbowania)
+2. Użyj `torch.cuda.empty_cache()`, aby zwolnić pamięć z cache
+3. Użyj `del tensor`, a następnie `torch.cuda.empty_cache()` dla dużych wartości pośrednich
+4. Użyj precyzji mieszanej (`torch.cuda.amp`), aby zmniejszyć zużycie pamięci o połowę
+5. Użyj gradient checkpointing dla bardzo głębokich modeli
 
 ### Część 7: Typowe błędy AI i jak je wyłapać
 
-#### Niedopasowanie kształtu
+#### Niezgodność kształtów (Shape Mismatch)
 
-Najczęstszy błąd. Tensor ma kształt `[batch, features]`, gdy model oczekuje `[batch, channels, height, width]`.
+Najczęstszy błąd. Tensor ma kształt `[batch, features]`, podczas gdy model oczekuje `[batch, channels, height, width]`.
 
 ```python
 def check_shapes(model, sample_input):
@@ -242,16 +242,16 @@ def check_shapes(model, sample_input):
         h.remove()
 ```
 
-Uruchom to raz z partią próbną. Odwzorowuje każdą transformację kształtu w Twoim modelu.
+Uruchom to raz z przykładowym batchem. Mapuje to każdą transformację kształtu w twoim modelu.
 
-#### Strata NaN
+#### NaN w stracie (NaN Loss)
 
-Utrata NaN oznacza, że coś eksplodowało. Najczęstsze przyczyny:
+NaN w stracie oznacza, że coś eksplodowało. Częste przyczyny:
 
-- Tempo uczenia się jest zbyt wysokie
-- Dzielenie przez zero straty celnej
-- Log zera lub liczby ujemnej
-- Eksplodujące gradienty w RNN
+- Zbyt wysoki learning rate
+- Dzielenie przez zero w niestandardowej funkcji straty
+- Logarytm zera lub liczby ujemnej
+- Eksplodujące gradienty w RNN-ach
 
 ```python
 def detect_nan(model, loss, step):
@@ -267,9 +267,9 @@ def detect_nan(model, loss, step):
     return False
 ```
 
-#### Wyciek danych
+#### Wyciek danych (Data Leakage)
 
-Twój model uzyskuje 99% dokładności na zestawie testowym. Brzmi świetnie. To błąd.
+Twój model osiąga 99% dokładności na zbiorze testowym. Brzmi świetnie. To błąd.
 
 ```python
 def check_data_leakage(train_set, test_set, id_column="id"):
@@ -282,11 +282,11 @@ def check_data_leakage(train_set, test_set, id_column="id"):
     return False
 ```
 
-Sprawdź także, czy nie ma wycieków czasowych: wykorzystanie przyszłych danych do przewidywania przeszłości. Sortuj według sygnatury czasowej przed podziałem.
+Sprawdź też wyciek czasowy (temporal leakage): wykorzystywanie przyszłych danych do przewidywania przeszłości. Posortuj według znacznika czasu przed podziałem.
 
-#### Złe urządzenie
+#### Niewłaściwe urządzenie (Wrong Device)
 
-Tensory na różnych urządzeniach (CPU i GPU) powodują błędy w czasie wykonywania. Czasami jednak tensor po cichu pozostaje na procesorze, podczas gdy wszystko inne jest na GPU, a trening przebiega powoli.
+Tensory na różnych urządzeniach (CPU vs GPU) powodują błędy w czasie wykonania. Ale czasem tensor po cichu pozostaje na CPU, podczas gdy wszystko inne jest na GPU, i trening po prostu działa wolno.
 
 ```python
 def check_devices(model, *tensors):
@@ -299,7 +299,7 @@ def check_devices(model, *tensors):
 
 ### Część 8: Podstawy TensorBoard
 
-TensorBoard pokazuje, co dzieje się w czasie treningu.
+TensorBoard pokazuje, co dzieje się wewnątrz treningu w czasie.
 
 ```bash
 pip install tensorboard
@@ -325,24 +325,24 @@ for step in range(num_steps):
 writer.close()
 ```
 
-Uruchom to:
+Uruchom go:
 
 ```bash
 tensorboard --logdir=runs
 ```
 
-Czego szukać:
+Na co zwracać uwagę:
 
-- **Strata nie maleje**: Szybkość uczenia się jest zbyt niska lub problem z architekturą modelu
-- **Strata gwałtownie oscyluje**: Szybkość uczenia się jest zbyt wysoka
-- **Strata dotyczy NaN**: Niestabilność numeryczna (patrz sekcja NaN powyżej)
-- **Maleje strata pociągu, rośnie strata wartości**: Przeuczenie
-- **Histogramy wagowe zapadające się do zera**: Zanikające gradienty
-- **Histogramy gradientu eksplodują**: Wymagane jest przycięcie gradientu
+- **Strata nie maleje**: Learning rate zbyt niski lub problem z architekturą modelu
+- **Strata oscyluje gwałtownie**: Learning rate zbyt wysoki
+- **Strata przechodzi w NaN**: Niestabilność numeryczna (zob. sekcja o NaN powyżej)
+- **Strata treningowa maleje, strata walidacyjna rośnie**: Przeuczenie (overfitting)
+- **Histogramy wag zapadają się do zera**: Zanikające gradienty (vanishing gradients)
+- **Histogramy gradientów eksplodują**: Potrzebne przycinanie gradientów (gradient clipping)
 
-### Część 9: Debuger kodu VS
+### Część 9: Debugger VS Code
 
-Do interaktywnego debugowania skonfiguruj kod VS za pomocą `launch.json`:
+Do debugowania interaktywnego skonfiguruj VS Code za pomocą `launch.json`:
 
 ```json
 {
@@ -360,21 +360,21 @@ Do interaktywnego debugowania skonfiguruj kod VS za pomocą `launch.json`:
 }
 ```
 
-Ustaw punkty przerwania, klikając rynnę. Użyj panelu Zmienne, aby sprawdzić właściwości tensora. Konsola debugowania umożliwia uruchamianie dowolnych wyrażeń języka Python w trakcie wykonywania.
+Ustaw breakpointy, klikając na marginesie (gutter). Użyj panelu Variables, aby sprawdzić właściwości tensorów. Debug Console pozwala na uruchamianie dowolnych wyrażeń Pythona w trakcie wykonywania.
 
-Przydatne do przechodzenia przez potoki wstępnego przetwarzania danych, w których chcesz zobaczyć każdą transformację.
+Przydatne do krokowego przechodzenia przez pipeline'y preprocessingu danych, gdzie chcesz zobaczyć każdą transformację.
 
-## Użyj tego
+## Zastosuj to
 
-Oto przepływ pracy debugowania, który wyłapuje większość błędów AI:
+Oto przepływ debugowania, który wyłapuje większość błędów AI:
 
-1. **Przed treningiem**: Uruchom `check_shapes` z partią próbną. Sprawdź, czy wymiary wejściowe i wyjściowe odpowiadają oczekiwaniom.
-2. **Pierwsze 10 kroków**: Użyj `debug_print` w przypadku strat, wyjść i gradientów. Upewnij się, że nic nie jest NaN, a wartości mieszczą się w rozsądnych zakresach.
-3. **Podczas treningu**: Utrata logu, szybkość uczenia się i normy gradientu. Do wizualizacji użyj TensorBoard.
-4. **Kiedy coś się zepsuje**: Upuść `breakpoint()` w miejscu awarii. Interaktywne sprawdzanie tensorów.
-5. **Dla wydajności**: Czas ładowania danych w porównaniu do przejścia do przodu i do tyłu. Pamięć profilu, jeśli jesteś w pobliżu OOM.
+1. **Przed treningiem**: Uruchom `check_shapes` z przykładowym batchem. Zweryfikuj, czy wymiary wejścia i wyjścia odpowiadają oczekiwaniom.
+2. **Pierwsze 10 kroków**: Użyj `debug_print` na stracie, wyjściach i gradientach. Potwierdź, że nic nie jest NaN i wartości mieszczą się w rozsądnych zakresach.
+3. **W trakcie treningu**: Loguj stratę, learning rate i normy gradientów. Użyj TensorBoard do wizualizacji.
+4. **Gdy coś się psuje**: Wstaw `breakpoint()` w miejscu awarii. Sprawdzaj tensory interaktywnie.
+5. **Pod kątem wydajności**: Zmierz czas ładowania danych w porównaniu z forward i backward pass. Profiluj pamięć, jeśli zbliżasz się do OOM.
 
-## Wyślij to
+## Wdróż to
 
 Uruchom skrypt zestawu narzędzi do debugowania:
 
@@ -382,12 +382,12 @@ Uruchom skrypt zestawu narzędzi do debugowania:
 python phases/00-setup-and-tooling/12-debugging-and-profiling/code/debug_tools.py
 ```
 
-Zobacz `outputs/prompt-debug-ai-code.md`, aby zapoznać się z monitem pomagającym zdiagnozować błędy specyficzne dla sztucznej inteligencji.
+Zobacz `outputs/prompt-debug-ai-code.md`, aby znaleźć prompt pomagający diagnozować błędy specyficzne dla AI.
 
 ## Ćwiczenia
 
-1. Uruchom `debug_tools.py` i przeczytaj wyniki każdej sekcji. Zmodyfikuj model fikcyjny, aby wprowadzić NaN (wskazówka: podziel przez zero w przebiegu do przodu) i obserwuj, jak detektor go wychwytuje.
+1. Uruchom `debug_tools.py` i przeczytaj wyniki każdej sekcji. Zmodyfikuj model dummy, aby wprowadzić NaN (wskazówka: dzielenie przez zero w forward pass) i zobacz, jak detektor go wyłapuje.
 2. Sprofiluj pętlę treningową za pomocą `cProfile` i zidentyfikuj najwolniejszą funkcję.
-3. Użyj `tracemalloc`, aby dowiedzieć się, która linia w potoku ładowania danych przydziela najwięcej pamięci.
-4. Skonfiguruj TensorBoard do prostego przebiegu treningowego i sprawdź, czy model nie jest nadmiernie dopasowany.
-5. Użyj `breakpoint()` w pętli treningowej. Przećwicz sprawdzanie kształtów tensorów, urządzeń i wartości gradientu w wierszu poleceń debugera.
+3. Użyj `tracemalloc`, aby znaleźć, która linia w twoim pipeline'ie ładowania danych alokuje najwięcej pamięci.
+4. Skonfiguruj TensorBoard dla prostego przebiegu treningowego i ustal, czy model się przeucza.
+5. Użyj `breakpoint()` wewnątrz pętli treningowej. Poćwicz sprawdzanie kształtów tensorów, urządzeń i wartości gradientów z poziomu konsoli debuggera.
