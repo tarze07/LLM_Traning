@@ -1,40 +1,40 @@
 # Teoria informacji
 
-> Teoria informacji mierzy zaskoczenie. Na nim zbudowane są funkcje straty.
+> Teoria informacji mierzy zaskoczenie. Funkcje straty są na niej zbudowane.
 
-**Typ:** Ucz się
+**Typ:** Nauka
 **Język:** Python
-**Wymagania wstępne:** Faza 1, lekcja 06 (Prawdopodobieństwo)
+**Wymagania wstępne:** Faza 1, Lekcja 06 (Prawdopodobieństwo)
 **Czas:** ~60 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Oblicz od podstaw entropię, entropię krzyżową i dywergencję KL i wyjaśnij ich związek
-- Wyprowadź, dlaczego minimalizacja strat entropii krzyżowej jest równoznaczna z maksymalizacją logarytmu wiarygodności
-- Oblicz wzajemne informacje między funkcjami a celem, aby uszeregować znaczenie funkcji
-- Wyjaśnij zakłopotanie jako efektywny rozmiar słownictwa wybierany przez model języka
+- Obliczyć entropię, cross-entropy i dywergencję KL od podstaw oraz wyjaśnić ich wzajemne relacje
+- Wyprowadzić, dlaczego minimalizacja funkcji straty cross-entropy jest równoważna maksymalizacji log-likelihood
+- Obliczyć informację wzajemną (mutual information) między cechami i zmienną docelową, aby ocenić ważność cech
+- Wyjaśnić perplexity jako efektywny rozmiar słownika, z którego model językowy wybiera
 
 ## Problem
 
-Wywołujesz `CrossEntropyLoss()` w każdym trenowanym modelu klasyfikacji. W każdym dokumencie dotyczącym modelu językowego widać „zakłopotanie”. Czytasz o rozbieżnościach KL w VAE, destylacji i RLHF. Nie są to pojęcia rozłączne. Wszyscy mają ten sam pomysł, noszą różne kapelusze.
+Wywołujesz `CrossEntropyLoss()` w każdym trenowanym modelu klasyfikacyjnym. Widzisz "perplexity" w każdej pracy o modelach językowych. Czytasz o dywergencji KL w VAE, dystylacji i RLHF. To nie są niezależne koncepcje. To wszystko ten sam pomysł w różnych przebraniach.
 
-Teoria informacji dostarcza języka umożliwiającego rozumowanie niepewności, kompresji i przewidywania. Claude Shannon wynalazł go w 1948 roku, aby rozwiązać problemy komunikacyjne. Okazuje się, że uczenie sieci neuronowej stanowi problem komunikacyjny: model próbuje przesłać poprawną etykietę przez zaszumiony kanał o wyuczonych wagach.
+Teoria informacji daje ci język do rozumowania o niepewności, kompresji i predykcji. Claude Shannon wynalazł ją w 1948 roku, aby rozwiązać problemy komunikacyjne. Okazuje się, że trenowanie sieci neuronowej jest problemem komunikacyjnym: model próbuje przekazać poprawną etykietę przez zaszumiony kanał wyuczonych wag.
 
-W tej lekcji każda formuła zostanie zbudowana od podstaw, dzięki czemu zobaczysz, skąd pochodzą i dlaczego działają.
+Ta lekcja buduje każdy wzór od podstaw, żebyś widział, skąd się bierze i dlaczego działa.
 
 ## Koncepcja
 
-### Treść informacyjna (niespodzianka)
+### Treść informacyjna (zaskoczenie)
 
-Kiedy dzieje się coś mało prawdopodobnego, niesie ze sobą więcej informacji. Głowy lądujące na monetach? Nic dziwnego. Wygrana na loterii? Bardzo zaskakujące.
+Kiedy zdarza się coś mało prawdopodobnego, niesie to więcej informacji. Wypadnięcie orła na monecie? Niezbyt zaskakujące. Wygrana na loterii? Bardzo zaskakująca.
 
-Treść informacyjna zdarzenia z prawdopodobieństwem p wynosi:
+Treść informacyjna zdarzenia o prawdopodobieństwie p wynosi:
 
 ```
 I(x) = -log(p(x))
 ```
 
-Użycie podstawy dziennika 2 daje bity. Korzystanie z dziennika naturalnego daje nat. Ten sam pomysł, różne jednostki.
+Użycie logarytmu o podstawie 2 daje bity. Użycie logarytmu naturalnego daje naty. Ten sam pomysł, różne jednostki.
 
 ```
 Event              Probability    Surprise (bits)
@@ -44,80 +44,80 @@ Rolling a 6        0.167          2.58
 Certain event      1.0            0.0
 ```
 
-Niektóre zdarzenia niosą ze sobą zero informacji. Wiedziałeś już, że tak się stanie.
+Zdarzenia pewne niosą zerową informację. Już wiedziałeś, że nastąpią.
 
-### Entropia (średnia niespodzianka)
+### Entropia (średnie zaskoczenie)
 
-Entropia to oczekiwana niespodzianka we wszystkich możliwych wynikach rozkładu.
+Entropia to oczekiwane zaskoczenie po wszystkich możliwych wynikach rozkładu.
 
 ```
 H(P) = -sum( p(x) * log(p(x)) )  for all x
 ```
 
-Uczciwa moneta ma maksymalną entropię dla zmiennej binarnej: 1 bit. Moneta stronnicza (99% orłów) ma niską entropię: 0,08 bita. Wiesz już, co się stanie, więc każdy obrót nie mówi ci prawie nic.
+Sprawiedliwa moneta ma maksymalną entropię dla zmiennej binarnej: 1 bit. Niesprawiedliwa moneta (99% orzeł) ma niską entropię: 0,08 bita. Już wiesz, co się wydarzy, więc każdy rzut mówi ci niewiele.
 
 ```
 Fair coin:    H = -(0.5 * log2(0.5) + 0.5 * log2(0.5)) = 1.0 bit
 Biased coin:  H = -(0.99 * log2(0.99) + 0.01 * log2(0.01)) = 0.08 bits
 ```
 
-Entropia mierzy nieredukowalną niepewność rozkładu. Poniżej nie można kompresować.
+Entropia mierzy nieredukowalną niepewność rozkładu. Nie można skompresować poniżej tej wartości.
 
-### Cross-Entropia (funkcja straty, której używasz na co dzień)
+### Cross-entropy (funkcja straty, którą używasz codziennie)
 
-Entropia krzyżowa mierzy średnią niespodziankę, gdy używasz rozkładu Q do kodowania zdarzeń, które faktycznie pochodzą z rozkładu P.
+Cross-entropy mierzy średnie zaskoczenie, gdy używasz rozkładu Q do kodowania zdarzeń, które w rzeczywistości pochodzą z rozkładu P.
 
 ```
 H(P, Q) = -sum( p(x) * log(q(x)) )  for all x
 ```
 
-P to prawdziwy rozkład (etykiety). Q to przewidywania Twojego modelu. Jeśli Q idealnie pasuje do P, entropia krzyżowa jest równa entropii. Wszelkie niedopasowania powodują, że jest on większy.
+P to prawdziwy rozkład (etykiety). Q to predykcje twojego modelu. Jeśli Q idealnie odpowiada P, cross-entropy równa się entropii. Każda niezgodność zwiększa tę wartość.
 
-W klasyfikacji P jest wektorem jednogorącym (prawdziwa klasa ma prawdopodobieństwo 1, wszystko inne 0). Upraszcza to entropię krzyżową do:
+W klasyfikacji P jest wektorem one-hot (prawdziwa klasa ma prawdopodobieństwo 1, wszystkie pozostałe 0). To upraszcza cross-entropy do:
 
 ```
 H(P, Q) = -log(q(true_class))
 ```
 
-To jest cały wzór na stratę krzyżową entropii do klasyfikacji. Maksymalizuj przewidywane prawdopodobieństwo właściwej klasy.
+To jest cały wzór funkcji straty cross-entropy dla klasyfikacji. Maksymalizuj przewidywane prawdopodobieństwo poprawnej klasy.
 
-### Rozbieżność KL (odległość między rozkładami)
+### Dywergencja KL (odległość między rozkładami)
 
-Rozbieżność KL mierzy, ile dodatkowej niespodzianki uzyskasz, używając Q zamiast P.
+Dywergencja KL mierzy, ile dodatkowego zaskoczenia otrzymujesz, używając Q zamiast P.
 
 ```
 D_KL(P || Q) = sum( p(x) * log(p(x) / q(x)) )  for all x
              = H(P, Q) - H(P)
 ```
 
-Entropia krzyżowa to entropia plus dywergencja KL. Ponieważ entropia prawdziwego rozkładu jest stała podczas uczenia, minimalizowanie entropii krzyżowej jest tym samym, co minimalizowanie rozbieżności KL. Popychasz rozkład swojego modelu w stronę rozkładu prawdziwego.
+Cross-entropy to entropia plus dywergencja KL. Ponieważ entropia prawdziwego rozkładu jest stała w trakcie treningu, minimalizacja cross-entropy jest tym samym co minimalizacja dywergencji KL. Przesuwasz rozkład swojego modelu w kierunku prawdziwego rozkładu.
 
-Rozbieżność KL nie jest symetryczna: D_KL(P || Q) != D_KL(Q || P). To nie jest prawdziwy miernik odległości.
+Dywergencja KL nie jest symetryczna: D_KL(P || Q) != D_KL(Q || P). Nie jest to prawdziwa metryka odległości.
 
-### Wzajemne informacje
+### Informacja wzajemna
 
-Wzajemne informacje mierzą, ile znajomość jednej zmiennej mówi o drugiej.
+Informacja wzajemna mierzy, ile znajomość jednej zmiennej mówi ci o drugiej.
 
 ```
 I(X; Y) = H(X) - H(X|Y)
         = H(X) + H(Y) - H(X, Y)
 ```
 
-Jeśli X i Y są niezależne, wzajemna informacja wynosi zero. Znajomość jednego nie mówi nic o drugim. Jeśli są one doskonale skorelowane, wzajemne informacje są równe entropii którejkolwiek ze zmiennych.
+Jeśli X i Y są niezależne, informacja wzajemna jest zerowa. Znajomość jednej nie mówi ci nic o drugiej. Jeśli są idealnie skorelowane, informacja wzajemna jest równa entropii którejkolwiek zmiennej.
 
-Przy wyborze cech wysoki poziom wzajemnej informacji między cechą a celem oznacza, że ​​cecha jest użyteczna. Niski poziom wzajemnej informacji oznacza, że ​​jest to hałas.
+W selekcji cech wysoka informacja wzajemna między cechą i zmienną docelową oznacza, że cecha jest użyteczna. Niska informacja wzajemna oznacza, że jest to szum.
 
 ### Entropia warunkowa
 
-H(Y|X) mierzy, jak duża niepewność pozostaje co do Y po zaobserwowaniu X.
+H(Y|X) mierzy, ile niepewności o Y pozostaje po zaobserwowaniu X.
 
 ```
 H(Y|X) = H(X,Y) - H(X)
 ```
 
-Dwie skrajności:
-- Jeśli X całkowicie określa Y, to H(Y|X) = 0. Znajomość X eliminuje wszelką niepewność dotyczącą Y. Przykład: X = temperatura w stopniach Celsjusza, Y = temperatura w stopniach Fahrenheita.
-- Jeśli X nie mówi nic o Y, to H(Y|X) = H(Y). Znajomość X wcale nie zmniejsza Twojej niepewności. Przykład: X = rzut monetą, Y = pogoda na jutro.
+Dwa ekstrema:
+- Jeśli X całkowicie determinuje Y, to H(Y|X) = 0. Znajomość X eliminuje całą niepewność o Y. Przykład: X = temperatura w stopniach Celsjusza, Y = temperatura w stopniach Fahrenheita.
+- Jeśli X nie mówi ci nic o Y, to H(Y|X) = H(Y). Znajomość X nie zmniejsza twojej niepewności wcale. Przykład: X = rzut monetą, Y = pogoda na jutro.
 
 Entropia warunkowa jest zawsze nieujemna i nigdy nie przekracza H(Y):
 
@@ -125,11 +125,11 @@ Entropia warunkowa jest zawsze nieujemna i nigdy nie przekracza H(Y):
 0 <= H(Y|X) <= H(Y)
 ```
 
-W uczeniu maszynowym entropia warunkowa pojawia się w drzewach decyzyjnych. Przy każdym podziale algorytm wybiera cechę X, która minimalizuje H(Y|X) — cechę, która usuwa największą niepewność co do etykiety Y.
+W uczeniu maszynowym entropia warunkowa pojawia się w drzewach decyzyjnych. Przy każdym podziale algorytm wybiera cechę X, która minimalizuje H(Y|X) -- cechę, która usuwa najwięcej niepewności o etykiecie Y.
 
-### Wspólna entropia
+### Entropia łączna
 
-H(X,Y) to entropia łącznego rozkładu X i Y.
+H(X,Y) to entropia łącznego rozkładu X i Y razem.
 
 ```
 H(X,Y) = -sum sum p(x,y) * log(p(x,y))   for all x, y
@@ -141,7 +141,7 @@ Kluczowa właściwość:
 H(X,Y) <= H(X) + H(Y)
 ```
 
-Równość zachodzi, gdy X i Y są niezależne. Jeśli dzielą się informacjami, łączna entropia jest mniejsza niż suma poszczególnych entropii. „Brakująca” entropia jest dokładnie wzajemną informacją.
+Równość zachodzi, gdy X i Y są niezależne. Jeśli współdzielą informację, entropia łączna jest mniejsza niż suma entropii pojedynczych. "Brakująca" entropia to właśnie informacja wzajemna.
 
 ```mermaid
 graph TD
@@ -171,9 +171,9 @@ Relacje:
 - I(X;Y) = H(X) - H(X|Y) = H(Y) - H(Y|X)
 - H(X,Y) = H(X) + H(Y) - I(X;Y)
 
-### Wzajemne informacje (głębokie nurkowanie)
+### Informacja wzajemna (głębsze spojrzenie)
 
-Wzajemna informacja I(X;Y) określa ilościowo, w jakim stopniu znajomość jednej zmiennej zmniejsza niepewność co do drugiej.
+Informacja wzajemna I(X;Y) określa, jak bardzo znajomość jednej zmiennej redukuje niepewność o drugiej.
 
 ```
 I(X;Y) = H(X) - H(X|Y)
@@ -185,58 +185,58 @@ I(X;Y) = H(X) - H(X|Y)
 Właściwości:
 - I(X;Y) >= 0 zawsze. Nigdy nie tracisz informacji, obserwując coś.
 - I(X;Y) = 0 wtedy i tylko wtedy, gdy X i Y są niezależne.
-- I(X;Y) = I(Y;X). Jest symetryczna, w przeciwieństwie do rozbieżności KL.
-- I(X;X) = H(X). Zmienna dzieli się ze sobą wszystkimi informacjami.
+- I(X;Y) = I(Y;X). Jest symetryczna, w przeciwieństwie do dywergencji KL.
+- I(X;X) = H(X). Zmienna współdzieli całą swoją informację ze sobą samą.
 
-**Wzajemne informacje dotyczące wyboru funkcji.** W ML potrzebne są funkcje informujące o celu. Wzajemne informacje pozwalają w prosty sposób oceniać funkcje:
+**Informacja wzajemna do selekcji cech.** W ML chcesz cech, które są informatywne względem zmiennej docelowej. Informacja wzajemna daje ci zasadny sposób rankingowania cech:
 
 1. Dla każdej cechy X_i oblicz I(X_i; Y), gdzie Y jest zmienną docelową.
-2. Uszereguj funkcje według wyniku MI.
-3. Zachowaj najlepsze funkcje.
+2. Uszereguj cechy według wyniku MI.
+3. Zachowaj k najlepszych cech.
 
-Działa to w przypadku każdej relacji między cechą a celem – liniowej, nieliniowej, monotonicznej lub nie. Korelacja obejmuje jedynie zależności liniowe. MI łapie wszystko.
+Działa to dla każdej relacji między cechą a celem -- liniowej, nieliniowej, monotonicznej lub innej. Korelacja wychwytuje tylko relacje liniowe. MI wychwytuje wszystko.
 
-| Metoda | Wykrywa | Koszt obliczeniowy | Odnosi się kategorycznie? |
-|--------|---------|--------------------------------|----------------------------------|
-| Korelacja Pearsona | Zależności liniowe | O(n) | Nie |
-| Korelacja Spearmana | Relacje monotoniczne | O(n log n) | Nie |
-| Wzajemne informacje | Dowolna zależność statystyczna | O(n log n) z kategoryzacją | Tak |
+| Method | Detects | Computational cost | Handles categorical? |
+|--------|---------|-------------------|---------------------|
+| Pearson correlation | Linear relationships | O(n) | No |
+| Spearman correlation | Monotonic relationships | O(n log n) | No |
+| Mutual information | Any statistical dependency | O(n log n) with binning | Yes |
 
-### Wygładzanie etykiet i entropia krzyżowa
+### Label smoothing i cross-entropy
 
-Klasyfikacja standardowa wykorzystuje cele twarde: [0, 0, 1, 0]. Prawdziwa klasa otrzymuje prawdopodobieństwo 1, wszystko inne otrzymuje 0. Wygładzanie etykiet zastępuje je miękkimi celami:
+Standardowa klasyfikacja używa twardych etykiet (hard targets): [0, 0, 1, 0]. Prawdziwa klasa ma prawdopodobieństwo 1, wszystkie pozostałe 0. Label smoothing zastępuje je miękkimi etykietami (soft targets):
 
 ```
 soft_target = (1 - epsilon) * hard_target + epsilon / num_classes
 ```
 
 Z epsilon = 0,1 i 4 klasami:
-- Trudny cel: [0, 0, 1, 0]
-- Miękki cel: [0,025, 0,025, 0,925, 0,025]
+- Hard target:  [0, 0, 1, 0]
+- Soft target:  [0.025, 0.025, 0.925, 0.025]
 
-Z punktu widzenia teorii informacji wygładzanie etykiet zwiększa entropię rozkładu docelowego. Twarde, jednogorące cele mają entropię 0 – nie ma niepewności. Miękkie cele mają dodatnią entropię.
+Z perspektywy teorii informacji label smoothing zwiększa entropię rozkładu docelowego. Twarde etykiety one-hot mają entropię 0 -- nie ma niepewności. Miękkie etykiety mają entropię większą od zera.
 
 Dlaczego to pomaga:
-- Zapobiega doprowadzaniu logitów do ekstremalnych wartości przez model (potrzebne byłyby nieskończone logity, aby idealnie dopasować jeden gorący cel w warunkach entropii krzyżowej)
-- Działa jak regularyzacja: model nie może być w 100% pewny
-- Poprawia kalibrację: przewidywane prawdopodobieństwa lepiej odzwierciedlają rzeczywistą niepewność
-- Zmniejsza różnicę między zachowaniem szkoleniowym a wnioskowanym
+- Zapobiega doprowadzaniu logitów przez model do wartości ekstremalnych (idealne dopasowanie do etykiety one-hot pod cross-entropy wymagałoby nieskończonych logitów)
+- Działa jako regularyzacja: model nie może być w 100% pewny
+- Poprawia kalibrację: przewidywane prawdopodobieństwa lepiej odzwierciedlają prawdziwą niepewność
+- Zmniejsza różnicę między zachowaniem podczas treningu i wnioskowania (inference)
 
-Utrata entropii krzyżowej przy wygładzaniu etykiet staje się:
+Funkcja straty cross-entropy z label smoothing staje się:
 
 ```
 L = (1 - epsilon) * CE(hard_target, prediction) + epsilon * H_uniform(prediction)
 ```
 
-Drugi termin penalizuje przewidywania, które są dalekie od jednolitych – bezpośrednie uregulowanie zaufania.
+Drugi człon karze predykcje, które są dalekie od rozkładu jednorodnego -- bezpośrednia regularyzacja pewności modelu.
 
-### Dlaczego entropia krzyżowa jest stratą w klasyfikacji
+### Dlaczego cross-entropy jest TĄ funkcją straty klasyfikacji
 
 Trzy perspektywy, ten sam wniosek.
 
-**Widok teorii informacji.** Entropia krzyżowa mierzy, ile bitów marnujesz, korzystając z rozkładu modelu zamiast rozkładu prawdziwego. Minimalizowanie go sprawia, że ​​Twój model staje się najskuteczniejszym koderem rzeczywistości.
+**Perspektywa teorii informacji.** Cross-entropy mierzy, ile bitów tracisz, używając rozkładu swojego modelu zamiast prawdziwego rozkładu. Minimalizacja tej wartości sprawia, że twój model staje się najbardziej efektywnym koderem rzeczywistości.
 
-**Widok największej wiarygodności.** Dla N próbek uczących z prawdziwymi klasami y_i:
+**Perspektywa maksymalnej wiarygodności (maximum likelihood).** Dla N próbek treningowych z prawdziwymi klasami y_i:
 
 ```
 Likelihood     = product( q(y_i) )
@@ -244,13 +244,13 @@ Log-likelihood = sum( log(q(y_i)) )
 Negative log-likelihood = -sum( log(q(y_i)) )
 ```
 
-Ostatnia linia to utrata entropii krzyżowej. Minimalizowanie entropii krzyżowej = maksymalizacja prawdopodobieństwa danych szkoleniowych w ramach modelu.
+Ta ostatnia linia to funkcja straty cross-entropy. Minimalizacja cross-entropy = maksymalizacja wiarygodności danych treningowych w ramach twojego modelu.
 
-**Widok gradientowy.** Gradient entropii krzyżowej w odniesieniu do logitów jest po prostu (przewidywany – prawdziwy). Czysty, stabilny i szybki w obliczeniach. Dlatego idealnie komponuje się z softmaxem.
+**Perspektywa gradientu.** Gradient cross-entropy względem logitów to po prostu (predicted - true). Czysty, stabilny i szybki do obliczenia. To właśnie dlatego idealnie współpracuje z softmax.
 
-### Bitsy kontra Naty
+### Bity vs naty
 
-Jedyną różnicą jest podstawa z bali.
+Jedyna różnica to podstawa logarytmu.
 
 ```
 log base 2   -> bits      (information theory tradition)
@@ -258,24 +258,24 @@ log base e   -> nats      (machine learning convention)
 log base 10  -> hartleys  (rarely used)
 ```
 
-1 nat = 1/ln(2) bitów = 1,4427 bitów. PyTorch i TensorFlow domyślnie używają dziennika naturalnego (nats).
+1 nat = 1/ln(2) bita = 1,4427 bita. PyTorch i TensorFlow domyślnie używają logarytmu naturalnego (natów).
 
-### Zakłopotanie
+### Perplexity
 
-Zakłopotanie jest wykładnikiem entropii krzyżowej. Informuje o efektywnej liczbie równie prawdopodobnych wyborów, pomiędzy którymi model nie jest pewien.
+Perplexity to wykładnicza funkcja cross-entropy. Mówi ci, jaka jest efektywna liczba równie prawdopodobnych opcji, między którymi model jest niezdecydowany.
 
 ```
 Perplexity = 2^H(P,Q)   (if using bits)
 Perplexity = e^H(P,Q)   (if using nats)
 ```
 
-Model językowy z zakłopotaniem 50 jest średnio tak zagmatwany, jak gdyby musiał jednolicie wybierać spośród 50 możliwych kolejnych tokenów. Niżej jest lepiej.
+Model językowy o perplexity 50 jest, średnio, tak zdezorientowany, jak gdyby musiał wybierać jednostajnie z 50 możliwych kolejnych tokenów. Mniej znaczy lepiej.
 
-GPT-2 osiągnął poziom zakłopotania ~30 w typowych testach porównawczych. Nowoczesne modele są jednocyfrowe dla dobrze reprezentowanych domen.
+GPT-2 osiągnął perplexity ~30 na popularnych benchmarkach. Współczesne modele mają wartości jednocyfrowe dla dobrze reprezentowanych domen.
 
 ## Zbuduj to
 
-### Krok 1: Treść informacji i entropia
+### Krok 1: Treść informacyjna i entropia
 
 ```python
 import math
@@ -300,7 +300,7 @@ print(f"Biased coin entropy: {entropy(biased_coin):.4f} bits")
 print(f"Fair die entropy:    {entropy(fair_die):.4f} bits")
 ```
 
-### Krok 2: Entropia krzyżowa i dywergencja KL
+### Krok 2: Cross-entropy i dywergencja KL
 
 ```python
 def cross_entropy(p, q, base=2):
@@ -326,7 +326,7 @@ print(f"KL divergence (good):     {kl_divergence(true_dist, good_model):.4f} bit
 print(f"KL divergence (bad):      {kl_divergence(true_dist, bad_model):.4f} bits")
 ```
 
-### Krok 3: Entropia krzyżowa jako utrata klasyfikacji
+### Krok 3: Cross-entropy jako funkcja straty klasyfikacji
 
 ```python
 def softmax(logits):
@@ -352,7 +352,7 @@ print(f"Loss:        {loss:.4f} nats")
 print(f"Perplexity:  {math.exp(loss):.2f}")
 ```
 
-### Krok 4: Entropia krzyżowa równa się ujemnemu logarytmowi wiarygodności
+### Krok 4: Cross-entropy jest równa negative log-likelihood
 
 ```python
 import random
@@ -379,7 +379,7 @@ print(f"Negative log-likelihood: {nll:.6f}")
 print(f"Difference:              {abs(ce_loss - nll):.2e}")
 ```
 
-### Krok 5: Wzajemna informacja
+### Krok 5: Informacja wzajemna
 
 ```python
 def mutual_information(joint_probs, base=2):
@@ -404,9 +404,9 @@ print(f"MI (independent): {mutual_information(independent):.4f} bits")
 print(f"MI (dependent):   {mutual_information(dependent):.4f} bits")
 ```
 
-## Użyj tego
+## Zastosuj to
 
-Te same koncepcje przy użyciu NumPy, sposób, w jaki będziesz z nich korzystać w praktyce:
+Te same koncepcje przy użyciu NumPy, w sposób, w jaki będziesz ich używać w praktyce:
 
 ```python
 import numpy as np
@@ -433,35 +433,35 @@ print(f"Cross-ent:  {np_cross_entropy(true, pred):.4f} nats")
 print(f"KL div:     {np_kl_divergence(true, pred):.4f} nats")
 ```
 
-Zbudowałeś od podstaw to, co `torch.nn.CrossEntropyLoss()` robi wewnętrznie. Teraz już wiesz, dlaczego strata maleje podczas uczenia: rozkład przewidywany przez Twój model zbliża się do rozkładu prawdziwego, mierzonego w natach zmarnowanych informacji.
+Zbudowałeś od podstaw to, co `torch.nn.CrossEntropyLoss()` robi wewnętrznie. Teraz wiesz, dlaczego strata spada w trakcie treningu: rozkład przewidywany przez twój model zbliża się do prawdziwego rozkładu, mierzony w natach utraconej informacji.
 
 ## Ćwiczenia
 
-1. Oblicz entropię alfabetu angielskiego przy założeniu równomiernego rozkładu (26 liter). Następnie oszacuj to, używając rzeczywistych częstotliwości liter. Co jest wyższe i dlaczego?
+1. Oblicz entropię alfabetu angielskiego, zakładając rozkład jednorodny (26 liter). Następnie oszacuj ją, korzystając z rzeczywistych częstotliwości liter. Która wartość jest wyższa i dlaczego?
 
-2. Model wyprowadza logity [5,0, 2,0, 0,5] dla próbki z prawdziwą klasą 1. Oblicz ręcznie stratę entropijną, a następnie sprawdź ją za pomocą funkcji `cross_entropy_loss`. Jakie logity dałyby zero strat?
+2. Model zwraca logity [5.0, 2.0, 0.5] dla próbki o prawdziwej klasie 1. Oblicz funkcję straty cross-entropy ręcznie, a następnie zweryfikuj wynik za pomocą swojej funkcji `cross_entropy_loss`. Jakie logity dałyby zerową stratę?
 
-3. Pokaż, że rozbieżność KL nie jest symetryczna. Wybierz dwa rozkłady P i Q i oblicz D_KL(P || Q) i D_KL(Q || P). Wyjaśnij, dlaczego się różnią.
+3. Pokaż, że dywergencja KL nie jest symetryczna. Wybierz dwa rozkłady P i Q i oblicz D_KL(P || Q) oraz D_KL(Q || P). Wyjaśnij, dlaczego się różnią.
 
-4. Zbuduj funkcję obliczającą złożoność sekwencji przewidywań tokenów. Biorąc pod uwagę listę par (true_token_index, przewidywane_logits), zwróć złożoność sekwencji.
+4. Zbuduj funkcję, która oblicza perplexity dla sekwencji predykcji tokenów. Mając listę par (true_token_index, predicted_logits), zwróć perplexity tej sekwencji.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Term | What people say | What it actually means |
 |------|----------------|----------------------|
-| Treść informacyjna | „Niespodzianka” | Liczba bitów (lub NAT) potrzebnych do zakodowania zdarzenia: -log(p) |
-| Entropia | „Losowość” | Średnia niespodzianka dla wszystkich wyników dystrybucji. Mierzy nieredukowalną niepewność. |
-| Entropia krzyżowa | „Funkcja straty” | Średnie zaskoczenie przy wykorzystaniu rozkładu modelu Q do kodowania zdarzeń z rozkładu prawdziwego P. |
-| Rozbieżność KL | „Odległość między rozkładami” | Dodatkowe bity marnowane przy użyciu Q zamiast P. Równa się entropii krzyżowej minus entropia. Nie symetryczny. |
-| Wzajemne informacje | „Jak powiązane są X i Y” | Zmniejszenie niepewności co do X poprzez poznanie Y. Zero oznacza niezależność. |
-| Softmax | „Zamień logity na prawdopodobieństwa” | Potęguj i normalizuj. Odwzorowuje dowolny wektor o wartościach rzeczywistych na prawidłowy rozkład prawdopodobieństwa. |
-| Zakłopotanie | „Jak zdezorientowany jest model” | Wykładniczy entropii krzyżowej. Efektywny rozmiar słownictwa, który model wybiera na każdym etapie. |
-| Bity | „Jednostka Shannona” | Informacje mierzone przy użyciu logarytmu o podstawie 2. Jeden bit rozstrzyga jeden uczciwy rzut monetą. |
-| Naty | „Jednostka ML” | Informacje mierzone logiem naturalnym. Domyślnie używane przez PyTorch i TensorFlow. |
-| Ujemny log wiarygodności | „Strata NLL” | Identyczne jak utrata entropii krzyżowej w przypadku etykiet typu one-hot. Minimalizowanie go maksymalizuje prawdopodobieństwo trafnych przewidywań. |
+| Information content | "Surprise" | The number of bits (or nats) needed to encode an event: -log(p) |
+| Entropy | "Randomness" | The average surprise across all outcomes of a distribution. Measures irreducible uncertainty. |
+| Cross-entropy | "The loss function" | Average surprise when using model distribution Q to encode events from true distribution P. |
+| KL divergence | "Distance between distributions" | Extra bits wasted by using Q instead of P. Equals cross-entropy minus entropy. Not symmetric. |
+| Mutual information | "How related are X and Y" | Reduction in uncertainty about X from knowing Y. Zero means independent. |
+| Softmax | "Turn logits into probabilities" | Exponentiate and normalize. Maps any real-valued vector to a valid probability distribution. |
+| Perplexity | "How confused the model is" | Exponential of cross-entropy. The effective vocabulary size the model is choosing from at each step. |
+| Bits | "Shannon's unit" | Information measured with log base 2. One bit resolves one fair coin flip. |
+| Nats | "ML's unit" | Information measured with natural log. Used by PyTorch and TensorFlow by default. |
+| Negative log-likelihood | "NLL loss" | Identical to cross-entropy loss for one-hot labels. Minimizing it maximizes the probability of correct predictions. |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-- [Shannon 1948: A Mathematical Theory of Communication](https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf) - oryginalna praca, wciąż czytelna
-- [Teoria informacji wizualnej (Chris Olah)](https://colah.github.io/posts/2015-09-Visual-Information/) - najlepsze wizualne wyjaśnienie entropii i rozbieżności KL
-- [dokumentacja PyTorch CrossEntropyLoss](https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html) - jak framework implementuje to, co właśnie zbudowałeś
+- [Shannon 1948: A Mathematical Theory of Communication](https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf) - oryginalna praca, wciąż warta przeczytania
+- [Visual Information Theory (Chris Olah)](https://colah.github.io/posts/2015-09-Visual-Information/) - najlepsze wizualne wyjaśnienie entropii i dywergencji KL
+- [PyTorch CrossEntropyLoss docs](https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html) - jak framework implementuje to, co właśnie zbudowałeś
