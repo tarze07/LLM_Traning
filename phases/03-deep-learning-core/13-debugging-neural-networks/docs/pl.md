@@ -1,38 +1,38 @@
 # Debugowanie sieci neuronowych
 
-> Twoja sieć została skompilowana. Pobiegło. Wyprodukowało numer. Numer jest błędny i nic się nie zawiesiło. Witamy w najtrudniejszym rodzaju debugowania — takim, w którym nie pojawia się żaden komunikat o błędzie.
+> Twoja sieć się skompilowała. Działa. Wyprodukowała liczbę. Liczba jest błędna i nic się nie wysypało. Witaj w najtrudniejszym rodzaju debugowania -- takim, w którym nie ma komunikatu o błędzie.
 
-**Typ:** Ćwicz
+**Typ:** Praktyka
 **Języki:** Python, PyTorch
-**Wymagania wstępne:** Faza 03, lekcje 01-10 (szczególnie propagacja wsteczna, funkcje strat, optymalizatory)
+**Wymagania wstępne:** Faza 03, lekcje 01-10 (zwłaszcza propagacja wsteczna, funkcje straty, optymalizatory)
 **Czas:** ~90 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Diagnozuj typowe awarie sieci neuronowych (utrata NaN, płaska krzywa strat, nadmierne dopasowanie, oscylacje) za pomocą systematycznych strategii debugowania
-- Zastosuj technikę „przeciążenia jednej partii”, aby sprawdzić, czy architektura modelu i pętla treningowa są prawidłowe
-- Sprawdź wielkość gradientu, rozkład aktywacji i normy wagowe, aby zidentyfikować problemy ze znikającym/eksplodującym gradientem
-- Zbuduj listę kontrolną debugowania obejmującą potok danych, architekturę modelu, funkcję straty, optymalizator i problemy z szybkością uczenia się
+- Diagnozowanie typowych awarii sieci neuronowych (NaN w stracie, płaska krzywa straty, przeuczenie, oscylacje) za pomocą systematycznych strategii debugowania
+- Zastosowanie techniki "overfit one batch" (przeuczenie na jednej partii) do weryfikacji, że architektura modelu i pętla treningowa są poprawne
+- Inspekcja wielkości gradientów, rozkładów aktywacji i norm wag w celu identyfikacji problemów z zanikającymi/eksplodującymi gradientami
+- Zbudowanie listy kontrolnej debugowania obejmującej potok danych, architekturę modelu, funkcję straty, optymalizator i problemy ze współczynnikiem uczenia
 
 ## Problem
 
-Tradycyjne oprogramowanie ulega awarii, gdy jest uszkodzone. Wskaźnik zerowy zgłasza wyjątek. Niezgodność typu kończy się niepowodzeniem w czasie kompilacji. Błąd typu off-by-one daje wyraźnie błędny wynik.
+Tradycyjne oprogramowanie ulega awarii, gdy jest uszkodzone. Wskaźnik null zgłasza wyjątek. Niezgodność typów kończy się błędem już na etapie kompilacji. Błąd "off-by-one" produkuje wynik, który jest wyraźnie błędny.
 
-Sieci neuronowe nie dają takiego luksusu.
+Sieci neuronowe nie dają nam tego luksusu.
 
-Uszkodzona sieć neuronowa działa do końca, drukuje wartość straty i generuje prognozy. Strata może się zmniejszyć. Przewidywania mogą wydawać się prawdopodobne. Ale model jest po cichu błędny – uczy się skrótów, zapamiętuje dźwięki lub skupia się na bezużytecznym lokalnym minimum. Badacze Google oszacowali, że 60–70% czasu debugowania ML pochłaniają „ciche” błędy, które nie powodują błędów, ale pogarszają jakość modelu.
+Uszkodzona sieć neuronowa wykonuje się do końca, wypisuje wartość straty i generuje predykcje. Strata może się zmniejszać. Predykcje mogą wyglądać sensownie. Ale model jest po cichu błędny -- uczy się "skrótów", zapamiętuje szum albo zbiega do bezużytecznego minimum lokalnego. Badacze z Google oszacowali, że 60-70% czasu poświęconego na debugowanie ML idzie na "ciche" błędy, które nie generują żadnych komunikatów o błędach, ale degradują jakość modelu.
 
-Różnica między działającym modelem a uszkodzonym to często pojedyncza źle umieszczona linia: brakujący `zero_grad()`, transponowany wymiar, 10-krotny spadek szybkości uczenia się. kanoniczny „Przepis na szkolenie sieci neuronowych” (2019) rozpoczyna się następującym stwierdzeniem: „Najczęstsze błędy sieci neuronowych to błędy, które się nie zawieszają”.
+Różnica między działającym modelem a uszkodzonym to często jedna źle umieszczona linia: brakujące `zero_grad()`, transponowany wymiar, współczynnik uczenia 10x za duży lub za mały. Kanoniczny "Recipe for Training Neural Networks" (2019) zaczyna się od stwierdzenia: "Najczęstsze błędy w sieciach neuronowych to błędy, które nie powodują awarii."
 
-Ta lekcja nauczy Cię znajdować te błędy.
+Ta lekcja uczy, jak znajdować takie błędy.
 
 ## Koncepcja
 
-### Nastawienie na debugowanie
+### Sposób myślenia w debugowaniu
 
-Zapomnij o debugowaniu typu „drukuj i módl się”. Debugowanie sieci neuronowej wymaga systematycznego podejścia, ponieważ pętla sprzężenia zwrotnego jest powolna (od minut do godzin na przebieg treningowy), a objawy są niejednoznaczne (poważna strata może oznaczać 20 różnych rzeczy).
+Zapomnij o debugowaniu metodą "print i módl się". Debugowanie sieci neuronowych wymaga systematycznego podejścia, ponieważ pętla zwrotna jest wolna (minuty do godzin na jeden przebieg treningowy), a symptomy są niejednoznaczne (zła strata może oznaczać 20 różnych rzeczy).
 
-Złota zasada: **zacznij od prostego, dodawaj złożoność jeden element na raz i sprawdzaj każdy element niezależnie.**
+Złota zasada: **zacznij od prostego rozwiązania, dodawaj złożoność po jednym elemencie naraz i weryfikuj każdy element niezależnie.**
 
 ```mermaid
 flowchart TD
@@ -50,43 +50,43 @@ flowchart TD
     K -->|"Too deep"| M["Optimization difficulty"]
 ```
 
-### Objaw 1: Strata nie maleje
+### Symptom 1: Strata nie spada
 
-To najczęstsza skarga. Pętla treningowa biegnie, mijają epoki, a strata pozostaje stała lub gwałtownie oscyluje.
+To najczęstsza skarga. Pętla treningowa działa, epoki mijają, a strata pozostaje płaska albo gwałtownie oscyluje.
 
-**Zły współczynnik uczenia.** Zbyt wysoki: strata oscyluje lub skacze do NaN. Zbyt niska: strata maleje tak wolno, że wygląda płasko. Dla Adama zacznij od 1e-3. W przypadku SGD zacznij od 1e-1 lub 1e-2. Zawsze wypróbuj 3 szybkości uczenia się, obejmujące 10 razy każdy (np. 1e-2, 1e-3, 1e-4), zanim dojdziesz do wniosku, że coś innego jest nie tak.
+**Niewłaściwy współczynnik uczenia.** Za wysoki: strata oscyluje albo skacze do NaN. Za niski: strata spada tak wolno, że wydaje się płaska. Dla Adama zacznij od 1e-3. Dla SGD zacznij od 1e-1 lub 1e-2. Zawsze wypróbuj 3 współczynniki uczenia różniące się 10-krotnie (np. 1e-2, 1e-3, 1e-4), zanim wnioskujesz, że problem jest gdzie indziej.
 
-**Martwe ReLU.** Jeśli neuron ReLU otrzyma duży ujemny sygnał wejściowy, na wyjściu wyświetli się 0, a jego gradient będzie wynosić 0. Nigdy więcej się nie aktywuje. Jeśli umrze wystarczająca liczba neuronów, sieć nie będzie mogła się uczyć. Sprawdź: wypisz ułamek aktywacji, który wynosi dokładnie 0 po każdej warstwie ReLU. Jeśli >50% nie żyje, przełącz się na LeakyReLU lub zmniejsz tempo uczenia się.
+**Martwe ReLU.** Jeśli neuron ReLU otrzymuje dużą ujemną wartość wejściową, zwraca 0, a jego gradient wynosi 0. Już nigdy się nie aktywuje. Jeśli wystarczająco dużo neuronów "umiera", sieć nie może się uczyć. Sprawdź: wypisz frakcję aktywacji, które są dokładnie 0 po każdej warstwie ReLU. Jeśli >50% jest martwych, przejdź na LeakyReLU albo zmniejsz współczynnik uczenia.
 
-**Zanikające gradienty.** W głębokich sieciach z aktywacją sigmoidalną lub tanh, gradienty kurczą się wykładniczo w miarę propagacji wstecz. Zanim dotrą do pierwszej warstwy, ich wartość wynosi ~0. Pierwsze warstwy przestają się uczyć. Poprawka: użyj ReLU/GELU, dodaj pozostałe połączenia lub użyj normalizacji wsadowej.
+**Zanikające gradienty.** W głębokich sieciach z aktywacjami sigmoid lub tanh gradienty zmniejszają się wykładniczo podczas propagacji wstecznej. Gdy docierają do pierwszej warstwy, są ~0. Pierwsze warstwy przestają się uczyć. Rozwiązanie: użyj ReLU/GELU, dodaj połączenia rezydualne (residual) albo użyj normalizacji wsadowej (batch normalization).
 
-**Wybuchające gradienty.** Problem odwrotny – gradienty rosną wykładniczo. Powszechne w sieciach RNN i bardzo głębokich sieciach. Strata skacze do NaN. Poprawka: obcinanie gradientu (`torch.nn.utils.clip_grad_norm_`), zmniejsz szybkość uczenia się lub dodaj normalizację.
+**Eksplodujące gradienty.** Odwrotny problem -- gradienty rosną wykładniczo. Częste w RNN-ach i bardzo głębokich sieciach. Strata skacze do NaN. Rozwiązanie: przycinanie gradientów (`torch.nn.utils.clip_grad_norm_`), niższy współczynnik uczenia albo dodanie normalizacji.
 
-### Objaw 2: Strata maleje, ale model jest zły
+### Symptom 2: Strata spada, ale model jest zły
 
-Strata maleje. Dokładność treningu sięga 99%. Ale dokładność testu wynosi 55%. Lub model generuje bezsensowne wyniki na podstawie rzeczywistych danych.
+Strata spada. Dokładność na zbiorze treningowym osiąga 99%. Ale dokładność na zbiorze testowym to 55%. Albo model produkuje absurdalne wyniki na rzeczywistych danych.
 
-**Nadmierne dopasowanie.** Model zapamiętuje dane treningowe zamiast wzorców uczenia się. Z biegiem czasu zwiększa się różnica między szkoleniem a utratą walidacji. Poprawka: więcej danych, rezygnacja z transmisji, spadek wagi, wcześniejsze zatrzymanie, zwiększenie ilości danych.
+**Przeuczenie (overfitting).** Model zapamiętuje dane treningowe, zamiast uczyć się wzorców. Różnica między stratą treningową i walidacyjną rośnie z czasem. Rozwiązanie: więcej danych, dropout, weight decay, wczesne zatrzymanie (early stopping), augmentacja danych.
 
-**Wyciek danych.** Dane testowe wyciekły do ​​treningu. Dokładność jest podejrzanie wysoka. Typowe przyczyny: tasowanie przed podziałem, wstępne przetwarzanie ze statystykami z pełnego zbioru danych, duplikowanie próbek w ramach podziałów. Poprawka: najpierw podziel, następnie przetwórz wstępnie, sprawdź duplikaty.
+**Wyciek danych (data leakage).** Dane testowe przeciekły do treningu. Dokładność jest podejrzanie wysoka. Częste przyczyny: przemieszanie (shuffling) przed podziałem, przetwarzanie wstępne ze statystykami z całego zbioru danych, duplikaty próbek między podziałami. Rozwiązanie: podziel najpierw, przetwórz potem, sprawdź duplikaty.
 
-**Błędy w etykietach.** 5–10% etykiet w większości rzeczywistych zbiorów danych jest błędnych (Northcutt i in., 2021 – „Pervasive Label Errors in Test Sets”). Model uczy się hałasu. Napraw: wykorzystaj pewność uczenia się, aby znaleźć i naprawić błędnie oznaczone przykłady, lub użyj obcięcia strat, aby zignorować próbki o dużych stratach.
+**Błędy etykiet.** 5-10% etykiet w większości rzeczywistych zbiorów danych jest błędnych (Northcutt i in., 2021 -- "Pervasive Label Errors in Test Sets"). Model uczy się szumu. Rozwiązanie: użyj confident learning, aby znaleźć i poprawić błędnie oznaczone przykłady, albo użyj loss truncation, aby ignorować próbki o wysokiej stracie.
 
-### Objaw 3: Strata NaN lub Inf
+### Symptom 3: NaN lub Inf w stracie
 
-Wartość straty to `nan` lub `inf`. Trening jest martwy.
+Wartość straty staje się `nan` lub `inf`. Trening jest martwy.
 
-**Zbyt wysoki współczynnik uczenia się.** Aktualizacje gradientu przekraczają tak bardzo, że ciężary eksplodują. Poprawka: zmniejsz o 10x.
+**Współczynnik uczenia za wysoki.** Aktualizacje gradientu tak bardzo "przestrzeliwują" cel, że wagi eksplodują. Rozwiązanie: zmniejsz 10-krotnie.
 
-**log(0) lub log(ujemny).** Obliczenia strat krzyżowych entropii `log(p)`. Jeśli Twój model wyświetli dokładnie 0 lub ujemne prawdopodobieństwo, dziennik eksploduje. Poprawka: zablokuj przewidywania do `[eps, 1-eps]`, gdzie `eps=1e-7`.
+**log(0) lub log(liczby ujemnej).** Funkcja straty cross-entropy oblicza `log(p)`. Jeśli model zwraca prawdopodobieństwo dokładnie 0 lub ujemne, logarytm eksploduje. Rozwiązanie: ogranicz predykcje do `[eps, 1-eps]`, gdzie `eps=1e-7`.
 
-**Podział przez zero.** Normalizacja wsadowa dzieli się przez odchylenie standardowe. Partia o stałych wartościach ma std=0. Poprawka: dodaj epsilon do mianownika (PyTorch robi to domyślnie, ale niestandardowe implementacje mogą nie).
+**Dzielenie przez zero.** Normalizacja wsadowa dzieli przez odchylenie standardowe. Wsad o stałych wartościach ma std=0. Rozwiązanie: dodaj epsilon do mianownika (PyTorch robi to domyślnie, ale własne implementacje mogą tego nie robić).
 
-**Przepełnienie liczbowe.** Duże aktywacje wprowadzone do `exp()` generują Inf. Szczególnie podatny jest Softmax. Poprawka: odejmij maksimum przed potęgowaniem (sztuczka log-sum-exp).
+**Przepełnienie numeryczne.** Duże aktywacje przekazane do `exp()` produkują Inf. Softmax jest na to szczególnie podatny. Rozwiązanie: odejmij maksimum przed potęgowaniem (trik log-sum-exp).
 
-### Technika 1: Sprawdzanie gradientu
+### Technika 1: Sprawdzanie gradientów (gradient checking)
 
-Porównaj swoje gradienty analityczne (z podpórek) z gradientami numerycznymi (z różnic skończonych). Jeśli się nie zgodzą, Twoje podanie do tyłu zawiera błąd.
+Porównaj swoje analityczne gradienty (z backpropagacji) z gradientami numerycznymi (z różnic skończonych). Jeśli się nie zgadzają, twój przebieg wsteczny ma błąd.
 
 Gradient numeryczny dla parametru `w`:
 
@@ -94,13 +94,13 @@ Gradient numeryczny dla parametru `w`:
 grad_numerical = (loss(w + eps) - loss(w - eps)) / (2 * eps)
 ```
 
-Metryka zgodności (różnica względna):
+Miara zgodności (różnica relatywna):
 
 ```
 rel_diff = |grad_analytical - grad_numerical| / max(|grad_analytical|, |grad_numerical|, 1e-8)
 ```
 
-Jeśli `rel_diff < 1e-5`: poprawne. Jeśli `rel_diff > 1e-3`: prawie na pewno jest to błąd.
+Jeśli `rel_diff < 1e-5`: poprawnie. Jeśli `rel_diff > 1e-3`: prawie na pewno błąd.
 
 ```mermaid
 flowchart LR
@@ -117,18 +117,18 @@ flowchart LR
 
 ### Technika 2: Statystyki aktywacji
 
-Podczas treningu monitoruj średnią i odchylenie standardowe aktywacji po każdej warstwie. Zdrowe sieci utrzymują aktywacje ze średnią bliską 0 i std bliską 1 (po normalizacji) lub co najmniej ograniczoną.
+Monitoruj średnią i odchylenie standardowe aktywacji po każdej warstwie podczas treningu. Zdrowe sieci utrzymują aktywacje ze średnią bliską 0 i odchyleniem standardowym bliskim 1 (po normalizacji) albo przynajmniej ograniczone.
 
-| Wskaźnik zdrowia | Znaczy | standardowe | Diagnoza |
-|----------------|------|-----|----------|
-| Zdrowy | ~0 | ~1 | Sieć uczy się normalnie |
-| Nasycone | >>0 lub <<0 | ~0 | Aktywacje utknęły na wartościach ekstremalnych |
-| Martwy | 0 | 0 | Neurony są martwe (wszystkie zera) |
-| Eksploduje | >>10 | >>10 | Aktywacje rosną bez ograniczeń |
+| Wskaźnik zdrowia | Średnia | Odch. std. | Diagnoza |
+|-----------------|------|-----|-----------|
+| Zdrowa | ~0 | ~1 | Sieć uczy się normalnie |
+| Wysycona (saturated) | >>0 lub <<0 | ~0 | Aktywacje zablokowane na ekstremalnych wartościach |
+| Martwa | 0 | 0 | Neurony są martwe (wszystko zera) |
+| Eksplodująca | >>10 | >>10 | Aktywacje rosną bez ograniczeń |
 
-### Technika 3: Wizualizacja przepływu gradientowego
+### Technika 3: Wizualizacja przepływu gradientów
 
-Narysuj średnią wielkość gradientu dla każdej warstwy. W sprawnej sieci wielkości gradientów powinny być mniej więcej podobne we wszystkich warstwach. Jeśli wczesne warstwy mają gradienty 1000 razy mniejsze niż późniejsze, mamy do czynienia z gradientami zanikającymi.
+Narysuj wykres średniej wielkości gradientu dla każdej warstwy. W zdrowej sieci wielkości gradientów powinny być z grubsza podobne we wszystkich warstwach. Jeśli pierwsze warstwy mają gradienty 1000x mniejsze niż późniejsze, masz zanikające gradienty.
 
 ```mermaid
 graph LR
@@ -144,24 +144,24 @@ graph LR
     end
 ```
 
-### Technika 4: Test nadmiernego dopasowania jednej partii
+### Technika 4: Test overfit-one-batch
 
-Najważniejsza technika debugowania w głębokim uczeniu się.
+Najważniejsza pojedyncza technika debugowania w deep learningu.
 
-Weź jedną małą partię (8-32 próbki). Trenuj na nim przez ponad 100 iteracji. Strata powinna spaść prawie do zera, a dokładność treningu powinna osiągnąć 100%. Jeżeli tak nie jest, w Twoim modelu lub pętli treningowej występuje zasadniczy błąd — nie przystępuj do pełnego treningu.
+Weź jedną małą partię (8-32 próbki). Trenuj na niej przez 100+ iteracji. Strata powinna spaść praktycznie do zera, a dokładność treningowa powinna osiągnąć 100%. Jeśli tak się nie stanie, twój model albo pętla treningowa ma fundamentalny błąd -- nie przechodź do pełnego treningu.
 
-Ten test łapie:
+Ten test wykrywa:
 - Uszkodzone funkcje straty
-- Złamane podania do tyłu
-- Architektura zbyt mała, aby reprezentować dane
-- Optymalizator nie jest podłączony do parametrów modelu
-- Dane i etykiety są źle wyrównane
+- Uszkodzone przebiegi wsteczne (backward passes)
+- Architekturę za małą, by reprezentować dane
+- Optymalizator niepodłączony do parametrów modelu
+- Niewspółosiowe dane i etykiety
 
-Uruchomienie zajmuje 30 sekund i pozwala zaoszczędzić godziny debugowania pełnych przebiegów treningowych.
+To zajmuje 30 sekund i oszczędza godziny debugowania pełnych przebiegów treningowych.
 
-### Technika 5: Wyszukiwarka szybkości uczenia się
+### Technika 5: Wyszukiwanie współczynnika uczenia (LR finder)
 
-Leslie Smith (2017) zaproponował zmianę tempa uczenia się z bardzo małego (1e-7) do bardzo dużego (10) w ciągu jednej epoki, rejestrując stratę. Utrata fabuły a szybkość uczenia się. Optymalna szybkość uczenia się jest w przybliżeniu 10 razy mniejsza niż szybkość, przy której strata zaczyna się najszybciej zmniejszać.
+Leslie Smith (2017) zaproponował przeszukiwanie współczynnika uczenia od bardzo małego (1e-7) do bardzo dużego (10) w trakcie jednej epoki, rejestrując stratę. Narysuj wykres straty względem współczynnika uczenia. Optymalny współczynnik uczenia jest z grubsza 10x mniejszy niż wartość, przy której strata zaczyna spadać najszybciej.
 
 ```mermaid
 graph TD
@@ -175,50 +175,51 @@ graph TD
     end
 ```
 
-Najlepszy LR w tym przykładzie: ~1e-3 (jeden rząd wielkości przed najbardziej stromym punktem).
+Najlepszy LR w tym przykładzie: ~1e-3 (jeden rząd wielkości przed najbardziej "stromym" punktem).
 
-### Typowe błędy PyTorcha
+### Częste błędy w PyTorch
 
-Oto błędy, które marnują najwięcej godzin w społeczności PyTorch:
+To błędy, które pożerają najwięcej zbiorowych godzin w społeczności PyTorch:
 
-| Błąd | Objaw | Napraw |
+| Błąd | Symptom | Rozwiązanie |
 |-----|---------|-----|
-| Zapominanie `optimizer.zero_grad()` | Gradienty kumulują się w partiach, straty oscylują | Dodaj `optimizer.zero_grad()` przed `loss.backward()` |
-| Zapominanie `model.eval()` w czasie testu | Normy dotyczące porzucenia i partii zachowują się inaczej, dokładność testu różni się w zależności od serii | Dodaj `model.eval()` i `torch.no_grad()` |
-| Złe kształty tensora | Ciche nadawanie daje błędne wyniki, nie ma błędu | Drukuj kształty po każdej operacji podczas debugowania |
-| Niedopasowanie procesora/GPU | `RuntimeError: expected CUDA tensor` | Użyj `.to(device)` na modelu ORAZ danych |
-| Nie odłączanie tensorów | Wykres obliczeniowy rośnie w nieskończoność, OOM | Użyj `.detach()` lub `with torch.no_grad()` |
-| Operacje na miejscu przerywające autograd | `RuntimeError: modified by in-place operation` | Zamień `x += 1` na `x = x + 1` |
-| Dane nieznormalizowane | Strata utknęła na poziomie losowej szansy | Normalizuj dane wejściowe na średnią=0, std=1 |
-| Etykiety jako błędny typ | Entropia krzyżowa oczekuje `Long`, otrzymała `Float` | Etykiety obsady: `labels.long()` |
+| Zapomnienie `optimizer.zero_grad()` | Gradienty się kumulują między partiami, strata oscyluje | Dodaj `optimizer.zero_grad()` przed `loss.backward()` |
+| Zapomnienie `model.eval()` przy testowaniu | Dropout i batch norm zachowują się inaczej, dokładność testowa zmienia się między uruchomieniami | Dodaj `model.eval()` i `torch.no_grad()` |
+| Niewłaściwe wymiary tensorów | Ciche broadcastowanie produkuje błędne wyniki, brak błędu | Wypisuj wymiary po każdej operacji podczas debugowania |
+| Niezgodność CPU/GPU | `RuntimeError: expected CUDA tensor` | Użyj `.to(device)` na modelu I na danych |
+| Brak odłączania (detach) tensorów | Graf obliczeń rośnie w nieskończoność, OOM | Użyj `.detach()` lub `with torch.no_grad()` |
+| Operacje in-place łamiące autograd | `RuntimeError: modified by in-place operation` | Zamień `x += 1` na `x = x + 1` |
+| Dane niezormalizowane | Strata zablokowana na poziomie przypadkowej zgadywanki | Znormalizuj wejścia do średnia=0, std=1 |
+| Etykiety o niewłaściwym typie (dtype) | Cross-entropy oczekuje `Long`, otrzymuje `Float` | Rzutuj etykiety: `labels.long()` |
 
 ### Główna tabela debugowania
 
-| Objaw | Prawdopodobna przyczyna | Pierwszą rzeczą, którą należy spróbować |
-|--------|------------|--------------------------------|
-| Strata utknęła na -log(1/num_classes) | Model przewidujący rozkład równomierny | Sprawdź potok danych, sprawdź, czy etykiety pasują do danych wejściowych |
-| Strata NaN po kilku krokach | Zbyt wysoka szybkość uczenia się | Zmniejsz LR o 10x |
-| Strata NaN natychmiast | log(0) lub dzielenie przez zero | Dodaj epsilon do operacji log/dzielenia |
-| Strata oscyluje dziko | LR za wysoki lub wielkość partii za mała | Zmniejsz LR, zwiększ wielkość partii |
-| Strata malejąca, a następnie plateau | LR za wysoki dla fazy dostrajania | Dodaj harmonogram LR (rozpad cosinusowy lub krokowy) |
-| Trening zgodnie z wysokim poziomem, test z niskim poziomem | Nadmierne dopasowanie | Dodaj porzucenie, spadek masy ciała, więcej danych |
-| Szkolenie acc = test acc = szansa | Modelka niczego się nie uczy | Uruchom test nadmiernego dopasowania w jednej partii |
-| Trening wg = test wg, ale oba niskie | Niedopasowanie | Większy model, więcej warstw, więcej funkcji |
-| Gradienty wszystkie zerowe | Martwe ReLU lub odłączony wykres obliczeniowy | Przełącz na LeakyReLU, sprawdź `.requires_grad` |
-| Brak pamięci podczas treningu | Partia jest zbyt duża lub wykres nie jest zwolniony | Zmniejsz rozmiar partii, użyj `torch.no_grad()` dla eval |
+| Symptom | Prawdopodobna przyczyna | Pierwsza rzecz do sprawdzenia |
+|---------|-------------|-------------------|
+| Strata zablokowana na -log(1/num_classes) | Model przewiduje rozkład jednorodny | Sprawdź potok danych, zweryfikuj zgodność etykiet z wejściami |
+| Strata NaN po kilku krokach | Współczynnik uczenia za wysoki | Zmniejsz LR 10x |
+| Strata NaN od razu | log(0) lub dzielenie przez zero | Dodaj epsilon do operacji log/dzielenia |
+| Strata gwałtownie oscyluje | LR za wysoki lub batch size za mały | Zmniejsz LR, zwiększ batch size |
+| Strata spada, a potem osiąga plateau | LR za wysoki dla fazy fine-tuningu | Dodaj harmonogram LR (cosine lub step decay) |
+| Wysoka dokładność treningowa, niska testowa | Przeuczenie | Dodaj dropout, weight decay, więcej danych |
+| Dokładność treningowa = testowa = przypadek | Model niczego się nie uczy | Wykonaj test overfit-one-batch |
+| Dokładność treningowa = testowa, ale obie niskie | Niedouczenie (underfitting) | Większy model, więcej warstw, więcej cech |
+| Wszystkie gradienty równe zero | Martwe ReLU lub odłączony graf obliczeń | Przejdź na LeakyReLU, sprawdź `.requires_grad` |
+| Brak pamięci podczas treningu | Batch za duży lub graf nieuwolniony | Zmniejsz batch size, użyj `torch.no_grad()` dla ewaluacji |
 
 ## Zbuduj to
 
-Zestaw narzędzi diagnostycznych, który monitoruje aktywacje, gradienty i krzywe strat. Celowo uszkodzisz sieć i użyjesz zestawu narzędzi do zdiagnozowania każdego problemu.
+Zestaw diagnostyczny, który monitoruje aktywacje, gradienty i krzywe straty. Świadomie zepsujesz sieć i użyjesz zestawu narzędzi do zdiagnozowania każdego problemu.
 
 ### Krok 1: Klasa NetworkDebugger
 
-Łączy się z modelem PyTorch w celu rejestrowania statystyk aktywacji i gradientu na warstwę.
+Podłącza się do modelu PyTorch za pomocą hooków, aby rejestrować statystyki aktywacji i gradientów dla każdej warstwy.
 
 ```python
 import torch
 import torch.nn as nn
 import math
+
 
 class NetworkDebugger:
     def __init__(self, model):
@@ -335,7 +336,7 @@ class NetworkDebugger:
         self.hooks.clear()
 ```
 
-### Krok 2: Test nadmiernego dopasowania jednej partii
+### Krok 2: Test overfit-one-batch
 
 ```python
 def overfit_one_batch(model, x_batch, y_batch, criterion, lr=0.01, steps=200):
@@ -366,7 +367,7 @@ def overfit_one_batch(model, x_batch, y_batch, criterion, lr=0.01, steps=200):
     return True
 ```
 
-### Krok 3: Wyszukiwarka szybkości uczenia się
+### Krok 3: Wyszukiwanie współczynnika uczenia
 
 ```python
 def find_learning_rate(model, x_data, y_data, criterion, start_lr=1e-7, end_lr=10, steps=100):
@@ -416,7 +417,7 @@ def find_learning_rate(model, x_data, y_data, criterion, start_lr=1e-7, end_lr=1
     return results
 ```
 
-### Krok 4: Sprawdzanie gradientu
+### Krok 4: Sprawdzanie gradientów
 
 ```python
 def _flat_to_multi_index(flat_idx, shape):
@@ -426,6 +427,7 @@ def _flat_to_multi_index(flat_idx, shape):
         multi_idx.insert(0, remaining % dim)
         remaining //= dim
     return tuple(multi_idx)
+
 
 def gradient_check(model, x, y, criterion, eps=1e-4):
     model.train()
@@ -489,9 +491,9 @@ def gradient_check(model, x, y, criterion, eps=1e-4):
     return overall_max_diff
 ```
 
-### Krok 5: Celowo uszkodzone sieci
+### Krok 5: Świadomie zepsute sieci
 
-Teraz zastosuj zestaw narzędzi do uszkodzonych sieci i zdiagnozuj każdą z nich.
+Teraz zastosuj zestaw narzędzi do zepsutych sieci i zdiagnozuj każdą z nich.
 
 ```python
 def demo_broken_networks():
@@ -611,7 +613,7 @@ for name, param in model.named_parameters():
         print(f"{name}: grad_mean={param.grad.abs().mean():.2e}")
 ```
 
-### Integracja wag i odchyleń
+### Integracja z Weights & Biases
 
 ```python
 import wandb
@@ -631,7 +633,7 @@ for epoch in range(100):
             wandb.log({f"grad/{name}": wandb.Histogram(param.grad.cpu().numpy())})
 ```
 
-### Płyta Tensor
+### TensorBoard
 
 ```python
 from torch.utils.tensorboard import SummaryWriter
@@ -648,58 +650,58 @@ for epoch in range(100):
             writer.add_histogram(f"gradients/{name}", param.grad, epoch)
 ```
 
-### Lista kontrolna debugowania (przed pełnym szkoleniem)
+### Lista kontrolna debugowania (przed pełnym treningiem)
 
-1. Przeprowadź test nadmiernego dopasowania w jednej partii. Jeśli się nie uda, przestań.
-2. Wydrukuj podsumowanie modelu – sprawdź, czy liczba parametrów jest rozsądna.
-3. Uruchom pojedynczy przebieg do przodu z losowymi danymi - sprawdź kształt wyjściowy.
-4. Trenuj przez 5 epok – sprawdź zmniejszenie strat.
-5. Sprawdź statystyki aktywacji – żadnych martwych warstw, żadnych eksplozji.
-6. Sprawdź przepływ gradientowy – czy nie znika, czy nie eksploduje.
-7. Zweryfikuj potok danych — wydrukuj 5 losowych próbek z etykietami.
+1. Wykonaj test overfit-one-batch. Jeśli się nie powiedzie, zatrzymaj się.
+2. Wypisz podsumowanie modelu -- zweryfikuj, że liczba parametrów jest rozsądna.
+3. Wykonaj jeden przebieg w przód (forward pass) na losowych danych -- sprawdź kształt wyjścia.
+4. Trenuj przez 5 epok -- zweryfikuj, że strata spada.
+5. Sprawdź statystyki aktywacji -- brak martwych warstw, brak eksplozji.
+6. Sprawdź przepływ gradientów -- brak zanikania, brak eksplozji.
+7. Zweryfikuj potok danych -- wypisz 5 losowych próbek z etykietami.
 
-## Wyślij to
+## Wypuść to
 
-Ta lekcja daje:
-- `outputs/prompt-nn-debugger.md` – monit o diagnozowanie błędów uczenia sieci neuronowej
-- `outputs/skill-debug-checklist.md` – lista kontrolna drzewa decyzyjnego do debugowania problemów szkoleniowych
+Ta lekcja tworzy:
+- `outputs/prompt-nn-debugger.md` -- prompt do diagnozowania awarii treningu sieci neuronowych
+- `outputs/skill-debug-checklist.md` -- listę kontrolną w formie drzewa decyzyjnego do debugowania problemów treningowych
 
-Kluczowe wzorce wdrażania debugowania:
-- Dodaj haki monitorujące do skryptów szkoleniowych produkcji
-- Rejestruj statystyki aktywacji i gradientu w W&B lub TensorBoard co N kroków
-- Wdrożenie automatycznych alertów o utracie NaN, martwych neuronach (>80% zera) lub eksplozji gradientu
-- Zawsze uruchamiaj test overfit-one-batch przy zmianie architektury lub potoków danych
+Kluczowe wzorce wdrożeniowe dla debugowania:
+- Dodaj hooki monitorujące do produkcyjnych skryptów treningowych
+- Loguj statystyki aktywacji i gradientów do W&B lub TensorBoard co N kroków
+- Zaimplementuj automatyczne alerty dla straty NaN, martwych neuronów (>80% zer) lub eksplozji gradientów
+- Zawsze wykonuj test overfit-one-batch przy zmianie architektury lub potoku danych
 
 ## Ćwiczenia
 
-1. **Dodaj detektor eksplodującego gradientu.** Zmodyfikuj `NetworkDebugger`, aby wykrywać, kiedy gradienty przekraczają próg i automatycznie sugerować wartość obcinania gradientu. Przetestuj go w sieci 20-warstwowej bez normalizacji.
+1. **Dodaj detektor eksplodujących gradientów.** Zmodyfikuj `NetworkDebugger`, aby wykrywał, kiedy gradienty przekraczają próg, i automatycznie sugerował wartość przycinania gradientów (gradient clipping). Przetestuj na 20-warstwowej sieci bez normalizacji.
 
-2. **Zbuduj resurrektor martwych neuronów.** Napisz funkcję, która identyfikuje martwe neurony ReLU (zawsze wyświetlając 0) i ponownie inicjuje ich przychodzące wagi za pomocą inicjalizacji Kaiming. Pokaż, że przywraca to sieć, w której ponad 70% neuronów jest martwych.
+2. **Zbuduj "wskrzeszacza" martwych neuronów.** Napisz funkcję, która identyfikuje martwe neurony ReLU (zawsze zwracające 0) i reinicjalizuje ich wagi wejściowe za pomocą inicjalizacji Kaiminga. Pokaż, że to przywraca do działania sieć, w której >70% neuronów jest martwych.
 
-3. **Zaimplementuj narzędzie do wyszukiwania szybkości uczenia się z kreśleniem.** Rozszerz `find_learning_rate`, aby zapisać wyniki jako plik CSV i napisz oddzielny skrypt, który odczyta plik CSV i wyświetli krzywą LR vs stratę za pomocą matplotlib. Zidentyfikuj optymalny LR dla ResNet-18 na CIFAR-10.
+3. **Zaimplementuj wyszukiwanie współczynnika uczenia z wykresem.** Rozszerz `find_learning_rate`, aby zapisywało wyniki jako CSV, i napisz osobny skrypt, który odczytuje CSV i wyświetla wykres LR vs strata za pomocą matplotlib. Zidentyfikuj optymalny LR dla ResNet-18 na CIFAR-10.
 
-4. **Utwórz walidator potoku danych.** Napisz funkcję sprawdzającą: duplikaty próbek w podziale pociągów/testów, brak równowagi dystrybucji etykiet (stosunek> 10:1), normalizację danych wejściowych (średnia bliska 0, std bliska 1) i wartości NaN/Inf w danych. Uruchom go na celowo uszkodzonym zestawie danych.
+4. **Stwórz walidator potoku danych.** Napisz funkcję, która sprawdza: duplikaty próbek między podziałami train/test, niezbalansowanie rozkładu etykiet (stosunek >10:1), normalizację wejść (średnia bliska 0, std bliskie 1) oraz wartości NaN/Inf w danych. Uruchom ją na świadomie uszkodzonym zbiorze danych.
 
-5. **Debugowanie prawdziwej awarii.** Weź mini-framework z lekcji 10, wprowadź subtelny błąd (np. transponuj macierz wag do tyłu) i użyj sprawdzania gradientu, aby dokładnie zlokalizować, który parametr ma nieprawidłowe gradienty. Udokumentuj proces debugowania.
+5. **Debuguj rzeczywistą awarię.** Weź mini-framework z lekcji 10, wprowadź subtelny błąd (np. transponuj macierz wag w przebiegu wstecznym) i użyj sprawdzania gradientów, aby zlokalizować, który parametr ma nieprawidłowe gradienty. Udokumentuj proces debugowania.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co mówią ludzie | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Cichy błąd | „Działa, ale daje złe wyniki” | Błąd, który nie generuje błędu, ale pogarsza jakość modelu — dominujący tryb awarii w ML |
-| Martwy ReLU | „Neurony umarły” | Neuron ReLU, którego wejście jest zawsze ujemne, więc wyprowadza 0 i otrzymuje stale gradient 0
-| Znikające gradienty | „Wczesne warstwy przestają się uczyć” | Gradienty kurczą się wykładniczo w warstwach, powodując skuteczne zamrożenie ciężarów we wczesnych warstwach
-| Eksplodujące gradienty | „Przegrana przypadła NaN” | Gradienty rosną wykładniczo przez warstwy, powodując aktualizacje wagi tak duże, że przepełniają |
-| Sprawdzanie gradientu | „Sprawdź, czy podpora jest poprawna” | Porównanie gradientów analitycznych z podłoża do gradientów numerycznych z różnic skończonych |
-| Overfit-jedna-partia | „Najważniejszy test debugowania” | Szkolenie na pojedynczej małej partii w celu sprawdzenia modelu MOŻE się uczyć -- jeśli nie może, coś jest zasadniczo uszkodzone |
-| Wyszukiwarka LR | „Przeszukaj, aby znaleźć odpowiednią szybkość uczenia się” | Wykładnicze zwiększanie tempa uczenia się w jednej epoce i wybieranie tempa tuż przed rozbieżnością strat |
-| Wyciek danych | „Dane testowe wyciekły do ​​treningu” | Gdy informacje ze zbioru testowego zanieczyszczają trening, powodując sztucznie wysoką dokładność |
-| Statystyki aktywacji | „Monitoruj stan warstwy” | Śledzenie średniej, standardowej i zerowej części wyjścia każdej warstwy w celu wykrycia martwych, nasyconych lub eksplodujących neuronów |
-| Przycinanie gradientu | „Ogranicz wielkość gradientu” | Skalowanie gradientów w dół, gdy ich norma przekracza próg, zapobiegając eksplozjom aktualizacji gradientów |
+| Silent bug (cichy błąd) | "Działa, ale daje złe wyniki" | Błąd, który nie generuje błędu, ale degraduje jakość modelu -- dominujący sposób awarii w ML |
+| Dead ReLU (martwy ReLU) | "Neurony zginęły" | Neuron ReLU, którego wejście jest zawsze ujemne, więc zwraca 0 i na zawsze otrzymuje gradient 0 |
+| Vanishing gradients (zanikające gradienty) | "Pierwsze warstwy przestają się uczyć" | Gradienty zmniejszają się wykładniczo wraz z warstwami, przez co wagi w pierwszych warstwach są praktycznie zamrożone |
+| Exploding gradients (eksplodujące gradienty) | "Strata poszła do NaN" | Gradienty rosną wykładniczo wraz z warstwami, powodując aktualizacje wag tak duże, że przepełniają zakres liczbowy |
+| Gradient checking (sprawdzanie gradientów) | "Zweryfikuj, że backprop jest poprawny" | Porównanie analitycznych gradientów z backpropagacji z gradientami numerycznymi z różnic skończonych |
+| Overfit-one-batch | "Najważniejszy test debugowania" | Trening na jednej małej partii, aby zweryfikować, że model MOŻE się uczyć -- jeśli nie może, coś jest fundamentalnie zepsute |
+| LR finder (wyszukiwanie LR) | "Przeszukaj, aby znaleźć właściwy współczynnik uczenia" | Wykładnicze zwiększanie współczynnika uczenia w trakcie jednej epoki i wybranie wartości tuż przed rozbieżnością straty |
+| Data leakage (wyciek danych) | "Dane testowe przeciekły do treningu" | Sytuacja, w której informacje ze zbioru testowego zanieczyszczają trening, dając sztucznie zawyżoną dokładność |
+| Activation statistics (statystyki aktywacji) | "Monitoruj zdrowie warstw" | Śledzenie średniej, odchylenia standardowego i frakcji zer wyjścia każdej warstwy w celu wykrycia martwych, wysyconych lub eksplodujących neuronów |
+| Gradient clipping (przycinanie gradientów) | "Ogranicz wielkość gradientu" | Skalowanie gradientów w dół, gdy ich norma przekracza próg, co zapobiega eksplodującym aktualizacjom wag |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-- Smith, „Cyclical Learning Rates for Training Neural Networks” (2017) – artykuł wprowadzający do testu zakresu szybkości uczenia się (wyszukiwarka LR)
-— Northcutt i in., „Pervasive Label Errors in Test Sets Destabilize Machine Learning Benchmarks” (2021) — pokazuje, że 3–6% etykiet w ImageNet, CIFAR-10 i innych głównych testach porównawczych jest błędnych
-– Zhang i in., „Understanding Deep Learning Requires Rethinking Generalization” (2017) – artykuł pokazujący, że sieci neuronowe potrafią zapamiętywać losowe etykiety, dlatego działa test overfit-one-batch
+- Smith, "Cyclical Learning Rates for Training Neural Networks" (2017) -- artykuł wprowadzający test zakresu współczynnika uczenia (LR finder)
+- Northcutt i in., "Pervasive Label Errors in Test Sets Destabilize Machine Learning Benchmarks" (2021) -- pokazuje, że 3-6% etykiet w ImageNet, CIFAR-10 i innych dużych benchmarkach jest błędnych
+- Zhang i in., "Understanding Deep Learning Requires Rethinking Generalization" (2017) -- artykuł pokazujący, że sieci neuronowe mogą zapamiętywać losowe etykiety, co wyjaśnia, czemu działa test overfit-one-batch
 - Dokumentacja PyTorch dotycząca `torch.autograd.detect_anomaly` i `torch.autograd.set_detect_anomaly` dla wbudowanego wykrywania NaN/Inf
