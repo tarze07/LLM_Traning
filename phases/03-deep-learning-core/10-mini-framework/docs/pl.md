@@ -1,58 +1,58 @@
-# Zbuduj własną mini ramę
+# Zbuduj swój własny mini-framework
 
-> Zbudowałeś neurony, warstwy, sieci, podpory, aktywacje, funkcje strat, optymalizatory, regularyzację, inicjalizację i harmonogramy LR. Wszystko jako osobne kawałki. Teraz połącz je razem w ramę. Nie PyTorch. Nie TensorFlow. Twój.
+> Zbudowałeś neurony, warstwy, sieci, propagację wsteczną, funkcje aktywacji, funkcje straty, optymalizatory, regularyzację, inicjalizację oraz harmonogramy szybkości uczenia. Wszystko jako odrębne elementy. Teraz połącz je razem w framework. Nie PyTorch. Nie TensorFlow. Twój.
 
-**Typ:** Kompilacja
+**Typ:** Budowa
 **Języki:** Python
-**Wymagania wstępne:** Wszystko z fazy 03 (lekcje 01-09)
+**Wymagania wstępne:** Cała Faza 03 (Lekcje 01-09)
 **Czas:** ~120 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zbuduj kompletną strukturę głębokiego uczenia się (~500 linii) z modułem, liniowym, ReLU, Sigmoid, Dropout, BatchNorm, sekwencyjnym, funkcjami utraty, optymalizatorami i DataLoader
-- Wyjaśnij abstrakcję modułu (do przodu, do tyłu, parametry) i dlaczego konieczne jest przełączanie trybu pociągu/ewaluacji
-- Połącz wszystkie komponenty w działającą pętlę treningową, która szkoli 4-warstwową sieć w zakresie klasyfikacji okręgów
-- Zamapuj każdy komponent swojego frameworka na jego odpowiednik w PyTorch (nn.Module, nn.Sequential, optim.Adam, DataLoader)
+- Zbuduj kompletny framework do głębokiego uczenia (~500 linii) z Module, Linear, ReLU, Sigmoid, Dropout, BatchNorm, Sequential, funkcjami straty, optymalizatorami i DataLoaderem
+- Wyjaśnij abstrakcję Module (forward, backward, parameters) oraz dlaczego przełączanie między trybem train/eval jest niezbędne
+- Połącz wszystkie komponenty w działającą pętlę treningową, która trenuje 4-warstwową sieć na zadaniu klasyfikacji okręgów
+- Przypisz każdy komponent swojego frameworka do jego odpowiednika w PyTorch (nn.Module, nn.Sequential, optim.Adam, DataLoader)
 
 ## Problem
 
-Masz dziesięć lekcji składających się z elementów rozproszonych w oddzielnych plikach. Tutaj zajęcia `Value`, pętla treningowa tam, inicjalizacja ciężaru w innym pliku, harmonogramy tempa nauki w jeszcze innym. Aby wytrenować sieć, kopiuj i wklejaj z pięciu różnych lekcji i ręcznie je połącz.
+Masz dziesięć lekcji klocków konstrukcyjnych rozsianych po odrębnych plikach. Tutaj klasa `Value`, tam pętla treningowa, inicjalizacja wag w innym pliku, harmonogramy szybkości uczenia w jeszcze innym. Aby wytrenować sieć, kopiujesz i wklejasz fragmenty z pięciu różnych lekcji i łączysz je ręcznie.
 
-To właśnie rozwiązują frameworki. PyTorch udostępnia `nn.Module`, `nn.Sequential`, `optim.Adam`, `DataLoader` i wzorzec pętli treningowej, który je łączy. TensorFlow zapewnia `keras.Layer`, `keras.Sequential`, `keras.optimizers.Adam`. To nie są magia. Są to wzorce organizacyjne, które umożliwiają definiowanie, szkolenie i ocenę sieci bez konieczności ciągłego wymyślania instalacji wodociągowej.
+To właśnie rozwiązują frameworki. PyTorch daje ci `nn.Module`, `nn.Sequential`, `optim.Adam`, `DataLoader` oraz wzorzec pętli treningowej, który łączy to wszystko razem. TensorFlow daje ci `keras.Layer`, `keras.Sequential`, `keras.optimizers.Adam`. To nie jest magia. To wzorce organizacyjne, które umożliwiają definiowanie, trenowanie i ewaluację sieci bez konieczności wymyślania na nowo całej instalacji za każdym razem.
 
-Zamierzasz zbudować to samo w ~ 500 liniach Pythona. Nie, nie. Brak zależności zewnętrznych. Framework, który może zdefiniować dowolną sieć ze sprzężeniem zwrotnym, wyszkolić ją z SGD lub Adamem, wsadowo przetwarzać dane, stosować porzucanie i normalizację wsadową, korzystać z dowolnej aktywacji i planować szybkość uczenia się.
+Zbudujesz to samo w ~500 liniach Pythona. Bez numpy. Bez zewnętrznych zależności. Framework, który może zdefiniować każdą sieć typu feedforward, wytrenować ją za pomocą SGD lub Adam, podzielić dane na partie, zastosować dropout i normalizację wsadową (batch normalization), użyć dowolnej aktywacji oraz zaplanować szybkość uczenia.
 
-Kiedy skończysz, dokładnie zrozumiesz, co się stanie, gdy napiszesz `model = nn.Sequential(...)` w PyTorch. Zrozumiesz, dlaczego istnieją `model.train()` i `model.eval()`. Zrozumiesz, dlaczego `optimizer.zero_grad()` to osobne wywołanie. Zrozumiesz to wszystko, ponieważ to ty to wszystko zbudowałeś.
+Kiedy skończysz, będziesz rozumieć dokładnie, co się dzieje, gdy piszesz `model = nn.Sequential(...)` w PyTorch. Zrozumiesz, dlaczego istnieją `model.train()` i `model.eval()`. Zrozumiesz, dlaczego `optimizer.zero_grad()` jest odrębnym wywołaniem. Zrozumiesz to wszystko, ponieważ sam to zbudowałeś.
 
 ## Koncepcja
 
-### Abstrakcja modułu
+### Abstrakcja Module
 
-Każda warstwa w PyTorch dziedziczy z `nn.Module`. Moduł ma trzy obowiązki:
+Każda warstwa w PyTorch dziedziczy po `nn.Module`. Module ma trzy obowiązki:
 
-1. **forward()** -- oblicza wynik na podstawie danych wejściowych
-2. **parameters()** -- zwróć wszystkie możliwe do wytrenowania ciężary
-3. **backward()** -- oblicz gradienty (obsługiwane przez autograd w PyTorch, jawnie w naszym)
+1. **forward()** -- obliczenie wyjścia na podstawie wejść
+2. **parameters()** -- zwrócenie wszystkich wag podlegających trenowaniu
+3. **backward()** -- obliczenie gradientów (w PyTorch obsługiwane przez autograd, w naszym przypadku jawne)
 
-Warstwa liniowa jest modułem. Aktywacja ReLU jest modułem. Warstwa porzucona to moduł. Warstwa normalizacji wsadowej to moduł. Wszystkie mają ten sam interfejs.
+Warstwa Linear jest Module. Aktywacja ReLU jest Module. Warstwa dropout jest Module. Warstwa normalizacji wsadowej jest Module. Wszystkie mają ten sam interfejs.
 
-### Kontener sekwencyjny
+### Kontener Sequential
 
-`nn.Sequential` łączy moduły. Przejście w przód: przepuszczenie danych przez moduł 1, następnie moduł 2, a następnie moduł 3. Przejście w tył: odwrócenie łańcucha. Sam kontener jest modułem — zawiera funkcje forward(), parametry() i backward(). Oto wzór złożony: sekwencja modułów sama w sobie jest modułem.
+`nn.Sequential` łączy moduły w łańcuch. Przebieg w przód: dane przechodzą przez Moduł 1, potem Moduł 2, potem Moduł 3. Przebieg w tył: łańcuch w odwrotnym kierunku. Sam kontener jest Module -- ma forward(), parameters() i backward(). To wzorzec kompozytu: sekwencja Modułów sama jest Modułem.
 
-### Trening a tryb oceny
+### Tryb treningowy vs ewaluacyjny
 
-Rezygnacja losowo zeruje neurony podczas treningu, ale przepuszcza wszystko podczas oceny. Normalizacja wsadowa wykorzystuje statystyki wsadowe podczas uczenia, ale średnie bieżące podczas oceny. Metody `train()` i `eval()` przełączają to zachowanie. Każdy moduł ma flagę `training`.
+Dropout losowo zeruje neurony podczas treningu, ale przepuszcza wszystko bez zmian podczas ewaluacji. Normalizacja wsadowa wykorzystuje statystyki partii podczas treningu, ale średnie bieżące (running averages) podczas ewaluacji. Metody `train()` i `eval()` przełączają to zachowanie. Każdy Module ma flagę `training`.
 
 ### Optymalizator
 
-Optymalizator aktualizuje parametry przy użyciu ich gradientów. SGD: `param -= lr * grad`. Adam: utrzymuje szacunki dynamiki i wariancji, a następnie aktualizuje. Optymalizator nie zna architektury sieci — widzi jedynie płaską listę parametrów i ich gradientów.
+Optymalizator aktualizuje parametry na podstawie ich gradientów. SGD: `param -= lr * grad`. Adam: utrzymuje estymaty momentum i wariancji, a następnie aktualizuje. Optymalizator nie wie nic o architekturze sieci -- widzi jedynie płaską listę parametrów i ich gradientów.
 
-### Moduł ładowania danych
+### DataLoader
 
-Dozowanie ma znaczenie z dwóch powodów. Po pierwsze, w przypadku dużych problemów nie można zmieścić całego zestawu danych w pamięci. Po drugie, opadanie gradientowe w małych wsadach zapewnia szum, który pomaga uniknąć lokalnych minimów. DataLoader dzieli dane na partie i opcjonalnie tasuje pomiędzy epokami.
+Podział na partie (batching) ma znaczenie z dwóch powodów. Pierwszy: nie da się zmieścić całego zbioru danych w pamięci dla dużych problemów. Drugi: stochastyczny spadek gradientu na mini-partiach wprowadza szum, który pomaga wyjść z lokalnych minimów. DataLoader dzieli dane na partie i opcjonalnie miesza je między epokami.
 
-### Architektura ramowa
+### Architektura frameworka
 
 ```mermaid
 graph TD
@@ -110,7 +110,7 @@ sequenceDiagram
     end
 ```
 
-### Hierarchia modułów
+### Hierarchia Module
 
 ```mermaid
 classDiagram
@@ -149,9 +149,9 @@ classDiagram
 
 ## Zbuduj to
 
-### Krok 1: Klasa bazowa modułu
+### Krok 1: Klasa bazowa Module
 
-Abstrakcyjny interfejs implementowany przez każdą warstwę.
+Abstrakcyjny interfejs, który implementuje każda warstwa.
 
 ```python
 class Module:
@@ -174,13 +174,14 @@ class Module:
         self.training = False
 ```
 
-### Krok 2: Warstwa liniowa
+### Krok 2: Warstwa Linear
 
-Podstawowy element konstrukcyjny. Przechowuje wagi i odchylenia, oblicza Wx + b do przodu i gradienty wagi/wejściowe do tyłu.
+Podstawowy element konstrukcyjny. Przechowuje wagi i biasy, oblicza Wx + b w przebiegu w przód oraz gradienty wag/wejścia w przebiegu w tył.
 
 ```python
 import math
 import random
+
 
 class Linear(Module):
     def __init__(self, fan_in, fan_out):
@@ -222,9 +223,9 @@ class Linear(Module):
         return params
 ```
 
-### Krok 3: Moduły aktywacyjne
+### Krok 3: Moduły aktywacji
 
-ReLU, Sigmoid i Tanh jako moduły. Każdy buforuje to, czego potrzebuje do przejścia wstecz.
+ReLU, Sigmoid i Tanh jako Moduły. Każdy z nich zapisuje to, czego potrzebuje na potrzeby przebiegu w tył.
 
 ```python
 class ReLU(Module):
@@ -238,6 +239,7 @@ class ReLU(Module):
 
     def backward(self, grad):
         return [g * m for g, m in zip(grad, self.mask)]
+
 
 class Sigmoid(Module):
     def __init__(self):
@@ -254,6 +256,7 @@ class Sigmoid(Module):
     def backward(self, grad):
         return [g * o * (1 - o) for g, o in zip(grad, self.output)]
 
+
 class Tanh(Module):
     def __init__(self):
         super().__init__()
@@ -267,9 +270,9 @@ class Tanh(Module):
         return [g * (1 - o * o) for g, o in zip(grad, self.output)]
 ```
 
-### Krok 4: Moduł rezygnacji
+### Krok 4: Moduł Dropout
 
-Losowo zeruje elementy podczas treningu. Skaluje pozostałe elementy o 1/(1-p), aby oczekiwane wartości pozostały takie same. Nie robi nic podczas eval.
+Losowo zeruje elementy podczas treningu. Skaluje pozostałe elementy o 1/(1-p), aby wartości oczekiwane pozostały niezmienione. Nie robi nic podczas ewaluacji.
 
 ```python
 class Dropout(Module):
@@ -292,7 +295,7 @@ class Dropout(Module):
 
 ### Krok 5: Moduł BatchNorm
 
-Normalizuje aktywacje do średniej zerowej i wariancji jednostkowej na cechę w całej partii. Utrzymuje statystyki działania dla trybu eval.
+Normalizuje aktywacje do zerowej średniej i jednostkowej wariancji per cecha, w ramach partii. Utrzymuje statystyki bieżące na potrzeby trybu ewaluacji.
 
 ```python
 class BatchNorm(Module):
@@ -370,9 +373,9 @@ class BatchNorm(Module):
         return params
 ```
 
-### Krok 6: Kontener sekwencyjny
+### Krok 6: Kontener Sequential
 
-Moduły łańcuchów. Do przodu idzie od lewej do prawej, do tyłu idzie od prawej do lewej.
+Łączy moduły w łańcuch. Przebieg w przód idzie od lewej do prawej, przebieg w tył od prawej do lewej.
 
 ```python
 class Sequential(Module):
@@ -409,7 +412,7 @@ class Sequential(Module):
 
 ### Krok 7: Funkcje straty
 
-MSE i binarna entropia krzyżowa. Każdy zwraca wartość straty i udostępnia funkcję backward(), która zwraca gradient.
+MSE i binarna entropia krzyżowa (Binary Cross-Entropy). Każda zwraca wartość straty i udostępnia backward(), które zwraca gradient.
 
 ```python
 class MSELoss:
@@ -423,6 +426,7 @@ class MSELoss:
     def backward(self):
         n = len(self.predicted)
         return [2 * (p - t) / n for p, t in zip(self.predicted, self.target)]
+
 
 class BCELoss:
     def __call__(self, predicted, target):
@@ -447,9 +451,9 @@ class BCELoss:
         return grads
 ```
 
-### Krok 8: Optymalizatory SGD i Adama
+### Krok 8: Optymalizatory SGD i Adam
 
-Oba pobierają listę parametrów i aktualizują wagi za pomocą gradientów.
+Oba przyjmują listę parametrów i aktualizują wagi na podstawie gradientów.
 
 ```python
 class SGD:
@@ -470,6 +474,7 @@ class SGD:
                 grad_container[i][j] = 0.0
             else:
                 grad_container[i] = 0.0
+
 
 class Adam:
     def __init__(self, parameters, lr=0.001, beta1=0.9, beta2=0.999, eps=1e-8):
@@ -511,9 +516,9 @@ class Adam:
                 grad_container[i] = 0.0
 ```
 
-### Krok 9: Moduł ładowania danych
+### Krok 9: DataLoader
 
-Dzieli dane na partie, opcjonalnie tasuje każdą epokę.
+Dzieli dane na partie, opcjonalnie miesza je przy każdej epoce.
 
 ```python
 class DataLoader:
@@ -537,9 +542,9 @@ class DataLoader:
         return (len(self.data) + self.batch_size - 1) // self.batch_size
 ```
 
-### Krok 10: Trenuj sieć 4-warstwową w oparciu o klasyfikację okręgową
+### Krok 10: Wytrenuj 4-warstwową sieć na zadaniu klasyfikacji okręgów
 
-Połącz wszystko razem. Zdefiniuj model, wybierz stratę, wybierz optymalizator, uruchom pętlę treningową.
+Połącz wszystko razem. Zdefiniuj model, wybierz funkcję straty, wybierz optymalizator, uruchom pętlę treningową.
 
 ```python
 def make_circle_data(n=500, seed=42):
@@ -551,6 +556,7 @@ def make_circle_data(n=500, seed=42):
         label = 1.0 if x * x + y * y < 1.5 else 0.0
         data.append(([x, y], [label]))
     return data
+
 
 def train():
     random.seed(42)
@@ -623,7 +629,7 @@ def train():
 
 ## Użyj tego
 
-Oto odpowiednik tego, co właśnie zbudowałeś w PyTorch:
+Oto odpowiednik tego, co właśnie zbudowałeś, w PyTorch:
 
 ```python
 import torch
@@ -658,44 +664,44 @@ for epoch in range(100):
         test_predictions = model(test_inputs)
 ```
 
-Struktura jest identyczna. `Sequential`, `Linear`, `ReLU`, `Sigmoid`, `BCELoss`, `Adam`, `zero_grad`, `backward`, `step`, `train`, `eval`. Każda koncepcja jest odwzorowana jeden do jednego. Różnica polega na tym, że PyTorch automatycznie obsługuje autograd (nie ma potrzeby implementowania funkcji backward() w każdym module), działa na GPU i jest optymalizowany od lat. Ale kości są takie same.
+Struktura jest identyczna. `Sequential`, `Linear`, `ReLU`, `Sigmoid`, `BCELoss`, `Adam`, `zero_grad`, `backward`, `step`, `train`, `eval`. Każda koncepcja mapuje się jeden do jednego. Różnica polega na tym, że PyTorch obsługuje autograd automatycznie (nie ma potrzeby implementowania backward() w każdym module), działa na GPU i jest optymalizowany przez lata. Ale szkielet jest taki sam.
 
-Teraz, gdy zobaczysz kod PyTorch, wiesz dokładnie, co dzieje się w każdej linii. O to właśnie chodzi.
+Teraz, gdy zobaczysz kod PyTorch, będziesz wiedzieć dokładnie, co dzieje się w każdej linii. To zrozumienie jest celem tej lekcji.
 
-## Wyślij to
+## Dostawa
 
-Ta lekcja daje:
-- `outputs/prompt-framework-architect.md` — zachęta do projektowania architektur sieci neuronowych przy użyciu abstrakcji frameworka
+Ta lekcja produkuje:
+- `outputs/prompt-framework-architect.md` -- prompt do projektowania architektur sieci neuronowych przy użyciu abstrakcji frameworka
 
 ## Ćwiczenia
 
-1. Dodaj klasę `SoftmaxCrossEntropyLoss` dla klasyfikacji wieloklasowej. Softmax prognozy, oblicza stratę entropii krzyżowej i obsługuje połączone przejście wstecz. Przetestuj to na zbiorze danych spirali 3 klas.
+1. Dodaj klasę `SoftmaxCrossEntropyLoss` do klasyfikacji wieloklasowej. Zastosuj softmax do predykcji, oblicz stratę cross-entropy i obsłuż połączony przebieg w tył. Przetestuj na zbiorze danych typu spirala z 3 klasami.
 
-2. Zaimplementuj w optymalizatorze planowanie szybkości uczenia się: dodaj metodę `set_lr()` i połącz harmonogram cosinusów z lekcji 09. Wytrenuj klasyfikator kołowy za pomocą rozgrzewki + cosinus i porównaj ze stałym LR.
+2. Zaimplementuj harmonogramowanie szybkości uczenia w optymalizatorze: dodaj metodę `set_lr()` i podłącz harmonogram kosinusowy z Lekcji 09. Wytrenuj klasyfikator okręgów z rozgrzewką (warmup) + kosinusem i porównaj z constant LR.
 
-3. Dodaj metody `save()` i `load()` do Sequential, które serializują wszystkie wagi do pliku JSON i ładują je z powrotem. Sprawdź, czy załadowany model generuje takie same przewidywania jak oryginał.
+3. Dodaj metody `save()` i `load()` do Sequential, które serializują wszystkie wagi do pliku JSON i wczytują je z powrotem. Zweryfikuj, że wczytany model produkuje te same predykcje co oryginał.
 
-4. Zaimplementuj rozkład masy (regularyzacja L2) w optymalizatorze Adama. Dodaj parametr `weight_decay`, który w każdym kroku zmniejsza wagę do zera. Porównaj trening z zanikiem = 0 vs zanikiem = 0,01.
+4. Zaimplementuj weight decay (regularyzację L2) w optymalizatorze Adam. Dodaj parametr `weight_decay`, który zmniejsza wagi w kierunku zera w każdym kroku. Porównaj trening z decay=0 i decay=0.01.
 
-5. Zastąp pętlę szkoleniową dla poszczególnych próbek odpowiednią akumulacją gradientów w minipartiach: zsumuj gradienty we wszystkich próbkach w partii, następnie podziel przez wielkość partii i wykonaj jeden krok optymalizatora. Zmierz, czy zmienia to prędkość konwergencji.
+5. Zastąp pętlę treningową działającą na pojedynczych próbkach właściwą akumulacją gradientów na mini-partiach: akumuluj gradienty dla wszystkich próbek w partii, następnie podziel przez rozmiar partii i wykonaj jeden krok optymalizatora. Zmierz, czy to zmienia szybkość zbieżności.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co mówią ludzie | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Moduł | „Warstwa” | Podstawowa abstrakcja w frameworku — wszystko z forward(), backward() i parametrami() |
-| Sekwencyjny | „Ułóż warstwy w kolejności” | Kontener, który łączy moduły, stosując je sekwencyjnie do przodu i do tyłu do tyłu |
-| Podanie w przód | „Uruchom sieć” | Obliczanie wyniku poprzez przekazywanie danych wejściowych przez każdy moduł w kolejności |
-| Podanie do tyłu | „Oblicz gradienty” | Propagowanie gradientu strat przez każdy moduł w odwrotnej kolejności w celu obliczenia gradientów parametrów |
-| Parametry | „Ciężary nadające się do treningu” | Wszystkie wartości w sieci, które optymalizator może aktualizować — wagi i błędy systematyczne |
-| Optymalizator | „To, co aktualizuje wagę” | Algorytm wykorzystujący gradienty do aktualizacji parametrów, implementujący SGD, Adam lub inne reguły |
-| Moduł ładowania danych | „To, co zasila dane” | Iterator dzielący zbiór danych na partie, opcjonalnie mieszając między epokami |
-| Tryb treningowy | "model.pociąg()" | Flaga umożliwiająca zachowanie stochastyczne, takie jak porzucanie i normalizacja wsadowa za pomocą statystyk wsadowych |
-| Tryb oceny | "model.eval()" | Flaga wyłączająca porzucanie i wykorzystująca statystyki bieżące do normalizacji wsadowej |
-| Zerowy stopień | „Wyczyść gradienty” | Resetowanie wszystkich gradientów parametrów do zera przed obliczeniem gradientów następnej partii |
+| Module | "Warstwa" | Podstawowa abstrakcja w frameworku -- wszystko, co ma forward(), backward() i parameters() |
+| Sequential | "Ułóż warstwy po kolei" | Kontener, który łączy moduły w łańcuch, stosując je w sekwencji dla przebiegu w przód i w odwrotnej kolejności dla przebiegu w tył |
+| Forward pass (przebieg w przód) | "Uruchom sieć" | Obliczenie wyjścia poprzez przepuszczenie wejścia przez każdy moduł po kolei |
+| Backward pass (przebieg w tył) | "Oblicz gradienty" | Propagacja gradientu straty przez każdy moduł w odwrotnym kierunku, aby obliczyć gradienty parametrów |
+| Parameters (parametry) | "Wagi podlegające trenowaniu" | Wszystkie wartości w sieci, które optymalizator może aktualizować -- wagi i biasy |
+| Optimizer (optymalizator) | "To, co aktualizuje wagi" | Algorytm, który wykorzystuje gradienty do aktualizacji parametrów, implementując SGD, Adam lub inne reguły |
+| DataLoader | "To, co dostarcza dane" | Iterator, który dzieli zbiór danych na partie, opcjonalnie mieszając je między epokami |
+| Training mode (tryb treningowy) | "model.train()" | Flaga, która włącza stochastyczne zachowania, takie jak dropout i normalizacja wsadowa ze statystykami partii |
+| Evaluation mode (tryb ewaluacji) | "model.eval()" | Flaga, która wyłącza dropout i wykorzystuje statystyki bieżące dla normalizacji wsadowej |
+| Zero grad | "Wyczyść gradienty" | Zresetowanie wszystkich gradientów parametrów do zera przed obliczeniem gradientów dla kolejnej partii |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-- Paszke i in., „PyTorch: An Imperative Style, High-Performance Deep Learning Library” (2019) – artykuł opisujący decyzje projektowe PyTorch
-– Chollet, „Deep Learning with Python, Second Edition” (2021) – Rozdział 3 omawia elementy wewnętrzne Keras z tą samą abstrakcją modułów/warstw
-– Johnson, „Tiny-DNN” (https://github.com/tiny-dnn/tiny-dnn) — platforma głębokiego uczenia się C++ zawierająca tylko nagłówki, umożliwiająca zrozumienie wewnętrznych elementów frameworka
+- Paszke i in., "PyTorch: An Imperative Style, High-Performance Deep Learning Library" (2019) -- artykuł opisujący decyzje projektowe PyTorch
+- Chollet, "Deep Learning with Python, Second Edition" (2021) -- Rozdział 3 opisuje wewnętrzne mechanizmy Keras z tą samą abstrakcją modułu/warstwy
+- Johnson, "Tiny-DNN" (https://github.com/tiny-dnn/tiny-dnn) -- header-only framework do głębokiego uczenia w C++ pomagający zrozumieć wewnętrzne mechanizmy frameworków

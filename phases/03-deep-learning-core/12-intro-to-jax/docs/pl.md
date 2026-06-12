@@ -1,49 +1,49 @@
 # Wprowadzenie do JAX
 
-> PyTorch mutuje tensory. TensorFlow buduje wykresy. JAX kompiluje czyste funkcje. To ostatnie zmienia sposób myślenia o głębokim uczeniu się.
+> PyTorch mutuje tensory. TensorFlow buduje grafy. JAX kompiluje czyste funkcje. Ta ostatnia różnica zmienia sposób myślenia o uczeniu głębokim.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
-**Wymagania wstępne:** Faza 03, lekcje 01-10, podstawowy NumPy
+**Wymagania wstępne:** Faza 03, lekcje 01-10, podstawy NumPy
 **Czas:** ~90 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Napisz kod sieci neuronowej o czystej funkcjonalności, korzystając z funkcjonalnego API JAX (jax.numpy, jax.grad, jax.jit, jax.vmap)
-- Wyjaśnij kluczową różnicę projektową pomiędzy chętną mutacją PyTorch a funkcjonalnym modelem kompilacji JAX
-- Zastosuj kompilację jit i wektoryzację vmap, aby przyspieszyć pętle szkoleniowe w porównaniu z naiwnym Pythonem
-- Wytrenuj prostą sieć w JAX i porównaj jawne zarządzanie stanem z podejściem obiektowym PyTorch
+- Pisanie kodu sieci neuronowych w stylu czystych funkcji przy użyciu funkcyjnego API JAX (jax.numpy, jax.grad, jax.jit, jax.vmap)
+- Wyjaśnienie kluczowej różnicy projektowej między eagerową mutacją w PyTorch a funkcyjnym modelem kompilacji w JAX
+- Zastosowanie kompilacji jit oraz wektoryzacji vmap do przyspieszenia pętli treningowych w porównaniu do naiwnego Pythona
+- Wytrenowanie prostej sieci w JAX i porównanie jawnego zarządzania stanem z obiektowym podejściem PyTorch
 
 ## Problem
 
-Wiesz, jak budować sieci neuronowe w PyTorch. Definiujesz `nn.Module`, wywołujesz `.backward()`, uruchamiasz optymalizator. To działa. Korzystają z niego miliony ludzi.
+Wiesz, jak budować sieci neuronowe w PyTorch. Definiujesz `nn.Module`, wywołujesz `.backward()`, robisz krok optymalizatora. Działa. Korzystają z tego miliony ludzi.
 
-Ale PyTorch ma pewne ograniczenie wpisane w swoje DNA: chętnie śledzi operacje w Pythonie, pojedynczo. Każde `tensor + tensor` jest osobnym uruchomieniem jądra. Każdy krok szkoleniowy reinterpretuje ten sam kod Pythona. Działa to dobrze, dopóki nie trzeba wytrenować modelu o 540 miliardach parametrów w 2048 TPU. Wtedy obciążenie cię zabije.
+Jednak PyTorch ma ograniczenie wpisane w swoje DNA: śledzi operacje eagerowo, jedną po drugiej, w Pythonie. Każde `tensor + tensor` to osobne wywołanie kernela. Każdy krok treningowy ponownie interpretuje ten sam kod Pythona. To działa dobrze, dopóki nie musisz wytrenować modelu o 540 miliardach parametrów na 2048 TPU. Wtedy narzut zaczyna zabijać wydajność.
 
-Google DeepMind szkoli Gemini w JAX. Anthropic przeszkolił Claude'a na JAX. To nie są małe operacje – to największe na Ziemi treningi sieci neuronowych. Wybrali JAX, ponieważ traktuje pętlę treningową jako program, który można skompilować, a nie sekwencję wywołań Pythona.
+Google DeepMind trenuje Gemini na JAX. Anthropic trenował Claude na JAX. To nie są małe operacje -- to największe treningi sieci neuronowych na świecie. Wybrali JAX, ponieważ traktuje pętlę treningową jako kompilowalny program, a nie sekwencję wywołań Pythona.
 
-JAX to NumPy z trzema supermocami: automatycznym różnicowaniem, kompilacją JIT do XLA i automatyczną wektoryzacją. Piszesz funkcję, która przetwarza jeden przykład. JAX udostępnia funkcję, która przetwarza wsadowo, oblicza gradienty, kompiluje do kodu maszynowego i działa na wielu urządzeniach. Wszystko bez zmiany pierwotnej funkcji.
+JAX to NumPy z trzema supermocami: automatyczne różniczkowanie, kompilacja JIT do XLA i automatyczna wektoryzacja. Piszesz funkcję, która przetwarza jeden przykład. JAX daje ci funkcję, która przetwarza batch, liczy gradienty, kompiluje się do kodu maszynowego i działa na wielu urządzeniach. Wszystko bez zmiany oryginalnej funkcji.
 
 ## Koncepcja
 
 ### Filozofia JAX
 
-JAX to framework funkcjonalny. Żadnych klas, żadnego modyfikowalnego stanu, żadnej metody `.backward()`. Zamiast tego:
+JAX jest frameworkiem funkcyjnym. Brak klas, brak mutowalnego stanu, brak metody `.backward()`. Zamiast tego:
 
 | PyTorch | JAX |
-|--------|-----|
-| `nn.Module` klasa ze stanem | Czysta funkcja: `f(params, x) -> y` |
+|---------|-----|
+| Klasa `nn.Module` ze stanem | Czysta funkcja: `f(params, x) -> y` |
 | `loss.backward()` | `jax.grad(loss_fn)(params, x, y)` |
-| Chętna egzekucja | Kompilacja JIT poprzez XLA |
-| `for x in batch:` pętla ręczna | `jax.vmap(f)` automatyczna wektoryzacja |
-| `DataParallel` / `FSDP` | `jax.pmap(f)` autorównoległość |
-| Zmienny `model.parameters()` | Niezmienne pytree tablic |
+| Wykonanie eagerowe | Kompilacja JIT przez XLA |
+| Ręczna pętla `for x in batch:` | Automatyczna wektoryzacja `jax.vmap(f)` |
+| `DataParallel` / `FSDP` | Automatyczna równoległość `jax.pmap(f)` |
+| Mutowalne `model.parameters()` | Niemutowalny pytree tablic |
 
-To nie jest preferencja stylu. Jest to ograniczenie kompilatora. Kompilacja JIT wymaga czystych funkcji - te same dane wejściowe zawsze dają te same wyniki, bez skutków ubocznych. To ograniczenie umożliwia 100-krotne przyspieszenie.
+To nie jest kwestia preferencji stylistycznych. To ograniczenie wynikające z kompilatora. Kompilacja JIT wymaga czystych funkcji -- te same wejścia zawsze dają te same wyjścia, brak efektów ubocznych. To ograniczenie jest tym, co umożliwia przyspieszenia 100x.
 
-### jax.numpy: Znana powierzchnia
+### jax.numpy: znana powierzchnia API
 
-JAX ponownie implementuje API NumPy w akceleratorach:
+JAX reimplementuje API NumPy na akceleratorach:
 
 ```python
 import jax.numpy as jnp
@@ -53,11 +53,11 @@ b = jnp.array([4.0, 5.0, 6.0])
 c = jnp.dot(a, b)
 ```
 
-Te same nazwy funkcji. Te same zasady nadawania. Ta sama semantyka krojenia. Ale tablice działają na GPU/TPU, a kompilator może prześledzić każdą operację.
+Te same nazwy funkcji. Te same reguły broadcastingu. Ta sama semantyka wycinania (slicing). Ale tablice żyją na GPU/TPU, a każda operacja jest śledzona (traceable) przez kompilator.
 
-Jedna krytyczna różnica: tablice JAX są niezmienne. Nie `a[0] = 5`. Zamiast tego: `a = a.at[0].set(5)`. Przez tydzień wydaje się to niezręczne, a potem klika — niezmienność sprawia, że ​​transformacje takie jak `grad`, `jit` i `vmap` dają się komponować.
+Jedna kluczowa różnica: tablice JAX są niemutowalne. Brak `a[0] = 5`. Zamiast tego: `a = a.at[0].set(5)`. Przez tydzień wydaje się to niewygodne, a potem "klika" -- niemutowalność jest tym, co sprawia, że transformacje takie jak `grad`, `jit` i `vmap` są kompozycyjne.
 
-### jax.grad: Funkcjonalna automatyczna różnica
+### jax.grad: funkcyjne automatyczne różniczkowanie
 
 PyTorch dołącza gradienty do tensorów (`.grad`). JAX dołącza gradienty do funkcji.
 
@@ -71,20 +71,20 @@ df = jax.grad(f)
 df(3.0)
 ```
 
-`jax.grad` pobiera funkcję i zwraca nową funkcję, która oblicza gradient. Brak połączenia `.backward()`. Żaden wykres obliczeniowy nie jest przechowywany na tensorach. Gradient to kolejna funkcja, którą możesz wywołać, utworzyć lub skompilować za pomocą JIT.
+`jax.grad` przyjmuje funkcję i zwraca nową funkcję, która liczy gradient. Brak wywołania `.backward()`. Brak grafu obliczeń przechowywanego na tensorach. Gradient jest po prostu kolejną funkcją, którą możesz wywołać, skomponować lub skompilować JIT-em.
 
-To tworzy arbitralnie:
+To komponuje się dowolnie:
 
 ```python
 d2f = jax.grad(jax.grad(f))
 d2f(3.0)
 ```
 
-Drugie pochodne. Trzecie pochodne. Jakobiani. Hesowie. Wszystko poprzez komponowanie `grad`. PyTorch też może to zrobić (`torch.autograd.functional.hessian`), ale jest przykręcony. W JAX to podstawa.
+Drugie derywaty. Trzecie derywaty. Jakobiany. Hesjany. Wszystko poprzez komponowanie `grad`. PyTorch też to umie (`torch.autograd.functional.hessian`), ale jest to dołożone na zewnątrz. W JAX to jest fundament.
 
-Ograniczenie: `grad` działa tylko na czystych funkcjach. Brak instrukcji print w środku (działają podczas śledzenia, a nie wykonywania). Brak mutacji stanu zewnętrznego. Żadnego generowania liczb losowych bez wyraźnego zarządzania kluczami.
+Ograniczenie: `grad` działa tylko na czystych funkcjach. Brak instrukcji print w środku (wykonują się podczas tracingu, nie podczas wykonania). Brak mutacji zewnętrznego stanu. Brak generowania liczb losowych bez jawnego zarządzania kluczem.
 
-### jit: Kompiluj do XLA
+### jit: kompilacja do XLA
 
 ```python
 @jax.jit
@@ -95,23 +95,23 @@ def train_step(params, x, y):
 fast_step = jax.jit(train_step)
 ```
 
-Przy pierwszym wywołaniu JAX śledzi funkcję - rejestruje, jakie operacje mają miejsce, bez ich wykonywania. Następnie przekazuje ten ślad do XLA (Accelerated Linear Algebra), kompilatora Google dla TPU i GPU. XLA łączy operacje, eliminuje zbędne kopie pamięci i generuje zoptymalizowany kod maszynowy.
+Przy pierwszym wywołaniu JAX śledzi (traces) funkcję -- zapisuje, jakie operacje się dzieją, bez ich wykonywania. Następnie przekazuje ten trace do XLA (Accelerated Linear Algebra), kompilatora Google dla TPU i GPU. XLA łączy operacje (fusion), eliminuje zbędne kopie pamięci i generuje zoptymalizowany kod maszynowy.
 
-Kolejne wywołania całkowicie pomijają Pythona. Skompilowany kod działa na akceleratorze z szybkością C++.
+Kolejne wywołania całkowicie pomijają Pythona. Skompilowany kod działa na akceleratorze z prędkością C++.
 
 Kiedy JIT pomaga:
-- Kroki szkoleniowe (te same obliczenia powtarzane tysiące razy)
-- Wnioskowanie (ten sam model, różne dane wejściowe)
-- Dowolna funkcja wywoływana więcej niż raz z danymi wejściowymi o podobnym kształcie
+- Kroki treningowe (te same obliczenia powtarzane tysiące razy)
+- Inferencja (ten sam model, różne wejścia)
+- Każda funkcja wywoływana więcej niż raz z wejściami o podobnych kształtach
 
-Kiedy JIT boli:
-- Funkcje z przepływem sterowania w Pythonie zależnym od wartości (`if x > 0` gdzie x jest tablicą śledzoną)
-- Obliczenia jednorazowe (narzut kompilacji przekracza czas wykonania)
-- Debugowanie (śledzenie ukrywa faktyczne wykonanie)
+Kiedy JIT szkodzi:
+- Funkcje z kontrolą przepływu w Pythonie zależną od wartości (`if x > 0`, gdzie x jest śledzoną tablicą)
+- Obliczenia jednorazowe (narzut kompilacji przewyższa czas wykonania)
+- Debugowanie (tracing skrywa rzeczywiste wykonanie)
 
-Ograniczenie przepływu sterowania jest rzeczywiste. `jax.lax.cond` zastępuje `if/else`. `jax.lax.scan` zastępuje pętle `for`. Nie są one opcjonalne – są ceną kompilacji.
+Ograniczenie kontroli przepływu jest realne. `jax.lax.cond` zastępuje `if/else`. `jax.lax.scan` zastępuje pętle `for`. Nie są to opcjonalne udogodnienia -- to cena kompilacji.
 
-### vmap: Automatyczna wektoryzacja
+### vmap: automatyczna wektoryzacja
 
 Piszesz funkcję, która przetwarza jeden przykład:
 
@@ -120,35 +120,35 @@ def predict(params, x):
     return jnp.dot(params['w'], x) + params['b']
 ```
 
-`vmap` podnosi go, aby przetworzyć partię:
+`vmap` podnosi ją do przetwarzania batcha:
 
 ```python
 batch_predict = jax.vmap(predict, in_axes=(None, 0))
 ```
 
-`in_axes=(None, 0)` oznacza: nie przetwarzaj wsadowo przez `params` (współdzielone), wsadowo ponad oś 0 `x`. Brak ręcznej pętli `for`. Żadnego przekształcania. Brak gwintowania wymiarów partii. JAX oblicza wymiar wsadowy i wektoryzuje całe obliczenia.
+`in_axes=(None, 0)` znaczy: nie batchuj po `params` (współdzielone), batchuj po osi 0 `x`. Brak ręcznej pętli `for`. Brak reshapingu. Brak ręcznego przeprowadzania wymiaru batcha przez kod. JAX sam ustala wymiar batcha i wektoryzuje całe obliczenie.
 
-To nie jest cukier syntaktyczny. `vmap` generuje połączony kod wektorowy, który działa 10–100 razy szybciej niż pętla Pythona. I komponuje się z `jit` i `grad`:
+To nie jest tylko cukier syntaktyczny. `vmap` generuje połączony (fused), zwektoryzowany kod, który działa 10-100x szybciej niż pętla w Pythonie. I komponuje się z `jit` i `grad`:
 
 ```python
 per_example_grads = jax.vmap(jax.grad(loss_fn), in_axes=(None, 0, 0))
 ```
 
-Gradienty według przykładu. Jedna linia. Jest to prawie niemożliwe w PyTorch bez hacków.
+Gradienty per-przykład. Jedna linia. W PyTorch jest to praktycznie niemożliwe bez sztuczek.
 
-### pmap: Równoległość danych na różnych urządzeniach
+### pmap: równoległość danych między urządzeniami
 
 ```python
 parallel_step = jax.pmap(train_step, axis_name='devices')
 ```
 
-`pmap` replikuje tę funkcję na wszystkich dostępnych urządzeniach (GPU/TPU) i dzieli partię. Wewnątrz funkcji `jax.lax.pmean` i `jax.lax.psum` synchronizują gradienty między urządzeniami.
+`pmap` replikuje funkcję na wszystkich dostępnych urządzeniach (GPU/TPU) i dzieli batch. Wewnątrz funkcji `jax.lax.pmean` i `jax.lax.psum` synchronizują gradienty między urządzeniami.
 
-Google szkoli Gemini na tysiącach chipów TPU v5e przy użyciu narzędzia `pmap` (i jego następcy `shard_map`). Model programowania: napisz wersję na jedno urządzenie, zapakuj `pmap` i gotowe.
+Google trenuje Gemini na tysiącach chipów TPU v5e, używając `pmap` (i jego następcy, `shard_map`). Model programowania: napisz wersję dla jednego urządzenia, owiń ją `pmap`, gotowe.
 
 ### Pytrees: uniwersalna struktura danych
 
-JAX działa na „pytrees” – zagnieżdżonych kombinacjach list, krotek, słowników i tablic. Parametry Twojego modelu to pytree:
+JAX operuje na "pytrees" -- zagnieżdżonych kombinacjach list, tupli, dictów i tablic. Parametry twojego modelu są pytree:
 
 ```python
 params = {
@@ -158,15 +158,15 @@ params = {
 }
 ```
 
-Każda transformacja JAX — `grad`, `jit`, `vmap` — wie, jak przeglądać pytree. `jax.tree.map(f, tree)` dotyczy `f` do każdego liścia. W ten sposób optymalizatory aktualizują wszystkie parametry na raz:
+Każda transformacja JAX -- `grad`, `jit`, `vmap` -- wie, jak przechodzić po pytrees. `jax.tree.map(f, tree)` stosuje `f` do każdego liścia. W ten sposób optymalizatory aktualizują wszystkie parametry na raz:
 
 ```python
 params = jax.tree.map(lambda p, g: p - lr * g, params, grads)
 ```
 
-Brak metody `.parameters()`. Brak rejestracji parametrów. Modelem jest struktura drzewa.
+Brak metody `.parameters()`. Brak rejestracji parametrów. Struktura drzewa jest modelem.
 
-### Funkcjonalne a obiektowe
+### Funkcyjne vs obiektowe
 
 PyTorch przechowuje stan wewnątrz obiektów:
 
@@ -186,21 +186,21 @@ def predict(params, x):
     return jnp.dot(x, params['w']) + params['b']
 ```
 
-Parametry są przekazywane. Nic nie jest przechowywane. Nic nie jest zmutowane. Dzięki temu każdą funkcję można testować, komponować i kompilować. Oznacza to również, że możesz samodzielnie zarządzać parametrami lub korzystać z bibliotek takich jak Flax lub Equinox.
+Parametry są przekazywane jako argument. Nic nie jest przechowywane. Nic nie jest mutowane. To czyni każdą funkcję testowalną, kompozycyjną i kompilowalną. Oznacza to też, że sam zarządzasz parametrami -- albo używasz biblioteki takiej jak Flax czy Equinox.
 
 ### Ekosystem JAX
 
-JAX daje prymitywy. Biblioteki zapewniają ergonomię:
+JAX daje ci prymitywy. Biblioteki dają ci ergonomię:
 
 | Biblioteka | Rola | Styl |
-|--------|------|-------|
-| **Len** (Google) | Warstwy sieci neuronowej | `nn.Module` z jawnym stanem |
-| **Równonoc** (Patrick Kidger) | Warstwy sieci neuronowej | Oparte na Pytree, Pythonic |
-| **Optax** (Głęboki Umysł) | Optymalizatory + harmonogramy LR | Kompozytowalne transformacje gradientowe |
-| **Orbax** (Google) | Punkt kontrolny | Zapisz/przywróć pytrees |
-| **CLU** (Google) | Metryki + rejestrowanie | Narzędzia pętli treningowej |
+|---------|------|-------|
+| **Flax** (Google) | Warstwy sieci neuronowych | `nn.Module` z jawnym stanem |
+| **Equinox** (Patrick Kidger) | Warstwy sieci neuronowych | Oparty na pytree, pythoniczny |
+| **Optax** (DeepMind) | Optymalizatory + harmonogramy LR | Komponowalne transformacje gradientów |
+| **Orbax** (Google) | Checkpointing | Zapis/odtwarzanie pytrees |
+| **CLU** (Google) | Metryki + logowanie | Narzędzia do pętli treningowej |
 
-Optax to standardowa biblioteka optymalizatora. Oddziela transformację gradientu (Adam, SGD, obcinanie) od aktualizacji parametrów, dzięki czemu komponowanie jest banalne:
+Optax jest standardową biblioteką optymalizatorów. Oddziela transformację gradientu (Adam, SGD, clipping) od aktualizacji parametrów, co sprawia, że komponowanie jest trywialne:
 
 ```python
 optimizer = optax.chain(
@@ -209,25 +209,25 @@ optimizer = optax.chain(
 )
 ```
 
-### Kiedy używać JAX zamiast PyTorch
+### Kiedy używać JAX, a kiedy PyTorch
 
 | Czynnik | JAX | PyTorch |
-|--------|-----|--------|
-| Wsparcie TPU | Pierwszorzędna (Google zbudował oba) | Utrzymywany przez społeczność (torch_xla) |
-| Obsługa GPU | Dobrze (CUDA przez XLA) | Najlepszy w swojej klasie (natywny CUDA) |
-| Debugowanie | Trudne (śledzenie + kompilacja) | Łatwy (chętny, linia po linii) |
-| Ekosystem | Skoncentrowany na badaniach (len, równonoc) | Masywny (HuggingFace, widzenie z pochodnią itp.) |
-| Zatrudnianie | Nisza (Google/DeepMind/Anthropic) | Główny nurt (wszędzie) |
-| Szkolenia na dużą skalę | Superior (XLA, pmap, siatka) | Dobry (FSDP, DeepSpeed) |
-| Szybkość prototypowania | Wolniejsze (narzut funkcjonalny) | Szybciej (mutuj i idź) |
-| Wnioskowanie o produkcji | Obsługa TensorFlow, Vertex AI | TorchServe, Triton, ONNX |
-| Kto tego używa | DeepMind (Bliźnięta), Antropiczny (Claude) | Meta (Lama), OpenAI (GPT), Stabilność AI |
+|--------|-----|---------|
+| Wsparcie TPU | Pierwszorzędne (Google zbudował obie rzeczy) | Wsparcie społeczności (torch_xla) |
+| Wsparcie GPU | Dobre (CUDA przez XLA) | Najlepsze w swojej klasie (natywne CUDA) |
+| Debugowanie | Trudne (tracing + kompilacja) | Łatwe (eager, linia po linii) |
+| Ekosystem | Skoncentrowany na badaniach (Flax, Equinox) | Ogromny (HuggingFace, torchvision itd.) |
+| Rekrutacja | Niszowe (Google/DeepMind/Anthropic) | Mainstream (wszędzie) |
+| Trening na dużą skalę | Lepszy (XLA, pmap, mesh) | Dobry (FSDP, DeepSpeed) |
+| Szybkość prototypowania | Wolniejsza (narzut funkcyjny) | Szybsza (mutuj i działaj) |
+| Inferencja produkcyjna | TensorFlow Serving, Vertex AI | TorchServe, Triton, ONNX |
+| Kto używa | DeepMind (Gemini), Anthropic (Claude) | Meta (Llama), OpenAI (GPT), Stability AI |
 
-Szczera odpowiedź: użyj PyTorch, chyba że masz konkretny powód, aby używać JAX. Powody te są następujące: dostęp do TPU, potrzeba stosowania gradientów według przykładu, szkolenie na wielu urządzeniach na masową skalę lub praca w Google/DeepMind/Anthropic.
+Szczera odpowiedź: używaj PyTorch, jeśli nie masz konkretnego powodu, by używać JAX. Te powody to -- dostęp do TPU, potrzeba gradientów per-przykład, trening na wielu urządzeniach w ogromnej skali, albo praca w Google/DeepMind/Anthropic.
 
 ### Liczby losowe w JAX
 
-JAX nie ma globalnego stanu losowego. Każda losowa operacja wymaga jawnego klucza PRNG:
+JAX nie ma globalnego stanu losowości. Każda operacja losowa wymaga jawnego klucza PRNG:
 
 ```python
 key = jax.random.PRNGKey(42)
@@ -235,13 +235,13 @@ key1, key2 = jax.random.split(key)
 w = jax.random.normal(key1, shape=(784, 256))
 ```
 
-Na początku jest to denerwujące. Gwarantuje jednak odtwarzalność na różnych urządzeniach i w kompilacjach — właściwość, której `torch.manual_seed` PyTorch nie może zagwarantować w przypadku ustawień wielu procesorów graficznych.
+Na początku jest to uciążliwe. Ale gwarantuje powtarzalność (reproducibility) między urządzeniami i kompilacjami -- właściwość, której `torch.manual_seed` z PyTorch nie może zagwarantować w środowiskach wielu GPU.
 
 ## Zbuduj to
 
 ### Krok 1: Konfiguracja i dane
 
-Będziemy trenować 3-warstwowy MLP na MNIST przy użyciu JAX i Optax. 784 wejścia, dwie ukryte warstwy po 256 i 128 neuronów, 10 klas wyjściowych.
+Wytrenujemy 3-warstwowy MLP na MNIST, używając JAX i Optax. 784 wejścia, dwie warstwy skryte o rozmiarach 256 i 128 neuronów, 10 klas wyjściowych.
 
 ```python
 import jax
@@ -259,7 +259,7 @@ def get_mnist_data():
     return X_train, y_train, X_test, y_test
 ```
 
-### Krok 2: Zainicjuj parametry
+### Krok 2: Inicjalizacja parametrów
 
 Brak klasy. Tylko funkcja, która zwraca pytree:
 
@@ -286,9 +286,9 @@ def init_params(key):
     return params
 ```
 
-He-inicjalizacja, wykonywana ręcznie. Trzy klucze PRNG wydzielone z jednego ziarna. Każda waga jest niezmienną tablicą w zagnieżdżonym dyktacie.
+Inicjalizacja He, wykonana ręcznie. Trzy klucze PRNG, wydzielone (split) z jednego seeda. Każda waga jest niemutowalną tablicą w zagnieżdżonym dicte.
 
-### Krok 3: Podanie w przód
+### Krok 3: Przejście w przód (forward pass)
 
 ```python
 def forward(params, x):
@@ -305,9 +305,9 @@ def loss_fn(params, x, y):
     return -jnp.mean(jnp.sum(jax.nn.log_softmax(logits) * one_hot, axis=-1))
 ```
 
-Czyste funkcje. Parametry wprowadzone, przewidywanie wyłączone. Nie `self`, brak stanu zapisanego. `loss_fn` oblicza entropię krzyżową od podstaw — softmax, log, średnia ujemna.
+Czyste funkcje. Parametry na wejściu, predykcja na wyjściu. Brak `self`, brak przechowywanego stanu. `loss_fn` liczy entropię skrośną (cross-entropy) od podstaw -- softmax, logarytm, ujemna średnia.
 
-### Krok 4: Krok szkolenia skompilowany przez JIT
+### Krok 4: Krok treningowy skompilowany przez JIT
 
 ```python
 @jax.jit
@@ -324,7 +324,7 @@ def accuracy(params, x, y):
     return jnp.mean(preds == y)
 ```
 
-`jax.value_and_grad` zwraca zarówno wartość straty, jak i gradienty w jednym przebiegu. Dekorator `@jax.jit` kompiluje obie funkcje do XLA. Po pierwszym wywołaniu każdy etap szkolenia przebiega bez dotykania Pythona.
+`jax.value_and_grad` zwraca jednocześnie wartość straty i gradienty w jednym przejściu. Dekorator `@jax.jit` kompiluje obie funkcje do XLA. Po pierwszym wywołaniu każdy krok treningowy działa, nie dotykając Pythona.
 
 ### Krok 5: Pętla treningowa
 
@@ -363,15 +363,15 @@ for epoch in range(n_epochs):
           f"Train Acc: {train_acc:.4f} | Test Acc: {test_acc:.4f}")
 ```
 
-10 epok. Dokładność testu ~97%. Pierwsza epoka jest powolna (kompilacja JIT). Epoki 2-10 są szybkie.
+10 epok. ~97% dokładności na zbiorze testowym. Pierwsza epoka jest wolna (kompilacja JIT). Epoki 2-10 są szybkie.
 
-Zwróć uwagę, czego brakuje: nie `.zero_grad()`, nie `.backward()`, nie `.step()`. Cała aktualizacja to jedno złożone wywołanie funkcji. Gradienty są obliczane, przekształcane przez Adama i stosowane do parametrów — wszystko wewnątrz `train_step`.
+Zauważ, czego brakuje: brak `.zero_grad()`, brak `.backward()`, brak `.step()`. Cała aktualizacja to jedno złożone wywołanie funkcji. Gradienty są obliczane, transformowane przez Adam i stosowane do parametrów -- wszystko wewnątrz `train_step`.
 
-## Użyj tego
+## Wykorzystaj to
 
-### Len: standard Google
+### Flax: standard Google
 
-Flax jest najpopularniejszą biblioteką sieci neuronowych JAX. Dodaje `nn.Module` z powrotem, ale z jawnym zarządzaniem stanem:
+Flax jest najpopularniejszą biblioteką sieci neuronowych dla JAX. Przywraca `nn.Module`, ale z jawnym zarządzaniem stanem:
 
 ```python
 import flax.linen as nn
@@ -391,11 +391,11 @@ params = model.init(jax.random.PRNGKey(0), jnp.ones((1, 784)))
 logits = model.apply(params, x_batch)
 ```
 
-Taka sama struktura jak PyTorch, ale `params` jest oddzielna od modelu. `model.init()` tworzy parametry. `model.apply(params, x)` uruchamia podanie do przodu. Obiekt modelu nie ma stanu.
+Ta sama struktura jak w PyTorch, ale `params` jest odseparowane od modelu. `model.init()` tworzy parametry. `model.apply(params, x)` wykonuje przejście w przód. Obiekt modelu nie ma stanu.
 
-### Równonoc: pytoniczna alternatywa
+### Equinox: pythoniczna alternatywa
 
-Equinox (autor: Patrick Kidger) przedstawia modele jako pytrees:
+Equinox (autor: Patrick Kidger) reprezentuje modele jako pytrees:
 
 ```python
 import equinox as eqx
@@ -407,9 +407,9 @@ model = eqx.nn.MLP(
 logits = model(x)
 ```
 
-Sam model to pytree. Nie jest potrzebny `.apply()`. Parametry to tylko liście modelu. To jest bliższe temu, co myśli JAX.
+Model sam jest pytree. Nie trzeba `.apply()`. Parametry są po prostu liśćmi modelu. To bliżej sposobu myślenia JAX.
 
-### Optax: Optymalizatory komponowalne
+### Optax: komponowalne optymalizatory
 
 Optax oddziela transformację gradientu od aktualizacji:
 
@@ -425,9 +425,9 @@ optimizer = optax.chain(
 )
 ```
 
-Przycinanie gradientu, nagrzewanie tempa uczenia się, spadek wagi – wszystko to składa się z łańcucha transformacji. Każda transformacja widzi gradienty, modyfikuje je i przekazuje do następnej. Brak monolitycznej klasy optymalizatora.
+Przycinanie gradientów (gradient clipping), rozgrzewka (warmup) tempa uczenia, regularyzacja wagi (weight decay) -- wszystko skomponowane jako łańcuch transformacji. Każda transformacja widzi gradienty, modyfikuje je i przekazuje do następnej. Brak monolitycznej klasy optymalizatora.
 
-## Wyślij to
+## Wypuść to
 
 **Instalacja:**
 
@@ -435,27 +435,27 @@ Przycinanie gradientu, nagrzewanie tempa uczenia się, spadek wagi – wszystko 
 pip install jax jaxlib optax flax
 ```
 
-W przypadku obsługi procesora graficznego:
+Dla wsparcia GPU:
 
 ```bash
 pip install jax[cuda12]
 ```
 
-W przypadku TPU (Google Cloud):
+Dla TPU (Google Cloud):
 
 ```bash
 pip install jax[tpu] -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
 ```
 
-**Wady dotyczące wydajności:**
+**Pułapki wydajnościowe:**
 
-- Pierwsze wywołanie JIT jest powolne (kompilacja). Rozgrzewka przed benchmarkingiem.
-- Unikaj pętli Pythona na tablicach JAX wewnątrz JIT. Użyj `jax.lax.scan` lub `jax.lax.fori_loop`.
-- `jax.debug.print()` działa w JIT. Zwykły `print()` nie.
-- Profil z `jax.profiler` lub TensorBoard. Kompilacja XLA może ukryć wąskie gardła.
-- JAX domyślnie wstępnie przydziela 75% pamięci GPU. Ustaw `XLA_PYTHON_CLIENT_PREALLOCATE=false`, aby wyłączyć.
+- Pierwsze wywołanie JIT jest wolne (kompilacja). Rozgrzej (warm up) przed pomiarem wydajności.
+- Unikaj pętli Pythona po tablicach JAX wewnątrz JIT. Używaj `jax.lax.scan` lub `jax.lax.fori_loop`.
+- `jax.debug.print()` działa wewnątrz JIT. Zwykły `print()` nie.
+- Profiluj za pomocą `jax.profiler` lub TensorBoard. Kompilacja XLA może maskować wąskie gardła.
+- JAX domyślnie pre-alokuje 75% pamięci GPU. Ustaw `XLA_PYTHON_CLIENT_PREALLOCATE=false`, aby to wyłączyć.
 
-**Punkty kontrolne:**
+**Checkpointing:**
 
 ```python
 import orbax.checkpoint as ocp
@@ -464,42 +464,42 @@ checkpointer.save('/tmp/model', params)
 restored = checkpointer.restore('/tmp/model')
 ```
 
-**Ta lekcja daje:**
-- `outputs/prompt-jax-optimizer.md` — monit o wybranie właściwej konfiguracji optymalizatora JAX
-- `outputs/skill-jax-patterns.md` — umiejętność obejmująca wzorce funkcjonalne w JAX
+**Ta lekcja tworzy:**
+- `outputs/prompt-jax-optimizer.md` -- prompt do wyboru właściwej konfiguracji optymalizatora JAX
+- `outputs/skill-jax-patterns.md` -- skill obejmujący wzorce funkcyjne w JAX
 
-## Ćwiczenia
+## Zadania
 
-1. Dodaj rezygnację do MLP. W JAX przerwanie wymaga klucza PRNG - przeciągnij klucz przez przejście do przodu i podziel go dla każdej warstwy porzucenia. Porównaj dokładność testu z i bez.
+1. Dodaj dropout do MLP. W JAX dropout wymaga klucza PRNG -- przeprowadź klucz przez przejście w przód i wydziel (split) go dla każdej warstwy dropout. Porównaj dokładność testową z dropoutem i bez niego.
 
-2. Użyj `jax.vmap`, aby obliczyć gradienty na przykładach dla partii 32 obrazów MNIST. Oblicz normę gradientu dla każdego przykładu. Które przykłady mają największe gradienty i dlaczego?
+2. Użyj `jax.vmap`, aby obliczyć gradienty per-przykład dla batcha 32 obrazów MNIST. Oblicz normę gradientu dla każdego przykładu. Które przykłady mają największe gradienty i czemu?
 
-3. Zastąp ręczną funkcję przesyłania dalej ogólną funkcją `mlp_forward(params, x)`, która działa dla dowolnej liczby warstw. Użyj `jax.tree.leaves`, aby automatycznie określić głębokość.
+3. Zastąp ręczną funkcję forward generyczną funkcją `mlp_forward(params, x)`, która działa dla dowolnej liczby warstw. Użyj `jax.tree.leaves`, aby automatycznie ustalić głębokość.
 
-4. Wykonaj test porównawczy na etapie szkolenia z `@jax.jit` i bez niego. Czas na 100 kroków każdego. Jak duże jest przyspieszenie na twoim sprzęcie? Jaki jest narzut kompilacji przy pierwszym wywołaniu?
+4. Zmierz wydajność kroku treningowego z `@jax.jit` i bez niego. Zmierz czas 100 kroków każdego wariantu. Jak duże jest przyspieszenie na twoim sprzęcie? Jaki jest narzut kompilacji przy pierwszym wywołaniu?
 
-5. Zaimplementuj obcinanie gradientu, tworząc `optax.chain(optax.clip_by_global_norm(1.0), optax.adam(1e-3))`. Trenuj z przycinaniem i bez. Narysuj normę gradientu podczas treningu, aby zobaczyć efekt.
+5. Zaimplementuj przycinanie gradientów (gradient clipping) poprzez skomponowanie `optax.chain(optax.clip_by_global_norm(1.0), optax.adam(1e-3))`. Trenuj z przycinaniem i bez niego. Wykreśl normę gradientu w trakcie treningu, aby zobaczyć efekt.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co ludzie mówią | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| XLA | „To, co sprawia, że ​​JAX jest szybki” | Accelerated Linear Algebra - kompilator, który łączy operacje i generuje zoptymalizowane jądra GPU/TPU z wykresu obliczeniowego |
-| JIT | „Kompilacja na czas” | JAX śledzi funkcję przy pierwszym wywołaniu, kompiluje do XLA, a następnie uruchamia skompilowaną wersję przy kolejnych wywołaniach
-| Czysta funkcja | „Brak skutków ubocznych” | Funkcja, w której wynik zależy tylko od danych wejściowych — bez stanu globalnego, bez mutacji, bez losowości bez jawnych kluczy |
-| mapa | „Automatyczne dozowanie” | Przekształca funkcję przetwarzającą jeden przykład w funkcję przetwarzającą partię bez przepisywania |
-| mapa | „Autorównoległość” | Replikuje funkcję na wielu urządzeniach i dzieli partię wejściową |
-| Pytree | „Zagnieżdżony dykt tablic” | Dowolna zagnieżdżona struktura list, krotek, słowników i tablic, które JAX może przeglądać i przekształcać |
-| Śledzenie | „Zapisywanie obliczeń” | JAX wykonuje funkcję z wartościami abstrakcyjnymi, aby zbudować wykres obliczeniowy, bez obliczania rzeczywistych wyników
-| Funkcjonalna automatyczna różnica | „grad funkcji” | Obliczanie pochodnych poprzez transformację funkcji, a nie przez dołączenie pamięci gradientu do tensorów |
-| Optax | „Biblioteka optymalizatora JAX” | Komponowana biblioteka transformacji gradientowych – Adam, SGD, obcinanie, planowanie – które łączą się w całość |
-| Len | „Moduł nn.JAX” | Biblioteka sieci neuronowej Google dla JAX, dodająca abstrakcje warstw przy jednoczesnym zachowaniu jawności stanu |
+| XLA | "To, co sprawia, że JAX jest szybki" | Accelerated Linear Algebra -- kompilator, który łączy (fuses) operacje i generuje zoptymalizowane kernele GPU/TPU z grafu obliczeń |
+| JIT | "Kompilacja just-in-time" | JAX śledzi (traces) funkcję przy pierwszym wywołaniu, kompiluje do XLA, a następnie uruchamia skompilowaną wersję przy kolejnych wywołaniach |
+| Czysta funkcja | "Brak efektów ubocznych" | Funkcja, której wyjście zależy tylko od wejść -- brak globalnego stanu, brak mutacji, brak losowości bez jawnych kluczy |
+| vmap | "Automatyczny batching" | Przekształca funkcję przetwarzającą jeden przykład w funkcję przetwarzającą batch, bez przepisywania kodu |
+| pmap | "Automatyczna równoległość" | Replikuje funkcję na wielu urządzeniach i dzieli batch wejściowy |
+| Pytree | "Zagnieżdżony dict tablic" | Każda zagnieżdżona struktura list, tupli, dictów i tablic, po której JAX może przechodzić i którą może transformować |
+| Tracing | "Zapisywanie obliczenia" | JAX wykonuje funkcję na abstrakcyjnych wartościach, aby zbudować graf obliczeń, bez liczenia rzeczywistych wyników |
+| Funkcyjne automatyczne różniczkowanie | "grad funkcji" | Obliczanie derywatów poprzez transformowanie funkcji, a nie poprzez dołączanie magazynu gradientów do tensorów |
+| Optax | "Biblioteka optymalizatorów JAX" | Komponowalna biblioteka transformacji gradientów -- Adam, SGD, clipping, scheduling -- które łączą się w łańcuch |
+| Flax | "nn.Module dla JAX" | Biblioteka sieci neuronowych Google dla JAX, dodająca abstrakcje warstw przy zachowaniu jawnego stanu |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-- Dokumentacja JAX: https://jax.readthedocs.io/ - oficjalna dokumentacja ze świetnymi tutorialami na temat grad, jit i vmap
-- „JAX: komponowalne transformacje programów Python+NumPy” (Bradbury et al., 2018) – artykuł oryginalny wyjaśniający filozofię projektowania
+- Dokumentacja JAX: https://jax.readthedocs.io/ -- oficjalna dokumentacja, ze świetnymi tutorialami o grad, jit i vmap
+- "JAX: composable transformations of Python+NumPy programs" (Bradbury et al., 2018) -- oryginalna praca wyjaśniająca filozofię projektową
 - Dokumentacja Flax: https://flax.readthedocs.io/ -- biblioteka sieci neuronowych Google dla JAX
-– Patrick Kidger, „Equinox: sieci neuronowe w JAX poprzez wywoływalne drzewa PyTrees i filtrowane transformacje” (2021) – Pythonowa alternatywa dla Flaxa
-- DeepMind, „Optax: komponowalna transformacja i optymalizacja gradientu” – standardowa biblioteka optymalizatora
-- „You Don’t Know JAX” (Colin Raffel, 2020) – praktyczny przewodnik po gotchach i wzorcach JAX, od jednego z autorów T5
+- Patrick Kidger, "Equinox: neural networks in JAX via callable PyTrees and filtered transformations" (2021) -- pythoniczna alternatywa do Flax
+- DeepMind, "Optax: composable gradient transformation and optimisation" -- standardowa biblioteka optymalizatorów
+- "You Don't Know JAX" (Colin Raffel, 2020) -- praktyczny przewodnik po pułapkach i wzorcach JAX, od jednego z autorów T5
