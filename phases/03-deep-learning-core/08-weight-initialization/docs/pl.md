@@ -1,110 +1,110 @@
-# Inicjalizacja ciężaru i stabilność treningu
+# Inicjalizacja wag i stabilność treningu
 
-> Zainicjuj źle, a trening nigdy się nie rozpocznie. Zainicjuj w prawo, a 50 warstw będzie trenowanych tak płynnie, jak 3.
+> Zainicjalizuj źle i trening nigdy nie zacznie się. Zainicjalizuj dobrze i 50 warstw trenuje się tak płynnie jak 3.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
-**Wymagania wstępne:** Lekcja 03.04 (Funkcje aktywacyjne), Lekcja 03.07 (Regularyzacja)
+**Wymagania wstępne:** Lekcja 03.04 (Funkcje aktywacji), Lekcja 03.07 (Regularyzacja)
 **Czas:** ~90 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zaimplementuj strategie inicjalizacji zerowej, losowej, Xaviera/Glorota i Kaiminga/He i zmierz ich wpływ na wielkości aktywacji w 50 warstwach
-- Wyprowadź, dlaczego Xavier init używa Var(w) = 2/(fan_in + fan_out), a Kaiming używa Var(w) = 2/fan_in
-- Zademonstrować problem symetrii przy inicjalizacji zera i wyjaśnić, dlaczego sama skala losowa nie wystarczy
-- Dopasuj prawidłową strategię inicjalizacji do funkcji aktywacji: Xavier dla sigmoid/tanh, Kaiming dla ReLU/GELU
+- Zaimplementuj strategie inicjalizacji: zerową, losową, Xavier/Glorot oraz Kaiming/He i zmierz ich wpływ na wielkość aktywacji w 50 warstwach
+- Wyprowadź, dlaczego inicjalizacja Xavier używa Var(w) = 2/(fan_in + fan_out), a Kaiming używa Var(w) = 2/fan_in
+- Zademonstruj problem symetrii przy inicjalizacji zerowej i wyjaśnij, czemu sama skala losowości nie wystarcza
+- Dopasuj właściwą strategię inicjalizacji do funkcji aktywacji: Xavier dla sigmoid/tanh, Kaiming dla ReLU/GELU
 
 ## Problem
 
-Zainicjuj wszystkie wagi do zera. Nic się nie uczy. Każdy neuron oblicza tę samą funkcję, otrzymuje ten sam gradient i aktualizuje się w identyczny sposób. Po 10 000 epok warstwa ukryta złożona z 512 neuronów nadal składa się z 512 kopii tego samego neuronu. Zapłaciłeś za 512 parametrów i otrzymałeś 1.
+Zainicjalizuj wszystkie wagi na zero. Nic się nie uczy. Każdy neuron oblicza tę samą funkcję, otrzymuje ten sam gradient i aktualizuje się identycznie. Po 10 000 epok twoja warstwa skryta o 512 neuronach to wciąż 512 kopii tego samego neuronu. Zapłaciłeś za 512 parametrów, a otrzymałeś 1.
 
-Zainicjuj je za duże. Aktywacje eksplodują w sieci. W warstwie 10 wartości osiągają 1e15. W warstwie 20 przelewają się do nieskończoności. Gradienty podążają tą samą trajektorią w odwrotnej kolejności.
+Zainicjalizuj je za dużymi wartościami. Aktywacje eksplodują w sieci. W warstwie 10 wartości sięgają 1e15. W warstwie 20 przekraczają zakres reprezentacji do nieskończoności. Gradienty przebywają tę samą trajektorię w odwrotną stronę.
 
-Zainicjuj je losowo ze standardowego rozkładu normalnego. Działa przez 3 warstwy. Przy 50 warstwach sygnał zanika do zera lub eksploduje do nieskończoności, w zależności od tego, czy skala losowa była nieco za mała, czy też nieco za duża. Granica między „dziełami” a „zepsutymi” jest cienka jak brzytwa.
+Zainicjalizuj je losowo z rozkładu normalnego standardowego. Działa dla 3 warstw. Przy 50 warstwach sygnał zapada się do zera albo detonuje do nieskończoności, w zależności od tego, czy losowa skala była odrobinę zbyt mała, czy zbyt duża. Granica między „działa” i „nie działa” jest niezwykle wąska.
 
-Inicjalizacja wagi jest najbardziej niedocenianą decyzją w głębokim uczeniu się. Architektura dostaje papiery. Optymalizatory otrzymują wpisy na blogu. Inicjalizacja otrzymuje przypis. Ale zrozum to źle i nic innego nie będzie się liczyło – Twoja sieć będzie martwa przed rozpoczęciem uczenia.
+Inicjalizacja wag to najbardziej niedoceniana decyzja w deep learningu. Architektura dostaje publikacje. Optymalizatory dostają wpisy na blogach. Inicjalizacja dostaje przypis. Ale jeśli ją zepsujesz, nic innego nie ma znaczenia -- twoja sieć jest martwa, zanim trening się zacznie.
 
 ## Koncepcja
 
 ### Problem symetrii
 
-Każdy neuron w warstwie ma tę samą strukturę: pomnóż dane wejściowe przez wagi, dodaj odchylenie, zastosuj aktywację. Jeśli wszystkie wagi zaczynają się od tej samej wartości (zero jest skrajnym przypadkiem), każdy neuron oblicza ten sam wynik. Podczas propagacji wstecznej każdy neuron otrzymuje ten sam gradient. Podczas etapu aktualizacji każdy neuron zmienia się w tym samym stopniu.
+Każdy neuron w warstwie ma taką samą strukturę: mnoży wejścia przez wagi, dodaje bias, stosuje funkcję aktywacji. Jeśli wszystkie wagi zaczynają od tej samej wartości (zero to ekstremalny przypadek), każdy neuron obliczy to samo wyjście. Podczas propagacji wstecznej każdy neuron otrzymuje ten sam gradient. Podczas aktualizacji każdy neuron zmienia się o tę samą wartość.
 
-Utknąłeś. Sieć ma setki parametrów, ale wszystkie poruszają się krok po kroku. Nazywa się to symetrią, a losowa inicjalizacja to brutalny sposób na jej złamanie. Każdy neuron zaczyna w innym punkcie przestrzeni wagowej, więc każdy uczy się innej cechy.
+Jesteś w impasie. Sieć ma setki parametrów, ale wszystkie poruszają się w jednym takcie. Nazywa się to symetrią, a inicjalizacja losowa to brutalny sposób jej przełamania. Każdy neuron startuje z innego punktu w przestrzeni wag, więc każdy uczy się innej cechy.
 
-Ale „losowe” nie wystarczy. *Skala* losowości określa, czy sieć się szkoli.
+Ale „losowo” nie wystarczy. *Skala* losowości decyduje o tym, czy sieć się wytrenuje.
 
 ### Propagacja wariancji przez warstwy
 
-Rozważ pojedynczą warstwę z wejściami fan_in:
+Rozważ pojedynczą warstwę z fan_in wejściami:
 
 ```
 z = w1*x1 + w2*x2 + ... + w_n*x_n
 ```
 
-Jeśli każda waga wi zostanie narysowana z rozkładu o wariancji Var(w) i każde wejście xi ma wariancję Var(x), wariancja wyjściowa wynosi:
+Jeśli każda waga wi jest losowana z rozkładu o wariancji Var(w), a każde wejście xi ma wariancję Var(x), wariancja wyjścia wynosi:
 
 ```
 Var(z) = fan_in * Var(w) * Var(x)
 ```
 
-Jeśli Var(w) = 1 i fan_in = 512, wariancja wyjściowa jest 512-krotnością wariancji wejściowej. Po 10 warstwach: 512^10 = 1,2e27. Twój sygnał eksplodował.
+Jeśli Var(w) = 1 i fan_in = 512, wariancja wyjścia jest 512 razy większa niż wariancja wejścia. Po 10 warstwach: 512^10 = 1.2e27. Twój sygnał eksplodował.
 
-Jeśli Var(w) = 0,001, wariancja wyjściowa zmniejsza się o 0,001 * 512 = 0,512 na warstwę. Po 10 warstwach: 0,512^10 = 0,00013. Twój sygnał zniknął.
+Jeśli Var(w) = 0.001, wariancja wyjścia kurczy się o 0.001 * 512 = 0.512 na warstwę. Po 10 warstwach: 0.512^10 = 0.00013. Twój sygnał zniknął.
 
-Cel: wybrać Var(w) tak, aby Var(z) = Var(x). Wielkość sygnału pozostaje stała we wszystkich warstwach.
+Cel: wybrać Var(w) tak, by Var(z) = Var(x). Wielkość sygnału pozostaje stała przez wszystkie warstwy.
 
-### Inicjalizacja Xaviera/Glorota
+### Inicjalizacja Xavier/Glorot
 
-Glorot i Bengio (2010) wyprowadzili rozwiązanie aktywacji esicy i tanh. Aby utrzymać stałą wariancję zarówno przy podaniu do przodu, jak i do tyłu:
+Glorot i Bengio (2010) wyprowadzili rozwiązanie dla funkcji aktywacji sigmoid i tanh. Aby zachować stałą wariancję zarówno w przejściu w przód, jak i w propagacji wstecznej:
 
 ```
 Var(w) = 2 / (fan_in + fan_out)
 ```
 
-W praktyce wagi pobiera się z:
+W praktyce wagi są losowane z:
 
 ```
 w ~ Uniform(-limit, limit)  where limit = sqrt(6 / (fan_in + fan_out))
 ```
 
-lub:
+albo:
 
 ```
 w ~ Normal(0, sqrt(2 / (fan_in + fan_out)))
 ```
 
-Działa to, ponieważ sigmoid i tanh są w przybliżeniu liniowe w pobliżu zera, gdzie żyją odpowiednio zainicjowane aktywacje. Wariancja pozostaje stabilna przez dziesiątki warstw.
+Działa to dlatego, że sigmoid i tanh są w przybliżeniu liniowe w okolicy zera, gdzie żyją prawidłowo zainicjalizowane aktywacje. Wariancja pozostaje stabilna przez dziesiątki warstw.
 
-### Inicjalizacja Kaiminga/He
+### Inicjalizacja Kaiming/He
 
-ReLU zabija połowę wyjść (wszystko ujemne staje się zerem). Efektywna wartość fan_in jest zmniejszona o połowę, ponieważ średnio połowa wejść jest zerowana. Funkcja Xavier init nie uwzględnia tego — niedoszacowuje potrzebną wariancję.
+ReLU zabija połowę wyjść (wszystko, co jest ujemne, staje się zerem). Efektywne fan_in zostaje zmniejszone o połowę, bo średnio połowa wejść jest wyzerowana. Inicjalizacja Xavier nie uwzględnia tego -- niedoszacowuje potrzebnej wariancji.
 
-On i in. (2015) dostosowali wzór:
+He i in. (2015) zmodyfikowali formułę:
 
 ```
 Var(w) = 2 / fan_in
 ```
 
-Wagi pobierane są z:
+Wagi są losowane z:
 
 ```
 w ~ Normal(0, sqrt(2 / fan_in))
 ```
 
-Współczynnik 2 kompensuje zerowanie ReLU połowy aktywacji. Bez tego sygnał kurczy się o ~0,5x na warstwę. Przy 50 warstwach: 0,5^50 = 8,8e-16. Kaiming init zapobiega temu.
+Czynnik 2 kompensuje wyzerowanie połowy aktywacji przez ReLU. Bez niego sygnał kurczy się o ~0.5x na warstwę. Przy 50 warstwach: 0.5^50 = 8.8e-16. Inicjalizacja Kaiming temu zapobiega.
 
-### Inicjalizacja transformatora
+### Inicjalizacja w transformerach
 
-GPT-2 wprowadził inny wzór. Połączenia resztkowe dodają wyjście każdej podwarstwy do jej wejścia:
+GPT-2 wprowadził inny wzorzec. Połączenia rezydualne (residual) dodają wyjście każdej podwarstwy do jej wejścia:
 
 ```
 x = x + sublayer(x)
 ```
 
-Każde dodanie zwiększa wariancję. W przypadku N pozostałych warstw wariancja rośnie proporcjonalnie do N. GPT-2 skaluje wagi pozostałych warstw o ​​1/sqrt(2N), gdzie N to liczba warstw. Dzięki temu wielkość zgromadzonego sygnału jest stabilna.
+Każde dodanie zwiększa wariancję. Przy N warstwach rezydualnych wariancja rośnie proporcjonalnie do N. GPT-2 skaluje wagi warstw rezydualnych przez 1/sqrt(2N), gdzie N to liczba warstw. Dzięki temu skumulowana wielkość sygnału pozostaje stabilna.
 
-Podobny schemat wykorzystuje Lama 3 (parametry 405B, 126 warstw). Bez tego skalowania strumień resztkowy rósłby nieograniczony przez 126 warstw uwagi i bloków wyprzedzających.
+Llama 3 (405B parametrów, 126 warstw) używa podobnego schematu. Bez tego skalowania strumień rezydualny rósłby bez ograniczeń przez 126 warstw bloków attention i feedforward.
 
 ```mermaid
 flowchart TD
@@ -127,7 +127,7 @@ flowchart TD
     end
 ```
 
-### Siła aktywacji w 50 warstwach
+### Wielkość aktywacji przez 50 warstw
 
 ```mermaid
 graph LR
@@ -144,7 +144,7 @@ graph LR
     end
 ```
 
-### Wybór odpowiedniego init
+### Wybór właściwej inicjalizacji
 
 ```mermaid
 flowchart TD
@@ -165,21 +165,25 @@ flowchart TD
 
 ### Krok 1: Strategie inicjalizacji
 
-Cztery sposoby inicjowania macierzy wag. Każda zwraca listę list (macierz 2D) z kolumnami fan_in i wierszami fan_out.
+Cztery sposoby inicjalizacji macierzy wag. Każdy zwraca listę list (macierz 2D) z fan_in kolumnami i fan_out wierszami.
 
 ```python
 import math
 import random
 
+
 def zero_init(fan_in, fan_out):
     return [[0.0 for _ in range(fan_in)] for _ in range(fan_out)]
+
 
 def random_init(fan_in, fan_out, scale=1.0):
     return [[random.gauss(0, scale) for _ in range(fan_in)] for _ in range(fan_out)]
 
+
 def xavier_init(fan_in, fan_out):
     std = math.sqrt(2.0 / (fan_in + fan_out))
     return [[random.gauss(0, std) for _ in range(fan_in)] for _ in range(fan_out)]
+
 
 def kaiming_init(fan_in, fan_out):
     std = math.sqrt(2.0 / fan_in)
@@ -188,23 +192,25 @@ def kaiming_init(fan_in, fan_out):
 
 ### Krok 2: Funkcje aktywacji
 
-Potrzebujemy sigmoida, tanh i ReLU, aby przetestować każdą strategię inicjującą z zamierzoną aktywacją.
+Potrzebujemy sigmoid, tanh i ReLU, aby przetestować każdą strategię inicjalizacji z jej docelową funkcją aktywacji.
 
 ```python
 def sigmoid(x):
     x = max(-500, min(500, x))
     return 1.0 / (1.0 + math.exp(-x))
 
+
 def tanh_act(x):
     return math.tanh(x)
+
 
 def relu(x):
     return max(0.0, x)
 ```
 
-### Krok 3: Przejdź do przodu przez 50 warstw
+### Krok 3: Przejście w przód przez 50 warstw
 
-Przepuszczaj losowe dane przez głęboką sieć i mierz średnią wielkość aktywacji w każdej warstwie.
+Przepuść losowe dane przez głęboką sieć i zmierz średnią wielkość aktywacji w każdej warstwie.
 
 ```python
 def forward_deep(init_fn, activation_fn, n_layers=50, width=64, n_samples=100):
@@ -237,7 +243,7 @@ def forward_deep(init_fn, activation_fn, n_layers=50, width=64, n_samples=100):
 
 ### Krok 4: Eksperyment
 
-Uruchom wszystkie kombinacje: zero init, losowe N(0,1), losowe N(0,0,01), Xavier z sigmoidem, Xavier z tanh, Kaiming z ReLU. Wydrukuj wielkość w kluczowych warstwach.
+Uruchom wszystkie kombinacje: inicjalizacja zerowa, losowa N(0,1), losowa N(0,0.01), Xavier z sigmoid, Xavier z tanh, Kaiming z ReLU. Wypisz wielkość w kluczowych warstwach.
 
 ```python
 def run_experiment():
@@ -269,7 +275,7 @@ def run_experiment():
 
 ### Krok 5: Demonstracja symetrii
 
-Pokaż, że zero init daje identyczne neurony.
+Pokaż, że inicjalizacja zerowa tworzy identyczne neurony.
 
 ```python
 def symmetry_demo():
@@ -293,7 +299,7 @@ def symmetry_demo():
 
 ### Krok 6: Raport wielkości warstwa po warstwie
 
-Wydrukuj wizualny wykres słupkowy wielkości aktywacji w 50 warstwach.
+Wypisz wizualny wykres słupkowy wielkości aktywacji przez 50 warstw.
 
 ```python
 def magnitude_report(name, magnitudes):
@@ -310,9 +316,9 @@ def magnitude_report(name, magnitudes):
             print(f"  Layer {i+1:3d}: {bar} ({mag:.6f})")
 ```
 
-## Użyj tego
+## Zastosuj to
 
-PyTorch udostępnia je jako funkcje wbudowane:
+PyTorch udostępnia te metody jako wbudowane funkcje:
 
 ```python
 import torch
@@ -329,45 +335,45 @@ nn.init.kaiming_normal_(layer.weight, nonlinearity='relu')
 nn.init.zeros_(layer.bias)
 ```
 
-Kiedy wywołujesz `nn.Linear(512, 256)`, PyTorch domyślnie używa jednolitej inicjalizacji Kaiming. Dlatego większość prostych sieci „po prostu działa” — PyTorch już dokonał właściwego wyboru. Ale kiedy budujesz niestandardowe architektury lub wchodzisz głębiej niż 20 warstw, musisz zrozumieć, co się dzieje i potencjalnie zastąpić ustawienie domyślne.
+Gdy wywołasz `nn.Linear(512, 256)`, PyTorch domyślnie używa inicjalizacji Kaiming uniform. Dlatego większość prostych sieci „po prostu działa” -- PyTorch już dokonał właściwego wyboru. Ale gdy budujesz własne architektury albo idziesz głębiej niż 20 warstw, musisz rozumieć, co się dzieje, i potencjalnie nadpisać wartość domyślną.
 
-W przypadku transformatorów modele HuggingFace zazwyczaj obsługują inicjalizację w swojej metodzie `_init_weights`. Implementacja GPT-2 skaluje prognozy rezydualne o 1/sqrt(N). Jeśli budujesz transformator od zera, musisz dodać to samodzielnie.
+Dla transformerów modele HuggingFace zwykle obsługują inicjalizację w metodzie `_init_weights`. Implementacja GPT-2 skaluje projekcje rezydualne przez 1/sqrt(N). Jeśli budujesz transformer od zera, musisz dodać to samodzielnie.
 
-## Wyślij to
+## Wypchnij to
 
-Ta lekcja daje:
-- `outputs/prompt-init-strategy.md` – monit diagnozujący problemy z inicjalizacją wagi i zalecający właściwą strategię
+Ta lekcja produkuje:
+- `outputs/prompt-init-strategy.md` -- prompt diagnozujący problemy z inicjalizacją wag i rekomendujący właściwą strategię
 
 ## Ćwiczenia
 
-1. Dodaj inicjalizację LeCun (Var = 1/fan_in, przeznaczony do aktywacji SELU). Przeprowadź eksperyment z 50 warstwami za pomocą LeCun init + tanh i porównaj z Xavier + tanh.
+1. Dodaj inicjalizację LeCun (Var = 1/fan_in, zaprojektowaną dla funkcji aktywacji SELU). Uruchom eksperyment z 50 warstwami z inicjalizacją LeCun + tanh i porównaj z Xavier + tanh.
 
-2. Zaimplementuj skalowanie resztkowe GPT-2: pomnóż wynik każdej warstwy przez 1/sqrt(2*N) przed dodaniem do strumienia resztkowego. Uruchom 50 warstw ze skalowaniem i bez, zmierz, jak szybko rośnie wielkość resztkowa.
+2. Zaimplementuj skalowanie rezydualne z GPT-2: pomnóż wyjście każdej warstwy przez 1/sqrt(2*N) przed dodaniem do strumienia rezydualnego. Uruchom 50 warstw ze skalowaniem i bez niego, zmierz, jak szybko rośnie wielkość rezyduum.
 
-3. Utwórz funkcję „kontroli stanu inicjowania”, która pobiera wymiary warstwy sieci i typ aktywacji, a następnie zaleca prawidłową inicjalizację i ostrzega, jeśli bieżąca inicjacja spowoduje problemy.
+3. Stwórz funkcję „init health check”, która przyjmuje wymiary warstw sieci i typ funkcji aktywacji, a następnie rekomenduje właściwą inicjalizację i ostrzega, jeśli obecna inicjalizacja spowoduje problemy.
 
-4. Przeprowadź eksperyment z fan_in = 16 vs fan_in = 1024. Xavier i Kaiming dostosowują się do fan_in, ale losowa inicjacja nie. Pokaż, jak odstęp między „działa” a „przerwami” zwiększa się wraz z większymi warstwami.
+4. Uruchom eksperyment z fan_in = 16 oraz fan_in = 1024. Xavier i Kaiming adaptują się do fan_in, ale inicjalizacja losowa nie. Pokaż, jak różnica między „działa” i „nie działa” poszerza się dla większych warstw.
 
-5. Zaimplementować inicjalizację ortogonalną (wygenerować macierz losową, obliczyć jej SVD, skorzystać z macierzy ortogonalnej U). Porównaj z Kaiming dla sieci ReLU przy 50 warstwach.
+5. Zaimplementuj inicjalizację ortogonalną (wygeneruj losową macierz, oblicz jej SVD, użyj macierzy ortogonalnej U). Porównaj z Kaiming dla sieci ReLU przy 50 warstwach.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co mówią ludzie | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Inicjalizacja wagi | „Ustaw losowo ciężary początkowe” | Strategia wyboru początkowych wartości wag decydujących o tym, czy sieć w ogóle może trenować |
-| Łamanie symetrii | „Uczyń neurony innymi” | Używanie losowej inicjalizacji, aby zapewnić, że neurony uczą się odrębnych cech, zamiast obliczać identyczne funkcje |
-| Wachlarz | „Liczba wejść do neuronu” | Liczba połączeń przychodzących, która określa, w jaki sposób wariancja danych wejściowych kumuluje się w sumie ważonej |
-| Wentylacja | „Liczba wyjść z neuronu” | Liczba połączeń wychodzących, istotna dla utrzymania wariancji gradientu podczas propagacji wstecznej |
-| Inicjacja Xaviera/Glorota | „Inicjalizacja sigmoidalna” | Var(w) = 2/(fan_in + fan_out), zaprojektowane w celu zachowania wariancji poprzez aktywacje sigmoidalne i tanh |
-| Kaiming/On inicjuje | „Inicjalizacja ReLU” | Var(w) = 2/fan_in, odpowiada zerowaniu ReLU połowy aktywacji |
-| Propagacja wariancji | „Jak sygnały rosną lub kurczą się poprzez warstwy” | Analiza matematyczna zmiany wariancji aktywacji warstwa po warstwie w oparciu o skalę wagową |
-| Skalowanie resztkowe | „Sztuczka inicjująca GPT-2” | Skalowanie pozostałych wag połączeń o 1/sqrt(2N), aby zapobiec wzrostowi wariancji przez N warstw transformatora |
-| Martwa sieć | „Nic nie trenuje” | Sieć, w której słaba inicjalizacja powoduje, że wszystkie gradienty wynoszą zero lub wszystkie aktywacje stają się nasycone
-| Eksplodujące aktywacje | „Wartości dążą do nieskończoności” | Gdy wariancja wagi jest zbyt duża, powoduje to wykładniczy wzrost wielkości aktywacji w warstwach |
+| Inicjalizacja wag (Weight initialization) | „Ustaw startowe wagi losowo” | Strategia wyboru początkowych wartości wag, która decyduje, czy sieć w ogóle może się wytrenować |
+| Przełamywanie symetrii (Symmetry breaking) | „Sprawić, by neurony były różne” | Użycie losowej inicjalizacji, aby zapewnić, że neurony uczą się odrębnych cech, a nie obliczają identycznych funkcji |
+| Fan-in | „Liczba wejść do neuronu” | Liczba połączeń wejściowych, która decyduje o tym, jak wariancja wejścia kumuluje się w sumie ważonej |
+| Fan-out | „Liczba wyjść z neuronu” | Liczba połączeń wyjściowych, istotna dla zachowania wariancji gradientu podczas propagacji wstecznej |
+| Inicjalizacja Xavier/Glorot | „Inicjalizacja dla sigmoid” | Var(w) = 2/(fan_in + fan_out), zaprojektowana, aby zachować wariancję przez aktywacje sigmoid i tanh |
+| Inicjalizacja Kaiming/He | „Inicjalizacja dla ReLU” | Var(w) = 2/fan_in, uwzględnia wyzerowanie połowy aktywacji przez ReLU |
+| Propagacja wariancji (Variance propagation) | „Jak sygnały rosną lub kurczą się przez warstwy” | Matematyczna analiza tego, jak wariancja aktywacji zmienia się warstwa po warstwie w zależności od skali wag |
+| Skalowanie rezydualne (Residual scaling) | „Sztuczka inicjalizacyjna GPT-2” | Skalowanie wag połączeń rezydualnych przez 1/sqrt(2N), aby zapobiec wzrostowi wariancji przez N warstw transformera |
+| Martwa sieć (Dead network) | „Nic się nie trenuje” | Sieć, w której słaba inicjalizacja powoduje, że wszystkie gradienty są zerowe albo wszystkie aktywacje są nasycone |
+| Eksplodujące aktywacje (Exploding activations) | „Wartości idą do nieskończoności” | Gdy wariancja wag jest za wysoka, co powoduje wykładniczy wzrost wielkości aktywacji przez warstwy |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-- Glorot i Bengio, „Understanding the Trudność treningu głębokich sieci neuronowych ze sprzężeniem zwrotnym” (2010) – oryginalny dokument inicjujący Xaviera z analizą wariancji
-- He i in., „Delving Deep in Rectifiers” (2015) – wprowadzili inicjalizację Kaiminga dla sieci ReLU
-– Radford i in., „Language Models are Unsupervised Multitask Learners” (2019) – artykuł GPT-2 z inicjalizacją skalowania resztkowego
-- Mishkin i Matas, „All You Need is a Good Init” (2016) – inicjalizacja jednostkowej wariancji po warstwie, empiryczna alternatywa dla formuł analitycznych
+- Glorot & Bengio, "Understanding the difficulty of training deep feedforward neural networks" (2010) -- oryginalna praca o inicjalizacji Xavier z analizą wariancji
+- He i in., "Delving Deep into Rectifiers" (2015) -- wprowadziła inicjalizację Kaiming dla sieci ReLU
+- Radford i in., "Language Models are Unsupervised Multitask Learners" (2019) -- praca o GPT-2 ze skalowaniem rezydualnym przy inicjalizacji
+- Mishkin & Matas, "All You Need is a Good Init" (2016) -- inicjalizacja sekwencyjna warstwa po warstwie o jednostkowej wariancji, empiryczna alternatywa dla formuł analitycznych
