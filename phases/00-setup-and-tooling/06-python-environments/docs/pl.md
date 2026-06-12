@@ -1,31 +1,31 @@
-# Środowiska Pythona
+# Środowiska Python
 
-> Piekło zależności jest realne. Wirtualne środowiska są lekarstwem.
+> Dependency hell jest realny. Środowiska wirtualne to lekarstwo.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Shell
-**Wymagania:** Faza 0, Lekcja 01
+**Wymagania wstępne:** Faza 0, Lekcja 01
 **Czas:** ~30 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Twórz izolowane środowiska wirtualne za pomocą `uv`, `venv` lub `conda`
-- Napisz `pyproject.toml` z opcjonalnymi grupami zależności i wygeneruj pliki blokujące w celu zapewnienia powtarzalności
-- Diagnozuj i napraw typowe pułapki: instalacje globalne, mieszanie pip/conda, niedopasowania wersji CUDA
-- Wdrażaj strategię środowiskową dla poszczególnych faz dla projektów ze sprzecznymi zależnościami
+- Tworzenie izolowanych środowisk wirtualnych przy użyciu `uv`, `venv` lub `conda`
+- Pisanie `pyproject.toml` z opcjonalnymi grupami zależności i generowanie lockfiles dla zapewnienia reprodukowalności
+- Diagnozowanie i naprawianie typowych pułapek: instalacje globalne, mieszanie pip/conda, niezgodności wersji CUDA
+- Wdrożenie strategii środowisk per-faza dla projektów z konfliktującymi zależnościami
 
 ## Problem
 
-Instalujesz PyTorch 2.4 w celu dostrojenia projektu. W przyszłym tygodniu inny projekt będzie potrzebował PyTorch 2.1, ponieważ jego kompilacja CUDA jest przypięta. Aktualizujesz globalnie, a pierwszy projekt się psuje. Zmniejszasz wersję, a druga się psuje.
+Instalujesz PyTorch 2.4 do projektu fine-tuningu. W przyszłym tygodniu inny projekt potrzebuje PyTorch 2.1, ponieważ jego build CUDA jest przypięty do konkretnej wersji. Aktualizujesz globalnie i pierwszy projekt się psuje. Cofasz wersję i psuje się drugi.
 
-To jest piekło zależności. Dzieje się tak stale w pracy AI/ML, ponieważ:
+To jest dependency hell. Zdarza się to nieustannie w pracy z AI/ML, ponieważ:
 
-— PyTorch, JAX i TensorFlow dostarczają własne powiązania CUDA
-- Biblioteki modeli przypinają określone wersje frameworka
+- PyTorch, JAX i TensorFlow każdy dostarczają własne bindingi CUDA
+- Biblioteki modeli przypinają konkretne wersje frameworków
 - Globalny `pip install` nadpisuje wszystko, co było wcześniej
-- Kompilacje CUDA 11.8 nie działają ze sterownikami CUDA 12.x (i odwrotnie)
+- Buildy CUDA 11.8 nie działają ze sterownikami CUDA 12.x (i odwrotnie)
 
-Poprawka: każdy projekt otrzymuje własne izolowane środowisko z własnymi pakietami.
+Rozwiązanie: każdy projekt dostaje własne, izolowane środowisko z własnymi pakietami.
 
 ## Koncepcja
 
@@ -49,7 +49,7 @@ graph TD
 
 ### Opcja 1: uv venv (zalecane)
 
-`uv` to najszybszy menedżer pakietów w języku Python (10–100 razy szybszy niż pip). Obsługuje środowiska wirtualne, wersje Pythona i rozwiązywanie zależności w jednym narzędziu.
+`uv` to najszybszy menedżer pakietów Python (10-100x szybszy niż pip). Obsługuje środowiska wirtualne, wersje Pythona i rozwiązywanie zależności w jednym narzędziu.
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -61,13 +61,13 @@ uv venv
 source .venv/bin/activate
 ```
 
-Zainstaluj pakiety:
+Instalacja pakietów:
 
 ```bash
 uv pip install torch numpy
 ```
 
-Utwórz projekt z `pyproject.toml` w jednym kroku:
+Utworzenie projektu z `pyproject.toml` w jednym kroku:
 
 ```bash
 uv init my-ai-project
@@ -77,7 +77,7 @@ uv add torch numpy matplotlib
 
 ### Opcja 2: venv (wbudowany)
 
-Jeśli nie możesz zainstalować `uv`, Python jest dostarczany z `venv`:
+Jeśli nie możesz zainstalować `uv`, Python jest dostarczany razem z `venv`:
 
 ```bash
 python3 -m venv .venv
@@ -89,13 +89,13 @@ pip install torch numpy
 
 Wolniejszy niż `uv`, ale działa wszędzie tam, gdzie jest zainstalowany Python.
 
-### Opcja 3: conda (kiedy jej potrzebujesz)
+### Opcja 3: conda (kiedy jest potrzebna)
 
-Conda zarządza zależnościami innymi niż Python, takimi jak zestawy narzędzi CUDA, cuDNN i biblioteki C. Użyj go, gdy:
+Conda zarządza zależnościami spoza Pythona, takimi jak toolkity CUDA, cuDNN i biblioteki C. Używaj jej, gdy:
 
-- Potrzebujesz określonej wersji zestawu narzędzi CUDA bez konieczności instalowania jej w całym systemie
-- Znajdujesz się w klastrze współdzielonym, w którym nie możesz instalować pakietów systemowych
-- Instrukcje instalacji biblioteki mówią „użyj conda”
+- Potrzebujesz konkretnej wersji toolkitu CUDA bez instalowania go systemowo
+- Pracujesz na współdzielonym klastrze, na którym nie możesz instalować pakietów systemowych
+- Instrukcje instalacji biblioteki mówią "use conda"
 
 ```bash
 # Install miniconda (not the full Anaconda)
@@ -108,11 +108,11 @@ conda activate myproject
 conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
 ```
 
-Jedna zasada: jeśli używasz conda dla środowiska, używaj conda dla wszystkich pakietów w tym środowisku. Mieszanie `pip install` w conda env powoduje konflikty zależności, których debugowanie jest bolesne.
+Jedna zasada: jeśli używasz conda dla danego środowiska, używaj conda dla wszystkich pakietów w tym środowisku. Mieszanie `pip install` w środowisku conda powoduje konflikty zależności, które są bolesne do debugowania.
 
-### Dla tego kursu: Strategia na fazę
+### Dla tego kursu: strategia per-faza
 
-Można stworzyć jedno środowisko dla całego kursu. Nie. Różne fazy wymagają różnych (czasami sprzecznych) zależności.
+Mógłbyś utworzyć jedno środowisko dla całego kursu. Nie rób tego. Różne fazy potrzebują różnych (czasem konfliktujących) zależności.
 
 Strategia:
 
@@ -130,11 +130,11 @@ ai-engineering-from-scratch/
 │       └── .venv/            <-- API SDKs, no torch needed
 ```
 
-Skrypt w `code/env_setup.sh` tworzy podstawowe środowisko dla tego kursu.
+Skrypt w `code/env_setup.sh` tworzy bazowe środowisko dla tego kursu.
 
 ## Podstawy pyproject.toml
 
-Każdy projekt w Pythonie powinien mieć `pyproject.toml`. Zastępuje `setup.py`, `setup.cfg` i `requirements.txt` w jednym pliku.
+Każdy projekt Python powinien mieć `pyproject.toml`. Zastępuje on `setup.py`, `setup.cfg` i `requirements.txt` w jednym pliku.
 
 ```toml
 [project]
@@ -161,9 +161,9 @@ uv pip install -e ".[llm]"     # base + LLM SDKs
 uv pip install -e ".[torch,llm]" # everything
 ```
 
-## Pliki blokujące
+## Lockfiles
 
-Plik blokujący przypina każdą zależność (w tym przechodnią) do dokładnych wersji. Gwarantuje to powtarzalność: każdy, kto zainstaluje z pliku blokującego, otrzyma dokładnie te same pakiety.
+Lockfile przypina każdą zależność (włącznie z zależnościami przechodnimi) do dokładnych wersji. Gwarantuje to reprodukowalność: każdy, kto instaluje z lockfile, otrzymuje dokładnie te same pakiety.
 
 ```bash
 # uv generates uv.lock automatically when using uv add
@@ -174,7 +174,7 @@ uv pip compile pyproject.toml -o requirements.lock
 uv pip install -r requirements.lock
 ```
 
-Zatwierdź swój plik blokujący w git. Kiedy ktoś klonuje repozytorium, instaluje z pliku blokującego i otrzymuje identyczne wersje.
+Commituj swój lockfile do gita. Gdy ktoś sklonuje repozytorium, instaluje z lockfile i otrzymuje identyczne wersje.
 
 ## Typowe błędy
 
@@ -187,14 +187,14 @@ source .venv/bin/activate
 pip install torch  # GOOD: installs to virtual environment
 ```
 
-Sprawdź dokąd trafiają Twoje paczki:
+Sprawdź, gdzie trafiają twoje pakiety:
 
 ```bash
 which python       # should show .venv/bin/python, not /usr/bin/python
 which pip           # should show .venv/bin/pip
 ```
 
-### 2. Mieszanie pipa i condy
+### 2. Mieszanie pip i conda
 
 ```bash
 conda create -n myenv python=3.12
@@ -204,9 +204,9 @@ pip install some-other-package   # BAD: can break conda's dependency tracking
 conda install some-other-package # GOOD: let conda manage everything
 ```
 
-Jeśli musisz użyć pip wewnątrz conda (niektóre pakiety obsługują tylko pip), najpierw zainstaluj wszystkie pakiety conda, a następnie pakiety pip na końcu.
+Jeśli musisz użyć pip wewnątrz conda (niektóre pakiety są dostępne tylko przez pip), zainstaluj najpierw wszystkie pakiety conda, a pakiety pip na końcu.
 
-### 3. Zapominanie o aktywacji
+### 3. Zapomnienie o aktywacji
 
 ```bash
 python train.py           # uses system Python, missing packages
@@ -214,19 +214,19 @@ source .venv/bin/activate
 python train.py           # uses project Python, packages found
 ```
 
-Twój monit powłoki powinien pokazywać nazwę środowiska:
+Twój prompt powłoki powinien pokazywać nazwę środowiska:
 
 ```
 (.venv) $ python train.py
 ```
 
-### 4. Zatwierdzenie .venv w git
+### 4. Commitowanie .venv do gita
 
 ```bash
 echo ".venv/" >> .gitignore
 ```
 
-Środowiska wirtualne zajmują 200 MB–2 GB. Są lokalne i nie można ich przenosić między maszynami. Zamiast tego zatwierdź `pyproject.toml` i plik blokady.
+Środowiska wirtualne mają 200MB-2GB. Są lokalne, nieprzenośne między maszynami. Zamiast tego commituj `pyproject.toml` i lockfile.
 
 ### 5. Niezgodność wersji CUDA
 
@@ -240,27 +240,27 @@ python -c "import torch; print(torch.version.cuda)"  # shows PyTorch CUDA versio
 
 ## Użyj tego
 
-Uruchom skrypt instalacyjny, aby utworzyć środowisko kursu:
+Uruchom skrypt konfiguracyjny, aby utworzyć środowisko kursu:
 
 ```bash
 bash phases/00-setup-and-tooling/06-python-environments/code/env_setup.sh
 ```
 
-Spowoduje to utworzenie `.venv` w katalogu głównym repozytorium z zainstalowanymi i zweryfikowanymi podstawowymi zależnościami.
+Tworzy on `.venv` w katalogu głównym repozytorium z zainstalowanymi i zweryfikowanymi podstawowymi zależnościami.
 
 ## Ćwiczenia
 
-1. Uruchom `env_setup.sh` i sprawdź, czy wszystkie kontrole poszły pomyślnie
+1. Uruchom `env_setup.sh` i zweryfikuj, że wszystkie sprawdzenia przechodzą
 2. Utwórz drugie środowisko wirtualne, zainstaluj w nim inną wersję numpy i potwierdź, że oba środowiska są izolowane
-3. Napisz `pyproject.toml` dla projektu, który wymaga zarówno PyTorch, jak i Anthropic SDK
-4. Celowo zainstaluj pakiet globalnie (bez aktywowania venv), zwróć uwagę, dokąd zmierza, a następnie odinstaluj go
+3. Napisz `pyproject.toml` dla projektu, który potrzebuje zarówno PyTorch, jak i Anthropic SDK
+4. Celowo zainstaluj pakiet globalnie (bez aktywowania venv), zauważ gdzie trafia, a następnie go odinstaluj
 
-## Kluczowe terminy
+## Kluczowe pojęcia
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Środowisko wirtualne | "Wenv" | Izolowany katalog zawierający interpreter języka Python i pakiety, niezależny od systemu Python |
-| Plik blokady | „Przypięte zależności” | Plik zawierający listę każdego pakietu i jego dokładną wersję, gwarantujący identyczną instalację na różnych komputerach |
-| pyproject.toml | „Nowy setup.py” | Standardowy plik konfiguracyjny projektu w języku Python, zastępujący plik setup.py/setup.cfg/requirements.txt |
-| Zależność przechodnia | „Zależność zależności” | Pakiet B zależy od C; jeśli zainstalujesz A, które zależy od B, C jest przechodnią zależnością A |
-| Niedopasowanie CUDA | „Mój procesor graficzny nie działa” | PyTorch został skompilowany dla innej wersji CUDA niż obsługiwana przez sterownik GPU |
+| Środowisko wirtualne | "Venv" | Izolowany katalog zawierający interpreter Pythona i pakiety, oddzielony od systemowego Pythona |
+| Lockfile | "Przypięte zależności" | Plik wymieniający każdy pakiet i jego dokładną wersję, gwarantujący identyczne instalacje na różnych maszynach |
+| pyproject.toml | "Nowy setup.py" | Standardowy plik konfiguracyjny projektu Python, zastępujący setup.py/setup.cfg/requirements.txt |
+| Zależność przechodnia | "Zależność zależności" | Pakiet B zależy od C; jeśli instalujesz A, które zależy od B, to C jest zależnością przechodnią A |
+| Niezgodność CUDA | "Mój GPU nie działa" | PyTorch został skompilowany dla innej wersji CUDA niż ta obsługiwana przez sterownik twojego GPU |

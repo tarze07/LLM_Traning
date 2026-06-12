@@ -1,97 +1,97 @@
 # Optymalizacja wypukła
 
-> Problemy wypukłe mają jedną dolinę. Sieci neuronowe mają miliony. Znajomość różnicy ma znaczenie.
+> Problemy wypukłe mają jedną dolinę. Sieci neuronowe mają ich miliony. Znajomość różnicy ma znaczenie.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Język:** Python
-**Wymagania wstępne:** Faza 1, lekcje 04 (Rachunek dla ML), 08 (Optymalizacja)
+**Wymagania wstępne:** Faza 1, Lekcje 04 (Calculus for ML), 08 (Optimization)
 **Czas:** ~90 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Sprawdź, czy funkcja jest wypukła, korzystając z definicji, drugiej pochodnej i kryteriów Hesja
-- Zastosuj metodę Newtona i porównaj jej zbieżność kwadratową z opadaniem gradientowym
-- Rozwiązywać problemy optymalizacji z ograniczeniami za pomocą mnożników Lagrange'a i interpretować warunki KKT
-- Wyjaśnij, dlaczego krajobrazy strat w sieciach neuronowych nie są wypukłe, a mimo to SGD wciąż znajduje dobre rozwiązania
+- Sprawdzanie, czy funkcja jest wypukła, za pomocą definicji, drugiej pochodnej i kryteriów hesjanu
+- Implementacja metody Newtona i porównanie jej kwadratowej zbieżności z gradient descent
+- Rozwiązywanie problemów optymalizacji z ograniczeniami za pomocą mnożników Lagrange'a i interpretacja warunków KKT
+- Wyjaśnienie, czemu krajobrazy strat sieci neuronowych są niewypukłe, a SGD wciąż znajduje dobre rozwiązania
 
 ## Problem
 
-Lekcja 08 nauczyła Cię opadania gradientowego, pędu i Adama. Te optymalizatory schodzą w dół po każdej powierzchni. Ale nie dają żadnych gwarancji. Zejście gradientowe na niewypukłym terenie może wylądować w złym minimum lokalnym, utknąć w punkcie siodłowym lub oscylować w nieskończoność. I tak go użyłeś, ponieważ sieci neuronowe nie są wypukłe i nie ma alternatywy.
+Lekcja 08 nauczyła cię gradient descent, momentum i Adam. Te optymalizatory schodzą w dół po dowolnej powierzchni. Ale nie dają żadnych gwarancji. Gradient descent na niewypukłym krajobrazie może wylądować w złym minimum lokalnym, zablokować się na punkcie siodłowym albo wiecznie oscylować. Korzystałeś z niego mimo to, bo sieci neuronowe są niewypukłe i nie ma alternatywy.
 
-Jednak wiele problemów związanych z uczeniem maszynowym ma charakter wypukły. Regresja liniowa, regresja logistyczna, SVM, LASSO, regresja grzbietowa. Dla nich istnieje coś mocniejszego: optymalizacja z gwarancjami matematycznymi. Problem wypukły ma dokładnie jedną dolinę. Każdy algorytm, który idzie w dół, osiągnie globalne minimum. Nie ma potrzeby ponownego uruchamiania. Brak harmonogramów kursów nauki. Żadnej modlitwy.
+Ale wiele problemów w uczeniu maszynowym jest wypukłych. Regresja liniowa, regresja logistyczna, SVM, LASSO, regresja grzbietowa (ridge). Dla nich istnieje coś silniejszego: optymalizacja z matematycznymi gwarancjami. Problem wypukły ma dokładnie jedną dolinę. Każdy algorytm, który schodzi w dół, dotrze do globalnego minimum. Bez restartów. Bez harmonogramów learning rate. Bez modlitwy.
 
-Zrozumienie wypukłości ma trzy znaczenie. Po pierwsze, informuje Cię, kiedy problem jest łatwy (wypukły), a kiedy trudny (nie wypukły). Po drugie, zapewnia szybsze narzędzia, takie jak metoda Newtona dla problemów wypukłych. Po trzecie, wyjaśnia koncepcje pojawiające się w ML: regularyzacja jako ograniczenie, dualizm w maszynach SVM i dlaczego głębokie uczenie się działa pomimo naruszenia każdej ładnej właściwości, jaką daje wypukłość.
+Zrozumienie wypukłości robi trzy rzeczy. Po pierwsze, mówi ci, kiedy twój problem jest łatwy (wypukły) a kiedy trudny (niewypukły). Po drugie, daje szybsze narzędzia, takie jak metoda Newtona, dla problemów wypukłych. Po trzecie, wyjaśnia koncepcje, które pojawiają się w całym ML: regularyzację jako ograniczenie, dualność w SVM oraz to, czemu deep learning działa, mimo że narusza każdą z miłych właściwości, jakie daje wypukłość.
 
 ## Koncepcja
 
 ### Zbiory wypukłe
 
-Zbiór S jest wypukły, jeśli dla dowolnych dwóch punktów w S odcinek między nimi również leży całkowicie w S.
+Zbiór S jest wypukły, jeśli dla dowolnych dwóch punktów w S odcinek łączący je również w całości leży w S.
 
-| Zbiory wypukłe | Nie wypukły |
+| Zbiory wypukłe | Zbiory niewypukłe |
 |---|---|
-| **Prostokąt**: dowolne dwa punkty wewnątrz można połączyć odcinkiem linii, który pozostaje wewnątrz | **Kształt gwiazdy/półksiężyca**: linia pomiędzy dwoma punktami wewnętrznymi może przechodzić poza zestawem |
-| **Trójkąt**: ta sama właściwość obowiązuje dla wszystkich punktów wewnętrznych | **Pączek/pierścień**: dziura oznacza, że ​​niektóre segmenty linii opuszczają zbiór |
-| Odcinek linii pomiędzy dowolnymi dwoma punktami mieści się w zbiorze | Odcinek linii pomiędzy niektórymi parami punktów opuszcza zbiór |
+| **Prostokąt**: dowolne dwa punkty wewnątrz można połączyć odcinkiem, który pozostaje wewnątrz | **Kształt gwiazdy/sierpa**: odcinek między dwoma punktami wewnętrznymi może wychodzić poza zbiór |
+| **Trójkąt**: ta sama właściwość zachodzi dla wszystkich punktów wewnętrznych | **Pierścień (donut/annulus)**: dziura oznacza, że niektóre odcinki wychodzą ze zbioru |
+| Odcinek między dowolnymi dwoma punktami pozostaje w zbiorze | Odcinek między pewnymi parami punktów wychodzi ze zbioru |
 
-Test formalny: dla dowolnych punktów x, y w S i dowolnego t w [0, 1], punkt tx + (1-t)y również znajduje się w S.
+Test formalny: dla dowolnych punktów x, y w S i dowolnego t z [0, 1], punkt tx + (1-t)y również należy do S.
 
 Przykłady zbiorów wypukłych:
-- Linia, płaszczyzna, wszystko R^n
-- Kula (okrąg, kula, hipersfera)
+- Linia, płaszczyzna, całe R^n
+- Kula (okrąg, sfera, hipersfera)
 - Półprzestrzeń: {x : a^T x <= b}
 - Przecięcie dowolnej liczby zbiorów wypukłych
 
 Przykłady zbiorów niewypukłych:
-- Pączek (pierścień)
-- Połączenie dwóch rozłącznych kręgów
-- Dowolny zestaw z „wgnieceniem” lub „dziurą”
+- Pierścień (annulus)
+- Unia dwóch rozłącznych okręgów
+- Każdy zbiór z "wgnieceniem" lub "dziurą"
 
 ### Funkcje wypukłe
 
-Funkcja f jest wypukła, jeśli jej dziedzina jest zbiorem wypukłym oraz dla dowolnych dwóch punktów x, y w jej dziedzinie i dowolnego t w [0, 1]:
+Funkcja f jest wypukła, jeśli jej dziedzina jest zbiorem wypukłym i dla dowolnych dwóch punktów x, y w jej dziedzinie oraz dowolnego t z [0, 1]:
 
 ```
 f(tx + (1-t)y) <= t*f(x) + (1-t)*f(y)
 ```
 
-Geometrycznie: odcinek linii pomiędzy dowolnymi dwoma punktami na wykresie leży nad wykresem lub na wykresie.
+Geometrycznie: odcinek między dowolnymi dwoma punktami na wykresie leży powyżej lub na wykresie.
 
-| Nieruchomość | Funkcja wypukła | Funkcja niewypukła |
+| Właściwość | Funkcja wypukła | Funkcja niewypukła |
 |---|---|---|
-| **Test odcinka linii** | Linia pomiędzy dowolnymi dwoma punktami na wykresie leży **powyżej lub na** krzywej | Linia pomiędzy niektórymi punktami na wykresie opada **poniżej** krzywej |
-| **Kształt** | Pojedyncza misa/dolina zakrzywiona w górę | Wiele szczytów i dolin o mieszanej krzywiźnie |
-| **Minima lokalne** | Każde minimum lokalne jest minimum globalnym | Na różnych wysokościach może istnieć wiele minimów lokalnych |
+| **Test odcinka** | Odcinek między dowolnymi dwoma punktami na wykresie leży **powyżej lub na** krzywej | Odcinek między pewnymi punktami na wykresie schodzi **poniżej** krzywej |
+| **Kształt** | Jedna miska/dolina zakrzywiona w górę | Wiele szczytów i dolin o mieszanej krzywizny |
+| **Minima lokalne** | Każde minimum lokalne jest minimum globalnym | Może istnieć wiele minimów lokalnych na różnych wysokościach |
 
-Typowe funkcje wypukłe:
+Popularne funkcje wypukłe:
 - f(x) = x^2 (parabola)
-- f(x) = |x| (wartość bezwzględna)
-- f(x) = e^x (wykładniczy)
-- f(x) = max(0, x) (ReLU, choć odcinkowo liniowo)
-- f(x) = -log(x) dla x > 0 (logarytm ujemny)
-- Dowolna funkcja liniowa f(x) = a^T x + b (zarówno wypukła, jak i wklęsła)
+- f(x) = |x| (wartość absolutna)
+- f(x) = e^x (eksponencjalna)
+- f(x) = max(0, x) (ReLU, choć kawałkami liniowa)
+- f(x) = -log(x) dla x > 0 (ujemny logarytm)
+- Każda funkcja liniowa f(x) = a^T x + b (jest zarówno wypukła, jak i wklęsła)
 
 ### Testowanie wypukłości
 
-Trzy praktyczne testy, od najłatwiejszego do najbardziej rygorystycznego.
+Trzy praktyczne testy, od najprostszego do najbardziej rygorystycznego.
 
-**Test 1: Test drugiej pochodnej (1D).** Jeśli f''(x) >= 0 dla wszystkich x, to f jest wypukłe.
+**Test 1: Test drugiej pochodnej (1D).** Jeśli f''(x) >= 0 dla wszystkich x, to f jest wypukła.
 
-- f(x) = x^2: f''(x) = 2 >= 0. Wypukłe.
-- f(x) = x^3: f''(x) = 6x. Ujemne dla x < 0. Nie wypukłe.
-- f(x) = e^x: f''(x) = e^x > 0. Wypukłe.
+- f(x) = x^2: f''(x) = 2 >= 0. Wypukła.
+- f(x) = x^3: f''(x) = 6x. Ujemna dla x < 0. Niewypukła.
+- f(x) = e^x: f''(x) = e^x > 0. Wypukła.
 
-**Test 2: Test Hessego (wieloczynnikowy).** Jeśli macierz Hessego H(x) jest dodatnia półokreślona dla wszystkich x, to f jest wypukła. Hesjan jest macierzą drugich pochodnych cząstkowych.
+**Test 2: Test hesjanu (wielowymiarowy).** Jeśli macierz hesjanu H(x) jest dodatnio półokreślona dla wszystkich x, to f jest wypukła. Hesjan to macierz drugich pochodnych cząstkowych.
 
-**Test 3: Test definicji.** Sprawdź bezpośrednio nierówność f(tx + (1-t)y) <= t*f(x) + (1-t)*f(y). Przydatne w przypadku funkcji, w przypadku których pochodne są trudne do obliczenia.
+**Test 3: Test z definicji.** Sprawdź nierówność f(tx + (1-t)y) <= t*f(x) + (1-t)*f(y) bezpośrednio. Przydatny dla funkcji, w których pochodne są trudne do obliczenia.
 
-### Dlaczego wypukłość ma znaczenie
+### Czemu wypukłość ma znaczenie
 
-Centralne twierdzenie optymalizacji wypukłej:
+Centralny teorem optymalizacji wypukłej:
 
-**W przypadku funkcji wypukłej każde minimum lokalne jest minimum globalnym.**
+**Dla funkcji wypukłej każde minimum lokalne jest minimum globalnym.**
 
-Oznacza to, że zejście gradientowe nie może zostać uwięzione. Każda ścieżka w dół prowadzi do tej samej odpowiedzi. Algorytm ma gwarancję zbieżności do rozwiązania optymalnego.
+To oznacza, że gradient descent nie może się zablokować. Każda ścieżka schodząca w dół prowadzi do tej samej odpowiedzi. Algorytm jest zagarantowany, że zbiegnie do rozwiązania optymalnego.
 
 ```mermaid
 graph LR
@@ -108,28 +108,28 @@ graph LR
 
 Konsekwencje:
 - Nie ma potrzeby losowych restartów
-- Nie ma potrzeby stosowania skomplikowanych harmonogramów tempa uczenia się
-- Możliwe są dowody zbieżności (szybkość zależy od właściwości funkcji)
-- Rozwiązanie jest unikalne (do obszarów płaskich)
+- Nie ma potrzeby zaawansowanych harmonogramów learning rate
+- Możliwe są dowody zbieżności (tempo zależy od właściwości funkcji)
+- Rozwiązanie jest unikalne (z dokładnością do płaskich obszarów)
 
-### Wypukłe i niewypukłe w ML
+### Wypukłe vs niewypukłe w ML
 
-| Problem | Wypukły? | Dlaczego |
-|--------|---------|-----|
-| Regresja liniowa (MSE) | Tak | Strata jest kwadratowa w wadze |
-| Regresja logistyczna | Tak | Strata loga jest wypukła w masach |
-| SVM (utrata zawiasów) | Tak | Maksimum funkcji liniowych |
+| Problem | Wypukły? | Czemu |
+|---------|---------|-----|
+| Regresja liniowa (MSE) | Tak | Strata jest kwadratowa względem wag |
+| Regresja logistyczna | Tak | Log-loss jest wypukła względem wag |
+| SVM (hinge loss) | Tak | Maksimum funkcji liniowych |
 | LASSO (regresja L1) | Tak | Suma funkcji wypukłych jest wypukła |
-| Regresja grzbietu (L2) | Tak | Kwadratowy + kwadratowy = wypukły |
-| Sieć neuronowa (wszelkie straty) | Nie | Aktywacje nieliniowe tworzą niewypukły krajobraz |
-| grupowanie k-średnich | Nie | Krok przypisania dyskretnego |
-| Faktoryzacja macierzy | Nie | Produkt niewiadomych |
+| Regresja grzbietowa (L2) | Tak | Kwadratowa + kwadratowa = wypukła |
+| Sieć neuronowa (każda strata) | Nie | Nieliniowe aktywacje tworzą niewypukły krajobraz |
+| Klastrowanie k-means | Nie | Dyskretny krok przypisania |
+| Faktoryzacja macierzy | Nie | Iloczyn nieznanych |
 
-Modele liniowe ze stratami wypukłymi są wypukłe. W momencie dodania ukrytych warstw z nieliniowymi aktywacjami wypukłość zostaje przerwana.
+Modele liniowe z wypukłymi stratami są wypukłe. W momencie, gdy dodajesz warstwy skryte z nieliniowymi aktywacjami, wypukłość się załamuje.
 
-### Macierz Hessego
+### Macierz hesjanu
 
-Hesjan H funkcji f: R^n -> R jest macierzą n x n drugich pochodnych cząstkowych.
+Hesjan H funkcji f: R^n -> R to macierz n x n drugich pochodnych cząstkowych.
 
 ```
 H[i][j] = d^2 f / (dx_i dx_j)
@@ -145,27 +145,27 @@ H = [ 2  3 ]
     [ 3  2 ]
 ```
 
-Hesjan mówi o krzywiźnie:
-- Wszystkie wartości własne są dodatnie: funkcja zakrzywia się w górę w każdym kierunku (w tym punkcie wypukła)
-- Wszystkie wartości własne są ujemne: krzywe w dół w każdym kierunku (wklęsłe, lokalne maksimum)
-- Znaki mieszane: punkt siodłowy (w niektórych kierunkach zakrzywiony w górę, w innych w dół)
+Hesjan informuje o krzywiźnie:
+- Wszystkie wartości własne dodatnie: funkcja zakrzywia się w górę w każdym kierunku (wypukła w tym punkcie)
+- Wszystkie wartości własne ujemne: zakrzywia się w dół w każdym kierunku (wklęsła, lokalne maksimum)
+- Mieszane znaki: punkt siodłowy (zakrzywia się w górę w niektórych kierunkach, w dół w innych)
 - Zerowa wartość własna: płaska w tym kierunku (zdegenerowana)
 
-W przypadku wypukłości hesjan musi być dodatni półokreślony (wszystkie wartości własne >= 0) wszędzie, a nie tylko w jednym punkcie.
+Aby funkcja była wypukła, hesjan musi być dodatnio półokreślony (wszystkie wartości własne >= 0) wszędzie, nie tylko w jednym punkcie.
 
 ### Metoda Newtona
 
-Zejście gradientowe wykorzystuje informacje pierwszego rzędu (gradient). Metoda Newtona wykorzystuje informację drugiego rzędu (Hessian). Dopasowuje przybliżenie kwadratowe w bieżącym punkcie i przeskakuje bezpośrednio do minimum tego kwadratu.
+Gradient descent wykorzystuje informację pierwszego rzędu (gradient). Metoda Newtona wykorzystuje informację drugiego rzędu (hesjan). Dopasowuje aproksymację kwadratową w aktualnym punkcie i przeskakuje wprost do minimum tej kwadratowej.
 
 ```
-Update rule:
+Reguła aktualizacji:
   x_new = x - H^(-1) * gradient
 
-Compare to gradient descent:
+Porównanie z gradient descent:
   x_new = x - lr * gradient
 ```
 
-Metoda Newtona zastępuje skalarną szybkość uczenia się odwrotną wartością Hesja. To automatycznie dostosowuje wielkość i kierunek kroku w oparciu o lokalną krzywiznę.
+Metoda Newtona zastępuje skalarny learning rate odwrotnym hesjanem. To automatycznie dopasowuje rozmiar kroku i kierunek na podstawie lokalnej krzywizny.
 
 ```mermaid
 graph TD
@@ -185,21 +185,21 @@ graph TD
 ```
 
 Zalety:
-- Zbieżność kwadratowa w pobliżu minimum (kwadraty błędu w każdym kroku)
-- Brak szybkości uczenia się do dostrojenia
-- Niezmiennik skali (działa niezależnie od tego, jak sparametryzujesz problem)
+- Kwadratowa zbieżność w pobliżu minimum (błąd jest podnoszony do kwadratu w każdym kroku)
+- Brak learning rate do dostosowywania
+- Niezmienność skali (działa niezależnie od tego, jak parametryzujesz problem)
 
 Wady:
-- Obliczenie kosztu Hesja wynosi O(n^2) pamięci i O(n^3) do odwrócenia
-- Dla sieci neuronowej o 1 milionie wag, czyli 10^12 wpisów i 10^18 operacji
-- Niepraktyczne w przypadku głębokiego uczenia się
+- Obliczenie hesjanu kosztuje O(n^2) pamięci i O(n^3), aby go odwrócić
+- Dla sieci neuronowej z 1 milionem wag to 10^12 elementów i 10^18 operacji
+- Niepraktyczne dla deep learning
 
-### Ograniczona optymalizacja
+### Optymalizacja z ograniczeniami
 
-Optymalizacja nieograniczona: minimalizuj f(x) po wszystkich x.
-Optymalizacja ograniczona: minimalizuj f(x) z zastrzeżeniem ograniczeń.
+Optymalizacja bez ograniczeń: minimalizuj f(x) po wszystkich x.
+Optymalizacja z ograniczeniami: minimalizuj f(x) z zachowaniem ograniczeń.
 
-Prawdziwe problemy mają ograniczenia. Chcesz zminimalizować koszty, ale Twój budżet jest ograniczony. Chcesz zminimalizować błąd, ale złożoność modelu jest ograniczona.
+Rzeczywiste problemy mają ograniczenia. Chcesz zminimalizować koszt, ale twój budżet jest ograniczony. Chcesz zminimalizować błąd, ale złożoność twojego modelu jest ograniczona.
 
 ```mermaid
 graph LR
@@ -212,26 +212,26 @@ graph LR
     end
 ```
 
-### Mnożniki Lagrange’a
+### Mnożniki Lagrange'a
 
-Metoda mnożników Lagrange'a przekształca problem ograniczony w problem nieograniczony.
+Metoda mnożników Lagrange'a przekształca problem z ograniczeniami w problem bez ograniczeń.
 
-Problem: zminimalizować f(x) pod warunkiem, że g(x) = 0.
+Problem: minimalizuj f(x) z zachowaniem g(x) = 0.
 
-Rozwiązanie: wprowadź nową zmienną (mnożnik Lagrange’a lambda) i rozwiąż problem nieograniczony:
+Rozwiązanie: wprowadź nową zmienną (mnożnik Lagrange'a lambda) i rozwiąż problem bez ograniczeń:
 
 ```
 L(x, lambda) = f(x) + lambda * g(x)
 ```
 
-W rozwiązaniu gradient L wynosi zero:
+W rozwiązaniu gradient L jest zerowy:
 
 ```
 dL/dx = df/dx + lambda * dg/dx = 0
 dL/dlambda = g(x) = 0
 ```
 
-Intuicja geometryczna: przy ograniczonym minimum gradient f musi być równoległy do gradientu ograniczenia g. Gdyby nie były one równoległe, można byłoby przesuwać się wzdłuż powierzchni wiązania i dalej zmniejszać f.
+Intuicja geometryczna: w minimum z ograniczeniem gradient f musi być równoległy do gradientu ograniczenia g. Gdyby nie były równoległe, można by przemieścić się wzdłuż powierzchni ograniczenia i jeszcze bardziej zmniejszyć f.
 
 ```mermaid
 graph LR
@@ -240,7 +240,7 @@ graph LR
     S --- C["At the solution, gradient of f is parallel to gradient of g"]
 ```
 
-Przykład: minimalizuj f(x,y) = x^2 + y^2 pod warunkiem, że x + y = 1.
+Przykład: zminimalizuj f(x,y) = x^2 + y^2 z zachowaniem x + y = 1.
 
 ```
 L = x^2 + y^2 + lambda(x + y - 1)
@@ -249,143 +249,143 @@ dL/dx = 2x + lambda = 0  =>  x = -lambda/2
 dL/dy = 2y + lambda = 0  =>  y = -lambda/2
 dL/dlambda = x + y - 1 = 0
 
-From first two: x = y
-Substituting: 2x = 1, so x = y = 0.5, lambda = -1
+Z dwóch pierwszych: x = y
+Po podstawieniu: 2x = 1, więc x = y = 0.5, lambda = -1
 ```
 
-Najbliższy początek linii x + y = 1 to (0,5, 0,5).
+Najbliższy punkt na linii x + y = 1 do początku układu współrzędnych to (0.5, 0.5).
 
 ### Warunki KKT
 
-Warunki Karusha-Kuhna-Tuckera rozszerzają mnożniki Lagrange'a na ograniczenia nierówności.
+Warunki Karusha-Kuhna-Tuckera rozszerzają mnożniki Lagrange'a na ograniczenia w postaci nierówności.
 
-Problem: zminimalizować f(x) pod warunkiem g_i(x) <= 0 dla i = 1, ..., m.
+Problem: minimalizuj f(x) z zachowaniem g_i(x) <= 0 dla i = 1, ..., m.
 
-Warunki KKT (niezbędne dla optymalności):
+Warunki KKT (warunki konieczne optymalności):
 
 ```
-1. Stationarity:    df/dx + sum(lambda_i * dg_i/dx) = 0
-2. Primal feasibility:  g_i(x) <= 0  for all i
-3. Dual feasibility:    lambda_i >= 0  for all i
-4. Complementary slackness:  lambda_i * g_i(x) = 0  for all i
+1. Stacjonarność:        df/dx + sum(lambda_i * dg_i/dx) = 0
+2. Wykonalność prymalna:  g_i(x) <= 0  dla wszystkich i
+3. Wykonalność dualna:    lambda_i >= 0  dla wszystkich i
+4. Komplementarne wykluczanie: lambda_i * g_i(x) = 0  dla wszystkich i
 ```
 
-Kluczowym spostrzeżeniem jest uzupełniający luz: albo ograniczenie jest aktywne (g_i = 0, rozwiązanie znajduje się na granicy), albo mnożnik wynosi zero (ograniczenie nie ma znaczenia). Wiązanie, które nie ma wpływu na rozwiązanie, ma lambda = 0.
+Komplementarne wykluczanie to kluczowa obserwacja: albo ograniczenie jest aktywne (g_i = 0, rozwiązanie znajduje się na granicy), albo mnożnik jest zerowy (ograniczenie nie ma znaczenia). Ograniczenie, które nie wpływa na rozwiązanie, ma lambda = 0.
 
-Warunki KKT mają kluczowe znaczenie dla maszyn SVM. Wektory podporowe to punkty danych, w których ograniczenie jest aktywne (lambda > 0). Wszystkie pozostałe punkty danych mają lambda = 0 i nie wpływają na granicę decyzji.
+Warunki KKT są centralne dla SVM. Wektory podpierające (support vectors) to punkty danych, dla których ograniczenie jest aktywne (lambda > 0). Wszystkie inne punkty danych mają lambda = 0 i nie wpływają na granicę decyzyjną.
 
 ### Regularyzacja jako optymalizacja z ograniczeniami
 
-Regularyzacja L1 i L2 nie jest arbitralną sztuczką. Są to ukryte problemy optymalizacyjne z ograniczeniami.
+Regularyzacja L1 i L2 to nie arbitralne sztuczki. To zamaskowane problemy optymalizacji z ograniczeniami.
 
-**Regularyzacja L2 (Grzbiet):**
+**Regularyzacja L2 (Ridge):**
 
 ```
-minimize  Loss(w)  subject to  ||w||^2 <= t
+minimalizuj  Loss(w)  z zachowaniem  ||w||^2 <= t
 
-Equivalent unconstrained form:
-minimize  Loss(w) + lambda * ||w||^2
+Równoważna forma bez ograniczeń:
+minimalizuj  Loss(w) + lambda * ||w||^2
 ```
 
-Więzy ||w||^2 <= t definiuje kulę (okrąg w 2D, kula w 3D). Rozwiązaniem jest miejsce, w którym kontury straty po raz pierwszy dotykają tej piłki.
+Ograniczenie ||w||^2 <= t definiuje kulę (okrąg w 2D, sfera w 3D). Rozwiązanie znajduje się tam, gdzie konturny straty po raz pierwszy stykają się z tą kulą.
 
 **Regularyzacja L1 (LASSO):**
 
 ```
-minimize  Loss(w)  subject to  ||w||_1 <= t
+minimalizuj  Loss(w)  z zachowaniem  ||w||_1 <= t
 
-Equivalent unconstrained form:
-minimize  Loss(w) + lambda * ||w||_1
+Równoważna forma bez ograniczeń:
+minimalizuj  Loss(w) + lambda * ||w||_1
 ```
 
-Ograniczenie ||w||_1 <= t definiuje romb (obrócony kwadrat w 2D).
+Ograniczenie ||w||_1 <= t definiuje diament (obrócony kwadrat w 2D).
 
-| Nieruchomość | Ograniczenie L2 (okrąg) | Ograniczenie L1 (romb) |
+| Właściwość | Ograniczenie L2 (okrąg) | Ograniczenie L1 (diament) |
 |---|---|---|
-| **Kształt ograniczenia** | Okrąg (kula w wyższych przyciemnieniach) | Diament (obrócony kwadrat w 2D) |
-| **Gdzie dotyka kontur straty** | Gładka granica — dowolny punkt na okręgu | Narożnik — zgodny z osią |
-| **Zachowanie rozwiązania** | Wagi są małe, ale niezerowe | Niektóre wagi są dokładnie zerowe (rzadkie) |
-| **Wynik** | Skurcz wagi | Wybór funkcji |
+| **Kształt ograniczenia** | Okrąg (sfera w wyższych wymiarach) | Diament (obrócony kwadrat w 2D) |
+| **Gdzie kontur straty się styka** | Gładka granica — dowolny punkt na okręgu | Wierzchołek — wyrównany z osią |
+| **Zachowanie rozwiązania** | Wagi są małe, ale niezerowe | Niektóre wagi są dokładnie zerowe (rzadkość) |
+| **Wynik** | Zmniejszanie wag | Selekcja cech |
 
-To wyjaśnia, dlaczego L1 tworzy rzadkie modele (wybór funkcji), podczas gdy L2 jedynie zmniejsza ciężary. Diament ma rogi wyrównane z osiami. Kontury strat częściej dotkną narożnika, ustawiając jedną lub więcej wag dokładnie na zero.
+To wyjaśnia, czemu L1 produkuje rzadkie modele (selekcja cech), a L2 tylko zmniejsza wagi. Diament ma wierzchołki wyrównane z osiami. Konturny straty częściej stykają się z wierzchołkiem, ustawiając jedną lub więcej wag dokładnie na zero.
 
-### Dwoistość
+### Dualność
 
-Każdy problem optymalizacji z ograniczeniami (pierwotny) ma problem towarzyszący (podwójny). W przypadku problemów wypukłych wartość pierwotna i podwójna mają tę samą optymalną wartość. To jest silna dwoistość.
+Każdy problem optymalizacji z ograniczeniami (prymalny) ma towarzyszący problem (dualny). Dla problemów wypukłych prymalny i dualny mają tę samą wartość optymalną. To jest silna dualność.
 
-Podwójna funkcja Lagrangianu:
+Funkcja dualna Lagrange'a:
 
 ```
-Primal: minimize f(x) subject to g(x) <= 0
+Prymalny: minimalizuj f(x) z zachowaniem g(x) <= 0
 Lagrangian: L(x, lambda) = f(x) + lambda * g(x)
-Dual function: d(lambda) = min_x L(x, lambda)
-Dual problem: maximize d(lambda) subject to lambda >= 0
+Funkcja dualna: d(lambda) = min_x L(x, lambda)
+Problem dualny: maksymalizuj d(lambda) z zachowaniem lambda >= 0
 ```
 
-Dlaczego dualizm ma znaczenie:
-- Problem podwójny jest czasem łatwiejszy do rozwiązania niż problem pierwotny
-- Maszyny SVM są rozwiązywane w ich podwójnej formie, gdzie problem zależy od iloczynów skalarnych pomiędzy punktami danych (umożliwiając sztuczkę jądra)
-- Wartość dualna zapewnia dolną granicę optymalnego pierwotnego, przydatną do sprawdzania jakości rozwiązania
+Czemu dualność ma znaczenie:
+- Problem dualny jest czasem łatwiejszy do rozwiązania niż prymalny
+- SVM są rozwiązywane w formie dualnej, gdzie problem zależy od iloczynów skalarnych między punktami danych (co umożliwia trik z jądrem - kernel trick)
+- Dualny dostarcza dolnej granicy optimum prymalnego, przydatnej do sprawdzania jakości rozwiązania
 
-W szczególności dla maszyn SVM:
+Dla SVM konkretnie:
 
 ```
-Primal: find w, b that maximize the margin 2/||w|| subject to
-        y_i(w^T x_i + b) >= 1 for all i
+Prymalny: znajdź w, b, które maksymalizują margines 2/||w|| z zachowaniem
+        y_i(w^T x_i + b) >= 1 dla wszystkich i
 
-Dual:   maximize sum(alpha_i) - 0.5 * sum_ij(alpha_i * alpha_j * y_i * y_j * x_i^T x_j)
-        subject to alpha_i >= 0 and sum(alpha_i * y_i) = 0
+Dualny:   maksymalizuj sum(alpha_i) - 0.5 * sum_ij(alpha_i * alpha_j * y_i * y_j * x_i^T x_j)
+        z zachowaniem alpha_i >= 0 oraz sum(alpha_i * y_i) = 0
 
-The dual only involves dot products x_i^T x_j.
-Replace x_i^T x_j with K(x_i, x_j) to get the kernel trick.
+Dualny zawiera tylko iloczyny skalarne x_i^T x_j.
+Zastąp x_i^T x_j przez K(x_i, x_j), aby uzyskać trik z jądrem (kernel trick).
 ```
 
-### Dlaczego głębokie uczenie się działa pomimo braku wypukłości
+### Czemu deep learning działa wbrew niewypukłości
 
-Funkcje utraty sieci neuronowej są niezwykle niewypukłe. Według każdej klasycznej miary ich optymalizacja powinna się nie udać. Jednak stochastyczne zejście gradientowe niezawodnie znajduje dobre rozwiązania. Wyjaśnia to kilka czynników.
+Funkcje straty sieci neuronowych są niesamowicie niewypukłe. Według każdej klasycznej miary ich optymalizacja powinna się nie powieść. Mimo to stochastyczny gradient descent rzetelnie znajduje dobre rozwiązania. Kilka czynników to wyjaśnia.
 
-**Większość minimów lokalnych jest wystarczająco dobra.** W przestrzeniach wielowymiarowych losowe punkty krytyczne (gdzie gradient wynosi zero) to w przeważającej mierze punkty siodłowe, a nie minima lokalne. Nieliczne istniejące minima lokalne mają zwykle wartości strat zbliżone do minimum globalnego. Uwięzienie w strasznym minimum lokalnym jest niezwykle mało prawdopodobne, gdy przestrzeń parametrów ma miliony wymiarów.
+**Większość minimów lokalnych jest wystarczająco dobra.** W przestrzeniach wysokowymiarowych losowe punkty krytyczne (gdzie gradient jest zerowy) są w zdecydowanej większości punktami siodłowymi, nie minimami lokalnymi. Te kilka minimów lokalnych, które istnieją, mają zwykle wartości straty bliskie globalnego minimum. Utknięcie w bardzo złym minimum lokalnym jest niezwykle nieprawdopodobne, gdy przestrzeń parametrów ma miliony wymiarów.
 
-**Prawdziwą przeszkodą są punkty siodłowe, a nie lokalne minima.** W funkcji z n parametrami punkt siodłowy ma mieszankę dodatnich i ujemnych kierunków krzywizny. W przypadku losowego punktu krytycznego w dużych wymiarach prawdopodobieństwo, że wszystkie wartości własne będą dodatnie (minimum lokalne) wynosi w przybliżeniu 2^(-n). Prawie wszystkie punkty krytyczne to punkty siodłowe. Hałas SGD pomaga im uciec.
+**Punkty siodłowe, a nie minima lokalne, są prawdziwą przeszkodą.** W funkcji z n parametrami punkt siodłowy ma mieszankę dodatnich i ujemnych kierunków krzywizny. Dla losowego punktu krytycznego w wysokich wymiarach prawdopodobieństwo, że wszystkie n wartości własnych jest dodatnich (minimum lokalne), wynosi z grubsza 2^(-n). Prawie wszystkie punkty krytyczne to punkty siodłowe. Szum SGD pomaga z nich uciec.
 
-**Nadparametryzacja wygładza krajobraz.** Sieci z większą liczbą parametrów niż przykłady szkoleniowe mają gładsze, bardziej połączone powierzchnie strat. Szersze sieci mają mniej złych minimów lokalnych. Jest to sprzeczne z intuicją, ale spójne empirycznie.
+**Nadparametryzacja wygładza krajobraz.** Sieci z większą liczbą parametrów niż przykładów treningowych mają gładsze, lepiej połączone powierzchnie straty. Szersze sieci mają mniej złych minimów lokalnych. To kontrintuicyjne, ale empirycznie spójne.
 
-**Struktura krajobrazu strat:**
+**Struktura krajobrazu straty:**
 
-| Nieruchomość | Przestrzeń niskowymiarowa | Przestrzeń wielowymiarowa |
+| Właściwość | Przestrzeń niskowymiarowa | Przestrzeń wysokowymiarowa |
 |---|---|---|
-| **Krajobraz** | Wiele odizolowanych szczytów i dolin | Płynnie połączone doliny |
-| **Minima** | Wiele izolowanych minimów lokalnych | Kilka złych minimów lokalnych; większość jest prawie optymalna |
+| **Krajobraz** | Wiele izolowanych szczytów i dolin | Gładko połączone doliny |
+| **Minima** | Wiele izolowanych minimów lokalnych | Mało złych minimów lokalnych; większość jest blisko optymalnych |
 | **Nawigacja** | Trudno znaleźć minimum globalne | Wiele ścieżek prowadzi do dobrych rozwiązań |
-| **Punkty krytyczne** | Mieszanka lokalnych minimów i punktów siodłowych | W przeważającej mierze punkty siodłowe, a nie lokalne minima |
+| **Punkty krytyczne** | Mieszanka minimów lokalnych i punktów siodłowych | W zdecydowanej większości punkty siodłowe, nie minima lokalne |
 
-**Szum stochastyczny działa jak ukryta regularyzacja.** Mini-partia SGD dodaje szum, który zapobiega osadzaniu się w ostrych minimach. Ostre przekroczenie minimów; płaskie minima uogólniają. Szum wpływa na optymalizację w kierunku płaskich obszarów krajobrazu strat.
+**Stochastyczny szum działa jak niejawna regularyzacja.** Mini-batch SGD wprowadza szum, który zapobiega osiadaniu w ostrych minimach. Ostre minima przeuczają się; płaskie minima generalizują. Szum przesuwa optymalizację w kierunku płaskich obszarów krajobrazu straty.
 
 ### Metody drugiego rzędu w praktyce
 
-Metoda czystego Newtona jest niepraktyczna w przypadku dużych modeli. Kilka przybliżeń sprawia, że ​​informacje drugiego rzędu stają się użyteczne.
+Czysta metoda Newtona jest niepraktyczna dla dużych modeli. Kilka aproksymacji sprawia, że informacja drugiego rzędu staje się użyteczna.
 
-**L-BFGS (BFGS o ograniczonej pamięci):** Przybliża odwrotność Hesja przy użyciu ostatnich m różnic gradientów. Wymaga pamięci O(mn) zamiast O(n^2). Działa dobrze w przypadku problemów z maksymalnie 10 000 parametrów. Używany w klasycznym ML (regresja logistyczna, CRF), ale nie w głębokim uczeniu się.
+**L-BFGS (Limited-memory BFGS):** Aproksymuje odwrotny hesjan, korzystając z ostatnich m różnic gradientów. Wymaga O(mn) pamięci zamiast O(n^2). Działa dobrze dla problemów z do ~10 000 parametrów. Używana w klasycznym ML (regresja logistyczna, CRF), ale nie w deep learning.
 
-**Naturalny gradient:** Używa matrycy informacyjnej Fishera (oczekiwanej wartości Hessianu w oparciu o logarytm wiarygodności) zamiast standardowej metody Hessian. To wyjaśnia geometrię rozkładów prawdopodobieństwa. K-FAC (przybliżona krzywizna współczynnika Kroneckera) przybliża macierz Fishera jako iloczyn Kroneckera, dzięki czemu jest praktyczna w sieciach neuronowych.
+**Gradient naturalny:** Wykorzystuje macierz informacji Fishera (oczekiwany hesjan log-likelihood) zamiast standardowego hesjanu. Uwzględnia geometrię rozkładów prawdopodobieństwa. K-FAC (Kronecker-Factored Approximate Curvature) aproksymuje macierz Fishera jako iloczyn Kroneckera, co sprawia, że jest praktyczna dla sieci neuronowych.
 
-**Optymalizacja bez Hesja:** Wykorzystuje gradient sprzężony do rozwiązania Hx = g bez tworzenia H. Wymaga jedynie produktów wektora Hessego, które można obliczyć w czasie O(n) poprzez automatyczne różniczkowanie.
+**Optymalizacja bez hesjanu (Hessian-free):** Wykorzystuje gradient sprzężony, aby rozwiązać Hx = g, nigdy nie tworząc H. Wymaga tylko produktów hesjan-wektor, które można obliczyć w czasie O(n) za pomocą automatycznego różniczkowania.
 
-**Przybliżenia ukośne:** Drugi moment Adama jest ukośnym przybliżeniem przekątnej Hessjana. AdaHessian rozszerza to, używając rzeczywistych elementów przekątnych Hessego za pomocą estymatora Hutchinsona.
+**Aproksymacje diagonalne:** Drugi moment Adam to diagonalna aproksymacja diagonali hesjanu. AdaHessian rozszerza to, używając rzeczywistych elementów diagonali hesjanu za pomocą estymatora Hutchinsona.
 
 | Metoda | Pamięć | Koszt na krok | Kiedy używać |
-|--------|--------|-------------|------------|
-| Zejście gradientowe | O(n) | O(n) | Linia bazowa, duże modele |
+|--------|--------|--------------|-------------|
+| Gradient descent | O(n) | O(n) | Punkt odniesienia, duże modele |
 | Metoda Newtona | O(n^2) | O(n^3) | Małe problemy wypukłe |
-| L-BFGS | O(mn) | O(mn) | Problemy średnio wypukłe |
-| Adama | O(n) | O(n) | Domyślne głębokie uczenie się |
-| K-FAC | O(n) | O(n) na warstwę | Badania, szkolenia wielkoseryjne |
+| L-BFGS | O(mn) | O(mn) | Średnie problemy wypukłe |
+| Adam | O(n) | O(n) | Domyślny w deep learning |
+| K-FAC | O(n) | O(n) na warstwę | Badania, trening z dużym batchem |
 
 ## Zbuduj to
 
 ### Krok 1: Sprawdzanie wypukłości
 
-Zbuduj funkcję, która empirycznie testuje wypukłość, próbkując punkty i sprawdzając definicję.
+Zbuduj funkcję, która testuje wypukłość empirycznie, próbkując punkty i sprawdzając definicję.
 
 ```python
 import random
@@ -407,7 +407,7 @@ def check_convexity(f, dim, bounds=(-5, 5), samples=1000):
 
 ### Krok 2: Metoda Newtona dla 2D
 
-Zaimplementuj metodę Newtona, używając jawnego Hesjanu. Porównaj prędkość konwergencji z opadaniem gradientowym.
+Zaimplementuj metodę Newtona, korzystając z jawnego hesjanu. Porównaj prędkość zbieżności z gradient descent.
 
 ```python
 def newtons_method(f, grad_f, hessian_f, x0, steps=50, tol=1e-12):
@@ -434,9 +434,9 @@ def newtons_method(f, grad_f, hessian_f, x0, steps=50, tol=1e-12):
     return history
 ```
 
-### Krok 3: Rozwiązanie mnożnika Lagrange’a
+### Krok 3: Solver mnożników Lagrange'a
 
-Rozwiąż optymalizację z ograniczeniami, korzystając z opadania gradientowego na Lagrangianie.
+Rozwiąż optymalizację z ograniczeniami za pomocą gradient descent na Lagrangianie.
 
 ```python
 def lagrange_solve(f_grad, g_val, g_grad, x0, lr=0.01,
@@ -457,9 +457,9 @@ def lagrange_solve(f_grad, g_val, g_grad, x0, lr=0.01,
     return history
 ```
 
-### Krok 4: porównanie pierwszego i drugiego rzędu
+### Krok 4: Porównanie pierwszego i drugiego rzędu
 
-Uruchom zejście gradientowe i metodę Newtona na tej samej funkcji kwadratowej. Policz kroki do konwergencji.
+Uruchom gradient descent i metodę Newtona na tej samej funkcji kwadratowej. Policz kroki do zbieżności.
 
 ```python
 def quadratic(x):
@@ -472,22 +472,22 @@ def quadratic_hessian(x):
     return [[10, 0], [0, 2]]
 ```
 
-Metoda Newtona będzie zbieżna w 1 kroku (jest dokładna dla kwadratów). Zejście gradientowe będzie wymagało setek kroków, ponieważ wartości własne Hesji różnią się pięciokrotnie, tworząc wydłużoną dolinę.
+Metoda Newtona zbiegnie w 1 kroku (jest dokładna dla funkcji kwadratowych). Gradient descent będzie potrzebować setek kroków, ponieważ wartości własne hesjanu różnią się o czynnik 5, tworząc wydłużoną dolinę.
 
-## Użyj tego
+## Zastosowanie
 
-Analiza wypukłości ma zastosowanie bezpośrednio przy wyborze modeli i solwerów ML.
+Analiza wypukłości ma bezpośrednie zastosowanie przy wyborze modeli ML i solverów.
 
 Dla problemów wypukłych (regresja logistyczna, SVM, LASSO):
-- Użyj dedykowanych solwerów (liblinear, CVXPY, scipy.optimize.minimize z method='L-BFGS-B')
-- Oczekuj unikalnego, globalnego rozwiązania
+- Korzystaj z dedykowanych solverów (liblinear, CVXPY, scipy.optimize.minimize z method='L-BFGS-B')
+- Oczekuj unikalnego rozwiązania globalnego
 - Metody drugiego rzędu są praktyczne i szybkie
 
 Dla problemów niewypukłych (sieci neuronowe):
-- Stosuj metody pierwszego rzędu (SGD, Adam)
+- Korzystaj z metod pierwszego rzędu (SGD, Adam)
 - Zaakceptuj, że rozwiązanie zależy od inicjalizacji i losowości
-- Użyj nadmiernej parametryzacji, szumu i harmonogramów szybkości uczenia się jako ukrytej regularyzacji
-- Nie trać czasu na szukanie minimum globalnego. Wystarczy dobre minimum lokalne.
+- Wykorzystuj nadparametryzację, szum i harmonogramy learning rate jako niejawną regularyzację
+- Nie trać czasu na poszukiwanie minimum globalnego. Dobre minimum lokalne jest wystarczające.
 
 ```python
 from scipy.optimize import minimize
@@ -500,7 +500,7 @@ result = minimize(
 )
 ```
 
-W przypadku maszyn SVM podwójna formuła pozwala zastosować sztuczkę jądra:
+Dla SVM formulacja dualna pozwala korzystać z triku z jądrem (kernel trick):
 
 ```python
 from sklearn.svm import SVC
@@ -512,40 +512,40 @@ print(f"Support vectors: {svm.n_support_}")
 
 ## Ćwiczenia
 
-1. **Galeria wypukłości.** Przetestuj te funkcje pod kątem wypukłości za pomocą sprawdzania: f(x) = x^4, f(x) = sin(x), f(x,y) = x^2 + y^2, f(x,y) = x*y, f(x) = max(x, 0). Wyjaśnij, dlaczego każdy wynik ma sens.
+1. **Galeria wypukłości.** Przetestuj te funkcje pod kątem wypukłości za pomocą checkera: f(x) = x^4, f(x) = sin(x), f(x,y) = x^2 + y^2, f(x,y) = x*y, f(x) = max(x, 0). Wyjaśnij, czemu każdy wynik ma sens.
 
-2. **Wyścig Newtona vs gradient zniżania.** Przeprowadź obie metody na f(x,y) = 50*x^2 + y^2 od punktu początkowego (10, 10). Ile kroków musi wykonać każdy z nich, aby osiągnąć stratę < 1e-10? Co dzieje się z opadaniem gradientowym, gdy liczba warunku (stosunek największej do najmniejszej wartości własnej Hessego) wzrasta?
+2. **Wyścig Newton vs gradient descent.** Uruchom obie metody na f(x,y) = 50*x^2 + y^2 z punktu startowego (10, 10). Ile kroków potrzebuje każda, aby osiągnąć loss < 1e-10? Co się dzieje z gradient descent, gdy wskaźnik kondycji (stosunek największej do najmniejszej wartości własnej hesjanu) wzrasta?
 
-3. **Geometria mnożnika Lagrange’a.** Minimalizuj f(x,y) = (x-3)^2 + (y-3)^2 pod warunkiem x + 2y = 4. Sprawdź rozwiązanie sprawdzając, czy gradient f jest równoległy do ​​gradientu g w rozwiązaniu.
+3. **Geometria mnożników Lagrange'a.** Zminimalizuj f(x,y) = (x-3)^2 + (y-3)^2 z zachowaniem x + 2y = 4. Zweryfikuj rozwiązanie, sprawdzając, że gradient f jest równoległy do gradientu g w rozwiązaniu.
 
-4. **Ograniczenie regularyzacyjne.** Zaimplementuj optymalizację ograniczoną L1: minimalizuj (x-3)^2 + (y-2)^2 z zastrzeżeniem |x| + |y| <= 1. Pokaż, że rozwiązanie ma jedną współrzędną równą zeru (rzadkość wynikająca z wiązania diamentu).
+4. **Ograniczenie regularyzacyjne.** Zaimplementuj optymalizację z ograniczeniem L1: zminimalizuj (x-3)^2 + (y-2)^2 z zachowaniem |x| + |y| <= 1. Pokaż, że rozwiązanie ma jedną współrzędną równą zero (rzadkość wynikająca z ograniczenia w postaci diamentu).
 
-5. **Analiza wartości własnej Hesja.** Oblicz hesjan funkcji Rosenbrocka w (1,1) i w (-1,1). Oblicz wartości własne w obu punktach. Co wartości własne mówią o krzywiźnie minimalnej i dalekiej od niej?
+5. **Analiza wartości własnych hesjanu.** Oblicz hesjan funkcji Rosenbrocka w (1,1) i w (-1,1). Oblicz wartości własne w obu punktach. Co wartości własne mówią o krzywiźnie w minimum w porównaniu z punktem odległym od niego?
 
 ## Kluczowe terminy
 
-| Termin | Co to znaczy |
-|------|----------------------------|
-| Zestaw wypukły | Zbiór, w którym odcinek łączący dowolne dwa punkty ze zbioru pozostaje wewnątrz zbioru |
-| Funkcja wypukła | Funkcja, w której linia łącząca dowolne dwa punkty na wykresie leży nad wykresem lub na wykresie. Odpowiednio, Hesjan jest wszędzie dodatni półokreślony |
-| Minimum lokalne | Punkt niższy niż wszystkie pobliskie punkty. W przypadku funkcji wypukłych każde minimum lokalne jest minimum globalnym |
-| Globalne minimum | Najniższy punkt funkcji w całej jej dziedzinie |
-| Macierz Hessego | Macierz wszystkich drugich pochodnych cząstkowych. Koduje informacje o krzywiźnie |
-| Pozytywny półokreślony | Macierz, której wszystkie wartości własne są nieujemne. Wielowymiarowy odpowiednik „drugiej pochodnej >= 0” |
-| Numer warunku | Stosunek największej do najmniejszej wartości własnej Hesja. Wysoka liczba warunków oznacza wydłużone doliny i powolne zejście gradientowe |
-| Metoda Newtona | Optymalizator drugiego rzędu wykorzystujący odwrotność Hesja do określenia kierunku i rozmiaru kroku. Zbieżność kwadratowa w pobliżu minimum |
-| Mnożnik Lagrange'a | Zmienna wprowadzona w celu przekształcenia problemu optymalizacyjnego z ograniczeniami w problem nieograniczony |
-| Warunki KKT | Warunki konieczne optymalności z ograniczeniami nierównościowymi. Uogólnij mnożniki Lagrange'a |
-| Uzupełniający luz | W rozwiązaniu albo ograniczenie jest aktywne, albo jego mnożnik wynosi zero. Nigdy oba niezerowe |
-| Dwoistość | Każdy ograniczony problem ma towarzyszący mu problem podwójny. W przypadku problemów wypukłych oba mają tę samą optymalną wartość |
-| Silna dwoistość | Wartości optymalne pierwotne i podwójne są równe. Dotyczy problemów wypukłych spełniających warunek Slatera |
-| L-BFGS | Przybliżona metoda drugiego rzędu, która przechowuje ostatnie m różnic gradientów zamiast pełnego Hessian |
-| Punkt siodłowy | Punkt, w którym gradient wynosi zero, ale w niektórych kierunkach jest minimum, a w innych maksimum
-| Przeparametryzacja | Używanie większej liczby parametrów niż przykładów szkoleniowych. Wygładza krajobraz strat i redukuje złe minima lokalne |
+| Termin | Co to oznacza |
+|------|---------------|
+| Zbiór wypukły (Convex set) | Zbiór, w którym odcinek między dowolnymi dwoma punktami w zbiorze pozostaje w zbiorze |
+| Funkcja wypukła (Convex function) | Funkcja, w której odcinek między dowolnymi dwoma punktami na jej wykresie leży powyżej lub na wykresie. Równoważnie, hesjan jest dodatnio półokreślony wszędzie |
+| Minimum lokalne (Local minimum) | Punkt niższy niż wszystkie punkty w jego okolicy. Dla funkcji wypukłych każde minimum lokalne jest minimum globalnym |
+| Minimum globalne (Global minimum) | Najniższy punkt funkcji na całej jej dziedzinie |
+| Macierz hesjanu (Hessian matrix) | Macierz wszystkich drugich pochodnych cząstkowych. Koduje informację o krzywiźnie |
+| Dodatnio półokreślona (Positive semidefinite) | Macierz, której wszystkie wartości własne są nieujemne. Wielowymiarowy odpowiednik "druga pochodna >= 0" |
+| Wskaźnik kondycji (Condition number) | Stosunek największej do najmniejszej wartości własnej hesjanu. Wysoki wskaźnik kondycji oznacza wydłużone doliny i wolny gradient descent |
+| Metoda Newtona (Newton's method) | Optymalizator drugiego rzędu, który wykorzystuje odwrotny hesjan do określenia kierunku i rozmiaru kroku. Kwadratowa zbieżność w pobliżu minimum |
+| Mnożnik Lagrange'a (Lagrange multiplier) | Zmienna wprowadzona, aby przekształcić problem optymalizacji z ograniczeniami w problem bez ograniczeń |
+| Warunki KKT (KKT conditions) | Warunki konieczne optymalności dla ograniczeń w postaci nierówności. Uogólniają mnożniki Lagrange'a |
+| Komplementarne wykluczanie (Complementary slackness) | W rozwiązaniu albo ograniczenie jest aktywne, albo jego mnożnik jest zerowy. Nigdy oba niezerowe |
+| Dualność (Duality) | Każdy problem z ograniczeniami ma towarzyszący problem dualny. Dla problemów wypukłych obie mają tę samą wartość optymalną |
+| Silna dualność (Strong duality) | Wartości optymalne prymalnego i dualnego są równe. Zachodzi dla problemów wypukłych spełniających warunek Slatera |
+| L-BFGS | Przybliżona metoda drugiego rzędu, która przechowuje ostatnie m różnic gradientów zamiast pełnego hesjanu |
+| Punkt siodłowy (Saddle point) | Punkt, w którym gradient jest zerowy, ale jest minimum w niektórych kierunkach a maksimum w innych |
+| Nadparametryzacja (Overparameterization) | Użycie większej liczby parametrów niż przykładów treningowych. Wygładza krajobraz straty i redukuje liczbę złych minimów lokalnych |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-- [Boyd & Vandenberghe: Convex Optimization](https://web.stanford.edu/~boyd/cvxbook/) - standardowy podręcznik, swobodnie dostępny online
-- [Bottou, Curtis, Nocedal: Optimization Methods for Large-Scale Machine Learning (2018)](https://arxiv.org/abs/1606.04838) - łączy teorię optymalizacji wypukłej z praktyką głębokiego uczenia się
-- [Choromanska et al.: The Loss Surfaces of Multilayer Networks (2015)](https://arxiv.org/abs/1412.0233) - dlaczego niewypukłe krajobrazy sieci neuronowych nie są tak złe, jak się wydaje
-- [Nocedal & Wright: Optymalizacja numeryczna](https://link.springer.com/book/10.1007/978-0-387-40065-5) - obszerne odniesienia do metody Newtona, L-BFGS i optymalizacji z ograniczeniami
+- [Boyd & Vandenberghe: Convex Optimization](https://web.stanford.edu/~boyd/cvxbook/) - standardowy podręcznik, dostępny bezpłatnie online
+- [Bottou, Curtis, Nocedal: Optimization Methods for Large-Scale Machine Learning (2018)](https://arxiv.org/abs/1606.04838) - łączy teorię optymalizacji wypukłej z praktyką deep learning
+- [Choromanska et al.: The Loss Surfaces of Multilayer Networks (2015)](https://arxiv.org/abs/1412.0233) - czemu niewypukłe krajobrazy sieci neuronowych nie są tak złe, jak się wydają
+- [Nocedal & Wright: Numerical Optimization](https://link.springer.com/book/10.1007/978-0-387-40065-5) - obszerne źródło na temat metody Newtona, L-BFGS i optymalizacji z ograniczeniami

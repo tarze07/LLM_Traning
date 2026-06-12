@@ -1,34 +1,34 @@
-# Transformata Fouriera
+# Transformacja Fouriera
 
-> Każdy sygnał jest sumą fal sinusoidalnych. Transformata Fouriera powie Ci które.
+> Każdy sygnał jest sumą sinusoid. Transformacja Fouriera mówi Ci, które z nich.
 
-**Typ:** Kompilacja
+**Typ:** Budowa
 **Język:** Python
-**Wymagania wstępne:** Faza 1, lekcje 01-04, 19 (liczby zespolone)
+**Wymagania wstępne:** Faza 1, Lekcje 01-04, 19 (liczby zespolone)
 **Czas:** ~90 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zaimplementuj DFT od podstaw i zweryfikuj go względem O(N log N) Cooley-Tukey FFT
-- Interpretacja współczynników częstotliwości: wyodrębnienie amplitudy, fazy i widma mocy z sygnału
-- Zastosuj twierdzenie o splocie, aby wykonać splot poprzez mnożenie FFT
-- Połącz rozkład częstotliwości Fouriera z kodowaniem pozycyjnym transformatora i warstwami splotu CNN
+- Zaimplementować DFT od podstaw i zweryfikować je względem FFT Cooleya-Tukeya o złożoności O(N log N)
+- Interpretować współczynniki częstotliwości: wyodrębnić amplitudę, fazę i widmo mocy z sygnału
+- Zastosować twierdzenie o splocie do wykonania splotu za pomocą mnożenia FFT
+- Połączyć dekompozycję częstotliwościową Fouriera z kodowaniami pozycyjnymi transformerów i warstwami splotowymi CNN
 
 ## Problem
 
-Nagranie audio to sekwencja pomiarów ciśnienia w czasie. Cena akcji to sekwencja wartości w ciągu dni. Obraz to siatka intensywności pikseli w przestrzeni. Wszystko to są dane w dziedzinie czasu (lub przestrzeni). Widzisz wartości zmieniające się w pewnym indeksie.
+Nagranie audio to sekwencja pomiarów ciśnienia w czasie. Cena akcji to sekwencja wartości w kolejnych dniach. Obraz to siatka intensywności pikseli w przestrzeni. Wszystkie te dane są danymi w domenie czasu (lub przestrzeni). Widzisz wartości zmieniające się wzdłuż pewnego indeksu.
 
-Jednak wiele wzorców jest niewidocznych w dziedzinie czasu. Czy ten sygnał audio jest czystym tonem czy akordem? Czy cena akcji ma cykl tygodniowy? Czy ten obraz ma powtarzającą się teksturę? Pytania te dotyczą zawartości częstotliwości, a dziedzina czasu ją ukrywa.
+Jednak wiele wzorców jest niewidocznych w domenie czasu. Czy ten sygnał audio to czysty ton, czy akord? Czy ta cena akcji ma tygodniowy cykl? Czy ten obraz ma powtarzającą się teksturę? Te pytania dotyczą zawartości częstotliwościowej, a domena czasu ją skrywa.
 
-Transformata Fouriera konwertuje dane z dziedziny czasu na dziedzinę częstotliwości. Pobiera sygnał i rozkłada go na fale sinusoidalne o różnych częstotliwościach. Każda fala sinusoidalna ma amplitudę (jak silna jest) i fazę (gdzie się zaczyna). Transformata Fouriera mówi jedno i drugie.
+Transformacja Fouriera przekształca dane z domeny czasu do domeny częstotliwości. Bierze sygnał i rozkłada go na sinusoidy o różnych częstotliwościach. Każda sinusoida ma amplitudę (jak silna jest) i fazę (gdzie się zaczyna). Transformacja Fouriera podaje obie te informacje.
 
-Ma to znaczenie dla ML, ponieważ myślenie w dziedzinie częstotliwości pojawia się wszędzie. Konwolucyjne sieci neuronowe wykonują splot, czyli mnożenie w dziedzinie częstotliwości. Kodowanie pozycyjne transformatora wykorzystuje rozkład częstotliwości do przedstawienia położenia. Modele audio (rozpoznawanie mowy, generowanie muzyki) działają na spektrogramach – reprezentacjach częstotliwości dźwięku. Modele szeregów czasowych szukają wzorców okresowych. Zrozumienie transformacji Fouriera zapewni Ci słownictwo potrzebne do pracy z nimi wszystkimi.
+Ma to znaczenie dla ML, ponieważ myślenie w domenie częstotliwości pojawia się wszędzie. Konwolucyjne sieci neuronowe wykonują splot, który jest mnożeniem w domenie częstotliwości. Kodowania pozycyjne transformerów wykorzystują dekompozycję częstotliwościową do reprezentowania pozycji. Modele audio (rozpoznawanie mowy, generowanie muzyki) operują na spektrogramach -- reprezentacjach częstotliwościowych dźwięku. Modele szeregów czasowych poszukują wzorców okresowych. Zrozumienie transformacji Fouriera daje Ci słownictwo potrzebne do pracy z tym wszystkim.
 
 ## Koncepcja
 
 ### Definicja DFT
 
-Biorąc pod uwagę N próbek x[0], x[1], ..., x[N-1], dyskretna transformata Fouriera generuje N współczynników częstotliwości X[0], X[1], ..., X[N-1]:
+Mając N próbek x[0], x[1], ..., x[N-1], Dyskretna Transformacja Fouriera (DFT) produkuje N współczynników częstotliwości X[0], X[1], ..., X[N-1]:
 
 ```
 X[k] = sum_{n=0}^{N-1} x[n] * e^(-2*pi*i*k*n/N)
@@ -36,27 +36,27 @@ X[k] = sum_{n=0}^{N-1} x[n] * e^(-2*pi*i*k*n/N)
 for k = 0, 1, ..., N-1
 ```
 
-Każde X[k] jest liczbą zespoloną. Jego wielkość |X[k]| informuje o amplitudzie częstotliwości k. Jego kąt fazowy (X[k]) informuje o przesunięciu fazowym tej częstotliwości.
+Każde X[k] jest liczbą zespoloną. Jej moduł |X[k]| informuje o amplitudzie częstotliwości k. Jej kąt fazowy angle(X[k]) informuje o przesunięciu fazowym tej częstotliwości.
 
-Kluczowy wniosek: `e^(-2*pi*i*k*n/N)` to wskaz wirujący o częstotliwości k. DFT oblicza korelację pomiędzy sygnałem i każdą z N równomiernie rozmieszczonych częstotliwości. Jeśli sygnał zawiera energię o częstotliwości k, korelacja jest duża. Jeśli nie, to jest blisko zera.
+Kluczowa obserwacja: `e^(-2*pi*i*k*n/N)` to wirujący fazor (phasor) o częstotliwości k. DFT oblicza korelację między sygnałem a każdą z N równo rozmieszczonych częstotliwości. Jeśli sygnał zawiera energię na częstotliwości k, korelacja jest duża. Jeśli nie, jest bliska zeru.
 
 ### Co oznacza każdy współczynnik
 
-**X[0]: składowa DC.** Jest to suma wszystkich próbek – proporcjonalna do średniej. Reprezentuje stałe (zero częstotliwości) przesunięcie sygnału.
+**X[0]: składowa DC.** To suma wszystkich próbek -- proporcjonalna do średniej. Reprezentuje stałe (zerowej częstotliwości) przesunięcie sygnału.
 
 ```
-X[0] = sum_{n=0}^{N-1} x[n] * e^0 = sum of all samples
+X[0] = sum_{n=0}^{N-1} x[n] * e^0 = suma wszystkich próbek
 ```
 
-**X[k] dla 1 <= k <= N/2: częstotliwości dodatnie.** X[k] oznacza częstotliwość k cykli na N próbek. Wyższe k oznacza wyższą częstotliwość (szybsze oscylacje).
+**X[k] dla 1 <= k <= N/2: częstotliwości pozytywne.** X[k] reprezentuje częstotliwość k cykli na N próbek. Wyższe k oznacza wyższą częstotliwość (szybsze oscylacje).
 
-**X[N/2]: częstotliwość Nyquista.** Najwyższa częstotliwość, jaką można przedstawić za pomocą N próbek. Powyżej tego pojawia się aliasing – wysokie częstotliwości udają niskie.
+**X[N/2]: częstotliwość Nyquista.** Najwyższa częstotliwość, którą można przedstawić za pomocą N próbek. Powyżej tej wartości dochodzi do aliasingu -- wysokie częstotliwości udają niskie.
 
-**X[k] dla N/2 < k < N: częstotliwości ujemne.** Dla sygnałów o wartościach rzeczywistych X[N-k] = conj(X[k]). Częstotliwości ujemne są lustrzanym odbiciem częstotliwości dodatnich. Dlatego właśnie przydatne informacje znajdują się w pierwszych współczynnikach N/2 + 1.
+**X[k] dla N/2 < k < N: częstotliwości negatywne.** Dla sygnałów rzeczywistych X[N-k] = conj(X[k]). Częstotliwości negatywne są zwierciadlanymi odbiciami częstotliwości pozytywnych. Dlatego użyteczna informacja znajduje się w pierwszych N/2 + 1 współczynnikach.
 
 ### Odwrotna DFT
 
-Odwrotna DFT rekonstruuje oryginalny sygnał na podstawie jego współczynników częstotliwości:
+Odwrotna DFT odtwarza pierwotny sygnał na podstawie jego współczynników częstotliwości:
 
 ```
 x[n] = (1/N) * sum_{k=0}^{N-1} X[k] * e^(2*pi*i*k*n/N)
@@ -64,21 +64,21 @@ x[n] = (1/N) * sum_{k=0}^{N-1} X[k] * e^(2*pi*i*k*n/N)
 for n = 0, 1, ..., N-1
 ```
 
-Jedyne różnice w stosunku do forward DFT: znak w wykładniku jest dodatni (nie ujemny) i występuje współczynnik normalizacji 1/N.
+Jedyne różnice względem DFT w przód: znak w wykładniku jest pozytywny (nie negatywny) oraz pojawia się czynnik normalizujący 1/N.
 
-Odwrotna DFT jest rekonstrukcją doskonałą. Żadne informacje nie zostaną utracone. Można przejść z domeny czasu do domeny częstotliwości i z powrotem bez żadnego błędu. DFT to zmiana podstawy - ponownie wyraża tę samą informację w innym układzie współrzędnych.
+Odwrotna DFT zapewnia perfekcyjną rekonstrukcję. Żadna informacja nie jest tracona. Można przejść z domeny czasu do domeny częstotliwości i z powrotem bez jakiegokolwiek błędu. DFT to zmiana bazy -- wyraża tę samą informację w innym układzie współrzędnych.
 
-### FFT: szybkie działanie
+### FFT: jak to zrobić szybko
 
-DFT zdefiniowana powyżej to O(N^2): dla każdego z N współczynników wyjściowych sumuje się N próbek wejściowych. Dla N = 1 milion, czyli 10^12 operacji.
+DFT zdefiniowane powyżej ma złożoność O(N^2): dla każdego z N współczynników wyjściowych sumujemy N próbek wejściowych. Dla N = 1 milion to 10^12 operacji.
 
-Szybka transformata Fouriera (FFT) oblicza ten sam wynik w O(N log N). Dla N = 1 milion oznacza to około 20 milionów operacji zamiast biliona. To właśnie sprawia, że ​​analiza częstotliwości jest praktyczna.
+Szybka Transformacja Fouriera (FFT) oblicza ten sam wynik w czasie O(N log N). Dla N = 1 milion to około 20 milionów operacji zamiast biliona. To właśnie sprawia, że analiza częstotliwościowa jest praktyczna.
 
-Algorytm Cooleya-Tukeya (najpopularniejszy FFT) działa na zasadzie dziel i zwyciężaj:
+Algorytm Cooleya-Tukeya (najczęstszy algorytm FFT) działa metodą dziel i zwyciężaj:
 
-1. Podziel sygnał na próbki o indeksie parzystym i nieparzystym.
-2. Oblicz rekurencyjnie DFT każdej połowy.
-3. Połącz dwa DFT o połowie rozmiaru, używając „współczynników twiddle” e^(-2*pi*i*k/N).
+1. Podziel sygnał na próbki o indeksach parzystych i nieparzystych.
+2. Oblicz DFT każdej połowy rekurencyjnie.
+3. Połącz obie DFT o połowicznym rozmiarze za pomocą "współczynników obrotu" (twiddle factors) e^(-2*pi*i*k/N).
 
 ```
 X[k] = E[k] + e^(-2*pi*i*k/N) * O[k]          for k = 0, ..., N/2 - 1
@@ -88,7 +88,7 @@ where E = DFT of even-indexed samples
       O = DFT of odd-indexed samples
 ```
 
-Symetria oznacza, że każdy poziom rekurencji działa O(N) i istnieją poziomy log2(N). Razem: O(N log N).
+Symetria oznacza, że na każdym poziomie rekurencji wykonywana jest praca O(N), a poziomów rekurencji jest log2(N). W sumie: O(N log N).
 
 ```mermaid
 graph TD
@@ -106,20 +106,20 @@ graph TD
     end
 ```
 
-FFT wymaga, aby długość sygnału była potęgą 2. W praktyce sygnały są dopełniane zerami do następnej potęgi 2.
+FFT wymaga, aby długość sygnału była potęgą liczby 2. W praktyce sygnały są dopełniane zerami (zero-padded) do najbliższej potęgi 2.
 
 ### Analiza spektralna
 
-**Widmo mocy** to |X[k]|^2 — kwadrat wielkości każdego współczynnika częstotliwości. Pokazuje, ile energii znajduje się na każdej częstotliwości.
+**Widmo mocy** (power spectrum) to |X[k]|^2 -- kwadrat modułu każdego współczynnika częstotliwości. Pokazuje, ile energii znajduje się na każdej częstotliwości.
 
-**Widmo fazowe** to kąt (X[k]) — przesunięcie fazowe każdej częstotliwości. W przypadku większości zadań analitycznych ważne jest widmo mocy i ignoruje się fazę.
+**Widmo fazowe** (phase spectrum) to angle(X[k]) -- przesunięcie fazowe każdej częstotliwości. W większości zadań analitycznych interesuje nas widmo mocy, a fazę się ignoruje.
 
 ```
 Power at frequency k:  P[k] = |X[k]|^2 = X[k].real^2 + X[k].imag^2
 Phase at frequency k:  phi[k] = atan2(X[k].imag, X[k].real)
 ```
 
-### Rozdzielczość częstotliwości
+### Rozdzielczość częstotliwościowa
 
 Rozdzielczość częstotliwościowa DFT zależy od liczby próbek N i częstotliwości próbkowania fs.
 
@@ -129,13 +129,13 @@ Frequency resolution:    delta_f = fs / N
 Maximum frequency:       f_max = fs / 2  (Nyquist)
 ```
 
-Aby rozdzielić dwie częstotliwości znajdujące się blisko siebie, potrzeba więcej próbek. Aby uchwycić wysokie częstotliwości, potrzebujesz wyższej częstotliwości próbkowania.
+Aby rozróżnić dwie częstotliwości znajdujące się blisko siebie, potrzeba więcej próbek. Aby uchwycić wysokie częstotliwości, potrzeba wyższej częstotliwości próbkowania.
 
 ### Twierdzenie o splocie
 
-Jest to jeden z najważniejszych wyników w przetwarzaniu sygnału i bezpośrednio związany z CNN.
+To jeden z najważniejszych wyników w przetwarzaniu sygnałów i ma bezpośrednie znaczenie dla CNN.
 
-**Splot w dziedzinie czasu jest równy punktowemu mnożeniu w dziedzinie częstotliwości.**
+**Splot w domenie czasu jest równoważny mnożeniu punktowemu w domenie częstotliwości.**
 
 ```
 x * h = IFFT(FFT(x) . FFT(h))
@@ -145,12 +145,12 @@ where * is convolution and . is element-wise multiplication
 
 Dlaczego to ma znaczenie:
 
-- Bezpośredni splot dwóch sygnałów o długości N i M wymaga operacji O(N*M).
-- Splot oparty na FFT wymaga O(N log N): przekształcenie obu, pomnożenie, przekształcenie z powrotem.
-- W przypadku dużych jąder splot FFT jest znacznie szybszy.
-- Dokładnie to dzieje się w warstwach splotowych z dużymi polami recepcyjnymi.
+- Bezpośredni splot dwóch sygnałów o długościach N i M wymaga O(N*M) operacji.
+- Splot oparty na FFT wymaga O(N log N): przekształć obie strony, pomnóż, przekształć wstecz.
+- Dla dużych kerneli splot FFT jest dramatycznie szybszy.
+- To dokładnie to, co dzieje się w warstwach splotowych z dużymi polami recepcyjnymi.
 
-Uwaga: DFT oblicza splot kołowy (sygnał zawija się). W przypadku splotu liniowego (bez zawijania) przed obliczeniem należy ustawić oba sygnały na długości N + M - 1.
+Uwaga: DFT oblicza splot kołowy (sygnał zawija się). Dla splotu liniowego (bez zawijania) należy dopełnić oba sygnały zerami do długości N + M - 1 przed obliczeniem.
 
 ```mermaid
 graph LR
@@ -168,76 +168,76 @@ graph LR
     FD -.->|"same result"| TC
 ```
 
-### Okno
+### Okienkowanie
 
-DFT zakłada, że sygnał jest okresowy – traktuje N próbek jako jeden okres nieskończenie powtarzającego się sygnału. Jeśli sygnał nie zaczyna się i nie kończy na tej samej wartości, powoduje to nieciągłość na granicy, co objawia się fałszywą treścią o wysokiej częstotliwości. Nazywa się to wyciekiem widmowym.
+DFT zakłada, że sygnał jest okresowy -- traktuje N próbek jako jeden okres nieskończenie powtarzającego się sygnału. Jeśli sygnał nie zaczyna i nie kończy się na tej samej wartości, powstaje nieciągłość na granicy, która objawia się jako sztuczna zawartość wysokoczęstotliwościowa. Nazywa się to przeciekiem widmowym (spectral leakage).
 
-Okienkowanie zmniejsza wyciek poprzez zwężenie sygnału do zera na obu końcach przed obliczeniem DFT.
+Okienkowanie redukuje przeciek poprzez wygaszanie sygnału do zera na obu końcach przed obliczeniem DFT.
 
-Typowe okna:
+Popularne okna:
 
-| Okno | Kształt | Szerokość głównego płata | Poziom płata bocznego | Przypadek użycia |
-|------------|-------|----------------|----------------|-------------|
-| Prostokątny | Mieszkanie (bez okna) | Najwęższy | Najwyższy (-13 dB) | Gdy sygnał jest dokładnie okresowy w N próbkach |
-| Hanna | Podniesiony cosinus | Umiarkowany | Niski (-31 dB) | Analiza spektralna ogólnego przeznaczenia |
-| Hamminga | Zmodyfikowany cosinus | Umiarkowany | Niższy (-42 dB) | Przetwarzanie dźwięku, analiza mowy |
-| Blackmana | Potrójny cosinus | Szeroki | Bardzo niski (-58 dB) | Kiedy tłumienie płatków bocznych jest krytyczne |
+| Okno | Kształt | Szerokość listka głównego | Poziom listków bocznych | Zastosowanie |
+|--------|-------|----------------|-----------------|----------|
+| Prostokątne | Płaskie (brak okna) | Najwęższy | Najwyższy (-13 dB) | Gdy sygnał jest dokładnie okresowy w N próbkach |
+| Hanna | Kosinus uniesiony | Umiarkowana | Niski (-31 dB) | Ogólna analiza spektralna |
+| Hamminga | Zmodyfikowany kosinus | Umiarkowana | Niższy (-42 dB) | Przetwarzanie audio, analiza mowy |
+| Blackmana | Trójkrotny kosinus | Szeroka | Bardzo niski (-58 dB) | Gdy tłumienie listków bocznych jest kluczowe |
 
 ```
 Hann window:    w[n] = 0.5 * (1 - cos(2*pi*n / (N-1)))
 Hamming window: w[n] = 0.54 - 0.46 * cos(2*pi*n / (N-1))
 ```
 
-Zastosuj okno, mnożąc je elementarnie przez sygnał przed DFT: `X = DFT(x * w)`.
+Zastosuj okno, mnożąc je punktowo z sygnałem przed wykonaniem DFT: `X = DFT(x * w)`.
 
 ### Właściwości DFT
 
-| Nieruchomość | Domena czasu | Dziedzina częstotliwości |
-|---------|------------|--------------------------------|
+| Właściwość | Domena czasu | Domena częstotliwości |
+|----------|-------------|-----------------|
 | Liniowość | a*x + b*y | a*X + b*Y |
-| Przesunięcie czasu | x[n - k] | X[f] * e^(-2*pi*i*f*k/N) |
-| Przesunięcie częstotliwości | x[n] * e^(2*pi*i*f0*n/N) | X[f - f0] |
-| Splot | x * godz | X * H (punktowo) |
-| Mnożenie | x * h (punktowo) | X * H (splot kołowy, skalowany co 1/N) |
-| Twierdzenie Parsevala | suma \|x[n]\|^2 | (1/N) * suma \|X[k]\|^2 |
-| Symetria sprzężona (wejście rzeczywiste) | x[n] prawdziwe | X[k] = spójnik(X[N-k]) |
+| Przesunięcie czasowe | x[n - k] | X[f] * e^(-2*pi*i*f*k/N) |
+| Przesunięcie częstotliwościowe | x[n] * e^(2*pi*i*f0*n/N) | X[f - f0] |
+| Splot | x * h | X * H (punktowo) |
+| Mnożenie | x * h (punktowo) | X * H (splot kołowy, skalowany przez 1/N) |
+| Twierdzenie Parsevala | sum \|x[n]\|^2 | (1/N) * sum \|X[k]\|^2 |
+| Symetria sprzężenia (wejście rzeczywiste) | x[n] rzeczywiste | X[k] = conj(X[N-k]) |
 
-Twierdzenie Parsevala mówi, że całkowita energia jest taka sama w obu dziedzinach. Energia jest oszczędzana poprzez transformację.
+Twierdzenie Parsevala mówi, że całkowita energia jest taka sama w obu domenach. Energia jest zachowana przez transformację.
 
-### Połączenie z kodowaniem pozycyjnym
+### Związek z kodowaniami pozycyjnymi
 
-Oryginalny Transformer wykorzystuje sinusoidalne kodowanie pozycyjne:
+Oryginalny Transformer wykorzystuje sinusoidalne kodowania pozycyjne:
 
 ```
 PE(pos, 2i)   = sin(pos / 10000^(2i/d_model))
 PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))
 ```
 
-Każda para wymiarów (2i, 2i+1) oscyluje z inną częstotliwością. Częstotliwości są geometrycznie rozmieszczone od wysokich (wymiar 0,1) do niskich (ostatni wymiar). Daje to każdej pozycji unikalny wzór we wszystkich pasmach częstotliwości – podobnie jak współczynniki Fouriera jednoznacznie identyfikują sygnał.
+Każda para wymiarów (2i, 2i+1) oscyluje z inną częstotliwością. Częstotliwości są rozmieszczone geometrycznie, od wysokich (wymiary 0, 1) do niskich (ostatnie wymiary). Daje to każdej pozycji unikalny wzorzec we wszystkich pasmach częstotliwości -- podobnie jak współczynniki Fouriera jednoznacznie identyfikują sygnał.
 
-Kluczowe właściwości, które zapewnia:
+Kluczowe właściwości, które to zapewnia:
 
-- **Wyjątkowość:** Żadne dwie pozycje nie mają tego samego kodowania.
-- **Wartości ograniczone:** sin i cos są zawsze w [-1, 1].
-- **Pozycja względna:** Kodowanie pozycji p+k można wyrazić jako funkcję liniową kodowania w pozycji p. Model może nauczyć się zwracać uwagę na względne pozycje.
+- **Unikalność:** Żadne dwie pozycje nie mają tego samego kodowania.
+- **Ograniczone wartości:** sin i cos zawsze znajdują się w przedziale [-1, 1].
+- **Pozycja relatywna:** Kodowanie pozycji p+k można wyrazić jako funkcję liniową kodowania pozycji p. Model może nauczyć się zwracać uwagę na pozycje relatywne.
 
-### Połączenie z CNN
+### Związek z CNN
 
-Warstwa splotu stosuje wyuczony filtr (jądro) do wejścia, przesuwając go po sygnale lub obrazie. Matematycznie jest to operacja splotu.
+Warstwa splotowa stosuje wyuczony filtr (kernel) do wejścia, przesuwając go po sygnale lub obrazie. Matematycznie jest to operacja splotu.
 
-Zgodnie z twierdzeniem o splocie jest to równoważne:
+Na podstawie twierdzenia o splocie jest to równoważne:
 1. FFT wejścia
-2. FFT jądro
-3. Pomnóż w dziedzinie częstotliwości
-4. IFFT wynik
+2. FFT kernela
+3. Mnożenie w domenie częstotliwości
+4. IFFT wyniku
 
-Standardowe implementacje CNN wykorzystują splot bezpośredni (szybszy dla małych jąder 3x3). Jednak w przypadku dużych jąder lub globalnego splotu podejścia oparte na FFT są znacznie szybsze. Niektóre architektury (takie jak FNet) całkowicie zastępują uwagę FFT, osiągając konkurencyjną dokładność przy złożoności O(N log N) zamiast O(N^2).
+Standardowe implementacje CNN wykorzystują splot bezpośredni (szybszy dla małych kerneli 3x3). Jednak dla dużych kerneli lub splotu globalnego podejścia oparte na FFT są znacznie szybsze. Niektóre architektury (jak FNet) całkowicie zastępują uwagę (attention) FFT, osiągając konkurencyjną dokładność ze złożonością O(N log N) zamiast O(N^2).
 
-### Spektrogramy i krótkotrwała transformata Fouriera
+### Spektrogramy i Krótkookresowa Transformacja Fouriera
 
-Pojedyncza FFT podaje zawartość częstotliwości całego sygnału, ale nie mówi nic o tym, kiedy te częstotliwości występują. Świergot (sygnał, którego częstotliwość wzrasta z upływem czasu) i akord (wszystkie częstotliwości obecne jednocześnie) mogą mieć to samo widmo wielkości.
+Pojedyncze FFT podaje zawartość częstotliwościową całego sygnału, ale nic nie mówi o tym, kiedy te częstotliwości się pojawiają. Chirp (sygnał, którego częstotliwość rośnie w czasie) i akord (wszystkie częstotliwości obecne jednocześnie) mogą mieć to samo widmo amplitudowe.
 
-Krótkoterminowa transformata Fouriera (STFT) rozwiązuje ten problem, obliczając FFT na nakładających się oknach sygnału. Rezultatem jest spektrogram: reprezentacja 2D z czasem na jednej osi i częstotliwością na drugiej. Intensywność w każdym punkcie pokazuje energię przy tej częstotliwości w tym czasie.
+Krótkookresowa Transformacja Fouriera (Short-Time Fourier Transform, STFT) rozwiązuje ten problem, obliczając FFT na nakładających się oknach sygnału. Wynikiem jest spektrogram: dwuwymiarowa reprezentacja z czasem na jednej osi i częstotliwością na drugiej. Intensywność w każdym punkcie pokazuje energię na danej częstotliwości w danym czasie.
 
 ```
 STFT procedure:
@@ -250,11 +250,11 @@ STFT procedure:
    d. Store the magnitude spectrum as one column of the spectrogram
 ```
 
-Spektrogramy są standardową reprezentacją wejściową dla modeli audio ML. Modele rozpoznawania mowy (Whisper, DeepSpeech) działają na spektrogramach mel – spektrogramach z częstotliwościami odwzorowanymi w skali mel, która lepiej odpowiada ludzkiej percepcji tonu.
+Spektrogramy są standardową reprezentacją wejściową dla modeli ML audio. Modele rozpoznawania mowy (Whisper, DeepSpeech) operują na mel-spektrogramach -- spektrogramach z częstotliwościami zmapowanymi na skalę mel, która lepiej odpowiada percepcji wysokości tonu przez człowieka.
 
 ### Aliasing
 
-Jeśli sygnał zawiera częstotliwości powyżej fs/2 (częstotliwość Nyquista), próbkowanie z szybkością fs spowoduje utworzenie aliasowanych kopii. Sygnał 90 Hz próbkowany przy 100 Hz wygląda identycznie jak sygnał 10 Hz. Nie ma możliwości odróżnienia ich od samych próbek.
+Jeśli sygnał zawiera częstotliwości powyżej fs/2 (częstotliwości Nyquista), próbkowanie z częstotliwością fs spowoduje powstanie aliasowanych kopii. Sygnał 90 Hz próbkowany z częstotliwością 100 Hz wygląda identycznie jak sygnał 10 Hz. Nie ma sposobu, aby rozróżnić je na podstawie samych próbek.
 
 ```
 Example:
@@ -267,19 +267,19 @@ Example:
   No amount of math can recover the original 90 Hz.
 ```
 
-Właśnie dlatego przetworniki analogowo-cyfrowe zawierają filtry antyaliasingowe, które przed próbkowaniem usuwają częstotliwości powyżej Nyquista. W ML aliasing pojawia się podczas próbkowania w dół map obiektów bez odpowiedniego filtrowania dolnoprzepustowego — niektóre architektury rozwiązują ten problem za pomocą antyaliasingowych warstw łączenia.
+Z tego powodu przetworniki analogowo-cyfrowe zawierają filtry antyaliasingowe, które usuwają częstotliwości powyżej Nyquista przed próbkowaniem. W ML aliasing pojawia się przy zmniejszaniu rozdzielczości map cech bez właściwego filtrowania dolnoprzepustowego -- niektóre architektury rozwiązują to za pomocą warstw poolingu z filtrem antyaliasingowym.
 
-### Dopełnienie zerami nie zwiększa rozdzielczości
+### Dopełnianie zerami nie zwiększa rozdzielczości
 
-Powszechne błędne przekonanie: dopełnienie sygnału zerami przed FFT poprawia rozdzielczość częstotliwości. Tak nie jest. Wypełnianie zerami interpoluje pomiędzy istniejącymi przedziałami częstotliwości, zapewniając gładsze widmo. Nie może jednak ujawnić szczegółów częstotliwości, których nie było w oryginalnych próbkach.
+Częste błędne przekonanie: dopełnienie sygnału zerami (zero-padding) przed FFT poprawia rozdzielczość częstotliwościową. To nieprawda. Dopełnianie zerami interpoluje pomiędzy istniejącymi binami częstotliwości, dając gładsze wyglądające widmo. Ale nie może ono ujawnić szczegółów częstotliwościowych, które nie były obecne w oryginalnych próbkach.
 
-Rzeczywista rozdzielczość częstotliwości zależy tylko od czasu obserwacji T = N / fs. Aby rozwiązać dwie częstotliwości oddzielone delta_f, potrzebujesz co najmniej T = 1 / delta_f sekund danych. Żadna ilość dopełnienia zerami nie zmienia tego podstawowego limitu.
+Prawdziwa rozdzielczość częstotliwościowa zależy tylko od czasu obserwacji T = N / fs. Aby rozróżnić dwie częstotliwości oddzielone przez delta_f, potrzeba co najmniej T = 1 / delta_f sekund danych. Żadna ilość dopełniania zerami nie zmienia tego fundamentalnego ograniczenia.
 
 ## Zbuduj to
 
-### Krok 1: DFT od zera
+### Krok 1: DFT od podstaw
 
-O(N^2) DFT wynika bezpośrednio z definicji.
+DFT o złożoności O(N^2) wynika bezpośrednio z definicji.
 
 ```python
 import math
@@ -303,7 +303,7 @@ def dft(x):
 
 ### Krok 2: Odwrotna DFT
 
-Ta sama struktura, wykładnik dodatni, podziel przez N.
+Ta sama struktura, dodatni wykładnik, dzielenie przez N.
 
 ```python
 def idft(X):
@@ -321,7 +321,7 @@ def idft(X):
 
 ### Krok 3: FFT (Cooley-Tukey)
 
-Rekurencyjna FFT wymaga długości potęgi 2. Podziel na parzyste i nieparzyste, powtórz, połącz z czynnikami twiddle.
+Rekurencyjne FFT wymaga długości będącej potęgą 2. Podziel na parzyste i nieparzyste, wykonaj rekurencję, połącz za pomocą współczynników obrotu.
 
 ```python
 def fft(x):
@@ -344,7 +344,7 @@ def fft(x):
     return result
 ```
 
-### Krok 4: Pomocnicy analizy spektralnej
+### Krok 4: Funkcje pomocnicze analizy spektralnej
 
 ```python
 def power_spectrum(X):
@@ -368,9 +368,9 @@ def convolve_fft(x, h):
     return [y[n].real for n in range(N)]
 ```
 
-## Użyj tego
+## Wykorzystaj to
 
-Do prawdziwej pracy użyj FFT numpy, który jest wspierany przez wysoce zoptymalizowane biblioteki C.
+W rzeczywistych zastosowaniach używaj FFT z numpy, które jest oparte na wysoko zoptymalizowanych bibliotekach C.
 
 ```python
 import numpy as np
@@ -385,7 +385,7 @@ positive_freqs = freqs[:len(freqs)//2]
 positive_power = power[:len(power)//2]
 ```
 
-Do okienkowania i bardziej zaawansowanej analizy widmowej:
+Do okienkowania i bardziej zaawansowanej analizy spektralnej:
 
 ```python
 from scipy.signal import windows, stft
@@ -395,7 +395,7 @@ windowed = signal * window
 spectrum = np.fft.fft(windowed)
 ```
 
-Dla splotu:
+Do splotu:
 
 ```python
 from scipy.signal import fftconvolve
@@ -403,7 +403,7 @@ from scipy.signal import fftconvolve
 result = fftconvolve(signal, kernel, mode='full')
 ```
 
-Dla spektrogramów:
+Do spektrogramów:
 
 ```python
 from scipy.signal import stft
@@ -412,50 +412,50 @@ frequencies, times, Zxx = stft(signal, fs=sample_rate, nperseg=256)
 spectrogram = np.abs(Zxx) ** 2
 ```
 
-Macierz spektrogramu ma kształt (n_częstotliwości, n_ramek czasowych). Każda kolumna to widmo mocy w jednym oknie czasowym. To właśnie pobierają modele audio ML jako dane wejściowe.
+Matryca spektrogramu ma kształt (n_frequencies, n_time_frames). Każda kolumna to widmo mocy w jednym oknie czasowym. To właśnie konsumują jako wejście modele ML audio.
 
-## Wyślij to
+## Wypchnij to (Ship It)
 
 Uruchom `code/fourier.py`, aby wygenerować `outputs/prompt-spectral-analyzer.md`.
 
 ## Ćwiczenia
 
-1. **Identyfikacja czystego tonu.** Utwórz sygnał za pomocą pojedynczej fali sinusoidalnej o nieznanej częstotliwości (od 1 do 50 Hz), próbkowanej przy częstotliwości 128 Hz przez 1 sekundę. Użyj DFT, aby zidentyfikować częstotliwość. Sprawdź, czy odpowiedzi pasują. Teraz dodaj szum Gaussa z odchyleniem standardowym 0,5 i powtórz. Jak szum wpływa na widmo?
+1. **Identyfikacja czystego tonu.** Stwórz sygnał z pojedynczą sinusoidą o nieznanej częstotliwości (między 1 a 50 Hz), próbkowany z częstotliwością 128 Hz na przestrzeni 1 sekundy. Użyj swojego DFT, aby zidentyfikować częstotliwość. Zweryfikuj, czy odpowiedź się zgadza. Teraz dodaj szum gaussowski o odchyleniu standardowym 0.5 i powtórz. Jak szum wpływa na widmo?
 
-2. **Weryfikacja FFT vs DFT.** Wygeneruj losowy sygnał o długości 64. Oblicz zarówno DFT (O(N^2)), jak i FFT. Sprawdź, czy wszystkie współczynniki mieszczą się w zakresie 1e-10. Obie funkcje czasu dla sygnałów o długości 256, 512, 1024 i 2048. Wykreśl stosunek czasu DFT do czasu FFT.
+2. **Weryfikacja FFT vs DFT.** Wygeneruj losowy sygnał o długości 64. Oblicz zarówno DFT (O(N^2)), jak i FFT. Zweryfikuj, że wszystkie współczynniki zgadzają się z dokładnością do 1e-10. Zmierz czas działania obu funkcji na sygnałach o długości 256, 512, 1024 i 2048. Wykreśl stosunek czasu DFT do czasu FFT.
 
-3. **Dowód twierdzenia o splocie na przykładzie.** Utwórz sygnał x = [1, 2, 3, 4, 0, 0, 0, 0] i filtruj h = [1, 1, 1, 0, 0, 0, 0, 0]. Oblicz bezpośrednio ich splot kołowy (pętla zagnieżdżona). Następnie oblicz to za pomocą FFT (przekształcenie, pomnożenie, transformacja odwrotna). Sprawdź zgodność wyników. Teraz wykonaj splot liniowy, odpowiednio dopełniając zerami.
+3. **Dowód twierdzenia o splocie na przykładzie.** Stwórz sygnał x = [1, 2, 3, 4, 0, 0, 0, 0] oraz filtr h = [1, 1, 1, 0, 0, 0, 0, 0]. Oblicz ich splot kołowy bezpośrednio (zagnieżdżona pętla). Następnie oblicz go za pomocą FFT (transformacja, mnożenie, odwrotna transformacja). Zweryfikuj, że wyniki się zgadzają. Teraz wykonaj splot liniowy poprzez odpowiednie dopełnienie zerami.
 
-4. **Efekty okienne.** Utwórz sygnał będący sumą dwóch fal sinusoidalnych przy 10 Hz i 12 Hz (bardzo blisko). Próbka przy 128 Hz przez 1 sekundę. Oblicz widmo mocy bez okna, okna Hanna i okna Hamminga. Które okno ułatwia rozróżnienie dwóch pików? Dlaczego?
+4. **Efekty okienkowania.** Stwórz sygnał będący sumą dwóch sinusoid o częstotliwościach 10 Hz i 12 Hz (bardzo zbliżonych). Próbkuj z częstotliwością 128 Hz na przestrzeni 1 sekundy. Oblicz widmo mocy bez okna, z oknem Hanna i z oknem Hamminga. Które okno najłatwiej pozwala odróżnić dwa piki? Dlaczego?
 
-5. **Analiza kodowania pozycyjnego.** Wygeneruj sinusoidalne kodowanie pozycyjne dla d_model = 128 i max_pos = 512. Dla każdej pary pozycji (p1, p2) oblicz iloczyn skalarny ich kodowania. Pokaż, że iloczyn skalarny zależy tylko od |p1 - p2|, a nie od pozycji bezwzględnych. Co dzieje się z iloczynem skalarnym wraz ze wzrostem odległości?
+5. **Analiza kodowań pozycyjnych.** Wygeneruj sinusoidalne kodowania pozycyjne dla d_model = 128 i max_pos = 512. Dla każdej pary pozycji (p1, p2) oblicz iloczyn skalarny ich kodowań. Pokaż, że iloczyn skalarny zależy tylko od |p1 - p2|, a nie od pozycji absolutnych. Co dzieje się z iloczynem skalarnym, gdy odległość rośnie?
 
-## Kluczowe terminy
+## Kluczowe pojęcia
 
-| Termin | Co to znaczy |
-|------|----------------------------|
-| DFT (dyskretna transformata Fouriera) | Konwertuje N próbek w dziedzinie czasu na N współczynników w dziedzinie częstotliwości. Każdy współczynnik jest korelacją ze złożoną sinusoidą przy tej częstotliwości |
-| FFT (szybka transformata Fouriera) | Algorytm O (N log N) do obliczania DFT. Algorytm Cooleya-Tukeya rekurencyjnie dzieli indeksy parzyste/nieparzyste |
-| Odwrotna DFT | Rekonstruuje sygnał w dziedzinie czasu na podstawie współczynników częstotliwości. Taki sam wzór jak DFT z odwróconym znakiem wykładnika i skalowaniem 1/N |
-| Pojemnik częstotliwości | Każdy indeks k na wyjściu DFT reprezentuje częstotliwość k*fs/N Hz. „Kosz” to dyskretna szczelina częstotliwości |
-| Składnik prądu stałego | X[0], współczynnik częstotliwości zerowej. Proporcjonalnie do średniej sygnału |
-| Częstotliwość Nyquista | fs/2, maksymalna częstotliwość reprezentowana przy częstotliwości próbkowania fs. Częstotliwości powyżej tego aliasu |
-| Spektrum mocy | \|X[k]\|^2, kwadrat wielkości każdego współczynnika częstotliwości. Pokazuje rozkład energii w różnych częstotliwościach |
-| Widmo fazowe | kąt(X[k]), przesunięcie fazowe każdej składowej częstotliwości. Często ignorowane w analizach |
-| Wyciek widmowy | Zawartość częstotliwości zakłócających spowodowana traktowaniem sygnału nieokresowego jako okresowego. Zmniejszone przez okienkowanie |
-| Funkcja okna | Funkcja zwężająca (Hann, Hamming, Blackman) zastosowana przed DFT w celu zmniejszenia wycieku widmowego |
-| Współczynnik Twiddle'a | Złożony wykładniczy e^(-2*pi*i*k/N) używany do łączenia sub-DFT w obliczeniach motyla FFT |
-| Twierdzenie o splocie | Splot w dziedzinie czasu jest równy punktowemu mnożeniu w dziedzinie częstotliwości. Podstawy przetwarzania sygnałów i CNN |
-| Splot kołowy | Splot, w którym sygnał się zawija. To właśnie oblicza DFT w sposób naturalny |
-| Splot liniowy | Standardowy splot bez zawijania. Osiągnięto przez zerowanie przed DFT |
-| Twierdzenie Parsevala | Całkowita energia jest zachowywana poprzez transformatę Fouriera. suma \|x[n]\|^2 = (1/N) suma \|X[k]\|^2 |
-| Aliasowanie | Gdy częstotliwości powyżej Nyquista pojawiają się jako częstotliwości niższe z powodu niewystarczającej częstotliwości próbkowania |
+| Pojęcie | Co oznacza |
+|------|---------------|
+| DFT (Dyskretna Transformacja Fouriera) | Przekształca N próbek z domeny czasu w N współczynników w domenie częstotliwości. Każdy współczynnik jest korelacją z zespoloną sinusoidą o danej częstotliwości |
+| FFT (Szybka Transformacja Fouriera) | Algorytm o złożoności O(N log N) do obliczania DFT. Algorytm Cooleya-Tukeya rekurencyjnie dzieli indeksy parzyste/nieparzyste |
+| Odwrotna DFT | Odtwarza sygnał w domenie czasu na podstawie współczynników częstotliwości. Ten sam wzór co DFT, ale z odwróconym znakiem wykładnika i skalowaniem 1/N |
+| Bin częstotliwości | Każdy indeks k na wyjściu DFT reprezentuje częstotliwość k*fs/N Hz. "Bin" to dyskretny przedział częstotliwości |
+| Składowa DC | X[0], współczynnik częstotliwości zerowej. Proporcjonalny do średniej sygnału |
+| Częstotliwość Nyquista | fs/2, maksymalna częstotliwość reprezentowalna przy częstotliwości próbkowania fs. Częstotliwości powyżej tej wartości ulegają aliasingowi |
+| Widmo mocy | \|X[k]\|^2, kwadrat modułu każdego współczynnika częstotliwości. Pokazuje rozkład energii pomiędzy częstotliwościami |
+| Widmo fazowe | angle(X[k]), przesunięcie fazowe każdej składowej częstotliwości. Często ignorowane w analizie |
+| Przeciek widmowy | Sztuczna zawartość częstotliwościowa spowodowana traktowaniem sygnału nieokresowego jako okresowego. Redukowana przez okienkowanie |
+| Funkcja okna | Funkcja wygaszająca (Hann, Hamming, Blackman) stosowana przed DFT w celu redukcji przecieku widmowego |
+| Współczynnik obrotu (twiddle factor) | Zespolony wykładnik e^(-2*pi*i*k/N) używany do łączenia pod-DFT w obliczeniach motylkowych FFT |
+| Twierdzenie o splocie | Splot w domenie czasu jest równoważny mnożeniu punktowemu w domenie częstotliwości. Fundamentalne dla przetwarzania sygnałów i CNN |
+| Splot kołowy | Splot, w którym sygnał zawija się. To właśnie naturalnie obliczane jest przez DFT |
+| Splot liniowy | Standardowy splot bez zawijania. Uzyskiwany poprzez dopełnianie zerami przed DFT |
+| Twierdzenie Parsevala | Całkowita energia jest zachowana przez transformację Fouriera. sum \|x[n]\|^2 = (1/N) sum \|X[k]\|^2 |
+| Aliasing | Sytuacja, gdy częstotliwości powyżej Nyquista pojawiają się jako niższe częstotliwości na skutek niewystarczającej częstotliwości próbkowania |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-- [Cooley & Tukey: An Algorithm for the Machine Calculation of Complex Fourier Series (1965)] (https://www.ams.org/journals/mcom/1965-19-090/S0025-5718-1965-0178586-1/) – oryginalna praca FFT, która zmieniła oblicze komputerów
-- [3Blue1Brown: Ale czym jest transformata Fouriera?](https://www.youtube.com/watch?v=spUNpyF58BY) – najlepsze wizualne wprowadzenie do transformat Fouriera
-- [Lee-Thorp i in.: FNet: Mixing Tokens with Fourier Transforms (2021)](https://arxiv.org/abs/2105.03824) - zastępuje samouważność FFT w transformatorach
-- [Smith: The Scientist and Engineer's Guide to Digital Signal Processing] (http://www.dspguide.com/) - bezpłatny podręcznik online obejmujący dogłębną analizę FFT, okienkowanie i analizę widmową
-- [Vaswani et al.: Attention Is All You Need (2017)](https://arxiv.org/abs/1706.03762) - sinusoidalne kodowanie pozycyjne wyprowadzone z rozkładu częstotliwości Fouriera
-- [Radford i in.: Whisper (2022)](https://arxiv.org/abs/2212.04356) - rozpoznawanie mowy przy użyciu spektrogramów mel jako reprezentacji wejściowej
+- [Cooley & Tukey: An Algorithm for the Machine Calculation of Complex Fourier Series (1965)](https://www.ams.org/journals/mcom/1965-19-090/S0025-5718-1965-0178586-1/) - oryginalna praca o FFT, która zmieniła informatykę
+- [3Blue1Brown: But what is the Fourier Transform?](https://www.youtube.com/watch?v=spUNpyF58BY) - najlepsze wizualne wprowadzenie do transformacji Fouriera
+- [Lee-Thorp et al.: FNet: Mixing Tokens with Fourier Transforms (2021)](https://arxiv.org/abs/2105.03824) - zastępuje self-attention przez FFT w transformerach
+- [Smith: The Scientist and Engineer's Guide to Digital Signal Processing](http://www.dspguide.com/) - darmowy podręcznik online obszernie omawiający FFT, okienkowanie i analizę spektralną
+- [Vaswani et al.: Attention Is All You Need (2017)](https://arxiv.org/abs/1706.03762) - sinusoidalne kodowania pozycyjne wywodzące się z dekompozycji częstotliwościowej Fouriera
+- [Radford et al.: Whisper (2022)](https://arxiv.org/abs/2212.04356) - rozpoznawanie mowy wykorzystujące mel-spektrogramy jako reprezentację wejściową

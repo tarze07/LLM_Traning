@@ -1,30 +1,30 @@
-# Transformacje macierzy
+# Transformacje macierzowe
 
-> Matryca to maszyna przekształcająca przestrzeń. Dowiedz się, co robi w każdym punkcie, a zrozumiesz całą transformację.
+> Macierz to maszyna, która przekształca przestrzeń. Naucz się, co robi z każdym punktem, a zrozumiesz całą transformację.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python, Julia
-**Wymagania wstępne:** Faza 1, lekcje 01-02 (Intuicja algebry liniowej, operacje na wektorach i macierzach)
+**Wymagania wstępne:** Faza 1, Lekcje 01-02 (Intuicja algebry liniowej, Operacje na wektorach i macierzach)
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Konstruuj macierze rotacji, skalowania, ścinania i odbicia i stosuj je do punktów 2D i 3D
-- Twórz wiele transformacji poprzez mnożenie macierzy i sprawdzaj, czy kolejność ma znaczenie
-- Oblicz wartości własne i wektory własne macierzy 2x2 z równania charakterystycznego
-- Wyjaśnij, dlaczego wartości własne determinują kierunki PCA, stabilność RNN i zachowanie skupień widmowych
+- Konstruowanie macierzy obrotu, skalowania, ścinania (shear) i odbicia oraz ich zastosowanie do punktów 2D i 3D
+- Składanie wielu transformacji poprzez mnożenie macierzy i weryfikacja, że kolejność ma znaczenie
+- Obliczanie wartości własnych i wektorów własnych macierzy 2x2 z równania charakterystycznego
+- Wyjaśnienie, dlaczego wartości własne determinują kierunki PCA, stabilność RNN oraz zachowanie klasteryzacji spektralnej
 
 ## Problem
 
-Czytasz o PCA i widzisz „znajdź wektory własne macierzy kowariancji”. Czytasz o stabilności modelu i widzisz „sprawdź, czy wszystkie wartości własne mają wielkość mniejszą niż 1”. Czytasz o powiększaniu danych i widzisz „zastosuj losową rotację”. Nic z tego nie ma sensu, dopóki nie zrozumiesz, jaki geometryczny wpływ macierze na przestrzeń.
+Czytasz o PCA i widzisz "znajdź wektory własne macierzy kowariancji". Czytasz o stabilności modeli i widzisz "sprawdź, czy wszystkie wartości własne mają moduł mniejszy niż 1". Czytasz o augmentacji danych i widzisz "zastosuj losowy obrót". Nic z tego nie ma sensu, dopóki nie zrozumiesz, co macierze robią z przestrzenią geometrycznie.
 
-Macierze to nie tylko siatki liczb. To maszyny przestrzenne. Macierz rotacji obraca punkty. Macierz skalowania je rozciąga. Matryca ścinania przechyla je. Każda transformacja danych, jaką sieć neuronowa stosuje, jest jedną z tych operacji lub ich kompozycją. Ta lekcja sprawia, że ​​te operacje stają się konkretne.
+Macierze to nie tylko siatki liczb. To maszyny przestrzenne. Macierz obrotu obraca punkty. Macierz skalowania je rozciąga. Macierz ścinania je przechyla. Każda transformacja, jaką sieć neuronowa stosuje do danych, jest jedną z tych operacji lub ich złożeniem. Ta lekcja czyni te operacje konkretnymi.
 
 ## Koncepcja
 
 ### Transformacje jako macierze
 
-Każdą transformację liniową w 2D można zapisać jako macierz 2x2. Macierz informuje dokładnie, gdzie kończą się wektory bazowe [1, 0] i [0, 1]. Wszystko inne następuje.
+Każdą transformację liniową w 2D można zapisać jako macierz 2x2. Macierz mówi dokładnie, gdzie trafiają wektory bazowe [1, 0] i [0, 1]. Wszystko inne wynika z tego.
 
 ```mermaid
 graph LR
@@ -45,7 +45,7 @@ graph LR
 
 ### Obrót
 
-Obrót 2D o kąt theta utrzymuje odległości i kąty niezmienione. Porusza każdy punkt po łuku kołowym.
+Obrót 2D o kąt theta zachowuje odległości i kąty. Przesuwa każdy punkt po łuku okręgu.
 
 ```mermaid
 graph LR
@@ -64,7 +64,7 @@ graph LR
     B --> R --> Bp
 ```
 
-W 3D obracasz się wokół osi. Każda oś ma własną macierz obrotu:
+W 3D obracasz wokół osi. Każda oś ma swoją własną macierz obrotu:
 
 ```
 Rz(theta) = | cos  -sin  0 |     Rotate around z-axis
@@ -82,7 +82,7 @@ Ry(theta) = |  cos  0  sin |     Rotate around y-axis
 
 ### Skalowanie
 
-Skalowanie rozciąga lub ściska niezależnie wzdłuż każdej osi.
+Skalowanie rozciąga lub kompresuje wzdłuż każdej osi niezależnie.
 
 ```mermaid
 graph LR
@@ -101,9 +101,9 @@ graph LR
     B --> S --> Bp
 ```
 
-### Strzyżenie
+### Ścinanie (shear)
 
-Ścinanie przechyla jedną oś, utrzymując drugą nieruchomą. Zamienia prostokąty w równoległoboki.
+Ścinanie przechyla jedną oś, zachowując drugą bez zmian. Zamienia prostokąty w równoległoboki.
 
 ```mermaid
 graph LR
@@ -128,7 +128,7 @@ Macierze ścinania:
 
 ### Odbicie
 
-Odbicie odzwierciedla punkty wzdłuż osi lub linii.
+Odbicie tworzy lustrzane odwzorowanie punktów względem osi lub prostej.
 
 ```mermaid
 graph LR
@@ -144,13 +144,13 @@ graph LR
     A --> R --> Ap
 ```
 
-Matryce odbicia:
-- Odbicie w poprzek osi Y: `[[-1, 0], [0, 1]]`
-- Odbicie w poprzek osi X: `[[1, 0], [0, -1]]`
+Macierze odbicia:
+- Odbicie względem osi y: `[[-1, 0], [0, 1]]`
+- Odbicie względem osi x: `[[1, 0], [0, -1]]`
 
-### Kompozycja: transformacje łańcuchowe
+### Złożenie: łączenie transformacji
 
-Zastosowanie transformacji A i B jest równoznaczne z pomnożeniem ich macierzy: `result = B @ A @ point`. Porządek ma znaczenie. Obróć, a następnie skaluj daje inne wyniki niż skalowanie, a następnie obróć.
+Zastosowanie transformacji A, a następnie B, jest tym samym co pomnożenie ich macierzy: `result = B @ A @ point`. Kolejność ma znaczenie. Obrót, a potem skalowanie, daje inny wynik niż skalowanie, a potem obrót.
 
 ```mermaid
 graph LR
@@ -159,7 +159,7 @@ graph LR
     end
 ```
 
-Utworzono: `S @ R = [[0, -2], [0.5, 0]]`
+Złożenie: `S @ R = [[0, -2], [0.5, 0]]`
 
 ```mermaid
 graph LR
@@ -168,13 +168,13 @@ graph LR
     end
 ```
 
-Utworzono: `R @ S = [[0, -0.5], [2, 0]]`
+Złożenie: `R @ S = [[0, -0.5], [2, 0]]`
 
 Różne wyniki. Mnożenie macierzy nie jest przemienne.
 
 ### Wartości własne i wektory własne
 
-Większość wektorów zmienia kierunek, gdy uderza w nie matryca. Wektory własne są wyjątkowe: macierz je tylko skaluje, nigdy ich nie obraca. Współczynnikiem skalującym jest wartość własna.
+Większość wektorów zmienia kierunek, gdy zostaną pomnożone przez macierz. Wektory własne są szczególne: macierz tylko je skaluje, nigdy nie obraca. Współczynnik skalowania to wartość własna.
 
 ```
 A @ v = lambda * v
@@ -192,9 +192,9 @@ Eigenvector [1, -1] with eigenvalue 1:
   A @ [1,-1] = [1, -1] = 1 * [1, -1]  (same direction, unchanged)
 ```
 
-Macierz rozciąga przestrzeń 3x wzdłuż [1, 1] i utrzymuje [1, -1] bez zmian. Każdy inny kierunek jest mieszanką tych dwóch.
+Macierz rozciąga przestrzeń 3-krotnie wzdłuż [1, 1] i pozostawia [1, -1] bez zmian. Każdy inny kierunek jest mieszanką tych dwóch.
 
-### Rozkład własny
+### Dekompozycja własna (eigendecomposition)
 
 Jeśli macierz ma n liniowo niezależnych wektorów własnych, można ją rozłożyć:
 
@@ -210,15 +210,15 @@ This says: rotate into eigenvector coordinates, scale along each axis, rotate ba
 
 ### Dlaczego wartości własne mają znaczenie
 
-**PCA.** Głównymi składnikami są wektory własne macierzy kowariancji. Wartości własne mówią, ile wariancji wychwytuje każdy składnik. Sortuj według wartości własnej, zachowaj górne k, a uzyskasz redukcję wymiarowości.
+**PCA.** Wektory własne macierzy kowariancji to główne składowe (principal components). Wartości własne mówią, ile wariancji ujmuje każda składowa. Posortuj według wartości własnej, zachowaj k najlepszych, a otrzymasz redukcję wymiarowości.
 
-**Stabilność.** W sieciach rekurencyjnych i układach dynamicznych wartości własne o wielkości > 1 powodują eksplozję wyników. Wielkość < 1 powoduje ich zanik. Jest to problem znikającego/eksplodującego gradientu określony w jednym zdaniu.
+**Stabilność.** W sieciach rekurencyjnych i systemach dynamicznych wartości własne o module > 1 powodują eksplozję wyjść. Moduł < 1 powoduje ich zanikanie. To problem zanikającego/eksplodującego gradientu ujęty w jednym zdaniu.
 
-**Metody spektralne.** Graficzne sieci neuronowe wykorzystują wartości własne macierzy sąsiedztwa. Grupowanie widmowe wykorzystuje wartości własne Laplaciana. Wektory własne ujawniają strukturę wykresu.
+**Metody spektralne.** Sieci grafowe (graph neural networks) wykorzystują wartości własne macierzy sąsiedztwa. Klasteryzacja spektralna wykorzystuje wartości własne macierzy Laplace'a. Wektory własne ujawniają strukturę grafu.
 
 ### Wyznacznik jako współczynnik skalowania objętości
 
-Wyznacznik macierzy transformacji informuje, w jakim stopniu skaluje ona obszar (2D) lub objętość (3D).
+Wyznacznik macierzy transformacji mówi, o ile skaluje ona pole powierzchni (2D) lub objętość (3D).
 
 ```
 det = 1:   area preserved (rotation)
@@ -285,7 +285,7 @@ reflected = mat_vec_mul(reflection_y(), [2.0, 1.0])
 print(f"Reflect (2,1) across y: ({reflected[0]:.1f}, {reflected[1]:.1f})")
 ```
 
-### Krok 2: Kompozycja transformacji
+### Krok 2: Złożenie transformacji
 
 ```python
 R = rotation_2d(math.pi / 2)
@@ -305,7 +305,7 @@ print(f"Same? {result1 == result2}")
 
 ### Krok 3: Wartości własne od podstaw (2x2)
 
-Dla macierzy 2x2 `[[a, b], [c, d]]` wartości własne rozwiązują równanie charakterystyczne: `lambda^2 - (a+d)*lambda + (ad - bc) = 0`.
+Dla macierzy 2x2 `[[a, b], [c, d]]` wartości własne są rozwiązaniami równania charakterystycznego: `lambda^2 - (a+d)*lambda + (ad - bc) = 0`.
 
 ```python
 def eigenvalues_2x2(matrix):
@@ -366,7 +366,7 @@ print(f"det(singular)     = {det_2x2(singular):.1f}")
 print("Singular: columns are proportional, space collapses to a line.")
 ```
 
-## Użyj tego
+## Zastosuj to
 
 NumPy obsługuje to wszystko za pomocą zoptymalizowanych procedur.
 
@@ -407,7 +407,7 @@ print(f"Original:\n{B}")
 print(f"Reconstructed:\n{reconstructed}")
 ```
 
-### Obroty 3D za pomocą NumPy
+### Obroty 3D z NumPy
 
 ```python
 def rotation_3d_z(theta):
@@ -427,35 +427,35 @@ print(f"Rotate 90 around z: {np.round(rotated_z, 4)}")
 print(f"Rotate 90 around x: {np.round(rotated_x, 4)}")
 ```
 
-## Wyślij to
+## Wdroż to
 
-Ta lekcja tworzy geometryczne podstawy analizy PCA (faza 2) i wagi sieci neuronowej. Zbudowany tutaj kod wartości własnej/wektora własnego jest tym samym algorytmem, który obsługuje redukcję wymiarowości, grupowanie widmowe i analizę stabilności w produkcyjnych systemach ML.
+Ta lekcja buduje geometryczne podstawy dla PCA (Faza 2) oraz analizy wag sieci neuronowych. Kod wartości własnych/wektorów własnych zbudowany tutaj to ten sam algorytm, który napędza redukcję wymiarowości, klasteryzację spektralną i analizę stabilności w produkcyjnych systemach ML.
 
 ## Ćwiczenia
 
-1. Zastosuj obrót, skalowanie i ścinanie do kwadratu jednostkowego (rogi w [0,0], [1,0], [1,1], [0,1]). Wydrukuj przekształcone rogi każdego z nich. Sprawdź, czy obrót zachowuje odległości pomiędzy narożnikami.
+1. Zastosuj obrót, skalowanie i ścinanie do kwadratu jednostkowego (wierzchołki w [0,0], [1,0], [1,1], [0,1]). Wypisz przekształcone wierzchołki dla każdej operacji. Zweryfikuj, że obrót zachowuje odległości między wierzchołkami.
 
-2. Znajdź ręcznie wartości własne macierzy [[4, 2], [1, 3]] korzystając z równania charakterystycznego. Następnie sprawdź swoją funkcję od podstaw i NumPy.
+2. Znajdź wartości własne macierzy [[4, 2], [1, 3]] ręcznie, korzystając z równania charakterystycznego. Następnie zweryfikuj wynik za pomocą swojej funkcji napisanej od podstaw oraz za pomocą NumPy.
 
-3. Utwórz kompozycję trzech przekształceń (obrót o 30 stopni, skala o [1,5, 0,8], ścinanie o kx=0,3) i zastosuj ją do 8 punktów rozmieszczonych na okręgu. Wydrukuj współrzędne przed i po. Oblicz wyznacznik złożonej macierzy i sprawdź, czy jest on równy iloczynowi poszczególnych wyznaczników.
+3. Utwórz złożenie trzech transformacji (obrót o 30 stopni, skalowanie o [1.5, 0.8], ścinanie z kx=0.3) i zastosuj je do 8 punktów rozmieszczonych na okręgu. Wypisz współrzędne przed i po. Oblicz wyznacznik macierzy złożonej i zweryfikuj, że jest równy iloczynowi poszczególnych wyznaczników.
 
-## Kluczowe terminy
+## Kluczowe pojęcia
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Pojęcie | Co się o nim mówi | Co naprawdę oznacza |
 |------|----------------|----------------------|
-| Macierz rotacji | „kręci rzeczy” | Macierz ortogonalna, która przesuwa punkty po łukach kołowych, zachowując jednocześnie odległości i kąty. Wyznacznik wynosi zawsze 1. |
-| Skalowanie macierzy | „Robi rzeczy większe” | Matryca diagonalna, która rozciąga się lub ściska niezależnie wzdłuż każdej osi. Wyznacznik jest iloczynem współczynników skali. |
-| Matryca ścinania | „Pochyla rzeczy” | Macierz, która przesuwa jedną współrzędną proporcjonalnie do drugiej, zamieniając prostokąty w równoległoboki. Wyznacznik wynosi 1. |
-| Odbicie | „Odzwierciedla rzeczy” | Macierz odwracająca przestrzeń wokół osi lub płaszczyzny. Wyznacznik wynosi -1. |
-| Skład | „Zrób dwie rzeczy” | Mnożenie macierzy transformacji do operacji łańcuchowych. Kolejność ma znaczenie: B @ A oznacza najpierw zastosowanie A, potem B. |
-| Wektor własny | „Specjalny kierunek” | Kierunek, który matryca tylko skaluje, nigdy się nie obraca. Odcisk palca transformacji. |
-| Wartość własna | „Jak bardzo się rozciąga” | Współczynnik skalarny, według którego macierz skaluje swój wektor własny. Może być ujemny (odwrócenie) lub złożony (obrót). |
-| Rozkład własny | „Rozbić matrix” | Zapisanie macierzy jako V @ D @ V^(-1), dzieląc ją na podstawowe kierunki skalowania i wielkości. |
-| Wyznacznik | „Pojedyncza liczba z macierzy” | Współczynnik, według którego transformacja skaluje powierzchnię (2D) lub objętość (3D). Zero oznacza, że ​​transformacja jest nieodwracalna. |
-| Równanie charakterystyczne | „Skąd biorą się wartości własne” | det(A - lambda * I) = 0. Wielomian, którego pierwiastkami są wartości własne. |
+| Macierz obrotu (rotation matrix) | "Obraca rzeczy" | Macierz ortogonalna, która przesuwa punkty po łukach okręgu, zachowując odległości i kąty. Wyznacznik zawsze równy 1. |
+| Macierz skalowania (scaling matrix) | "Powiększa rzeczy" | Macierz diagonalna, która rozciąga lub kompresuje niezależnie wzdłuż każdej osi. Wyznacznik to iloczyn współczynników skalowania. |
+| Macierz ścinania (shearing matrix) | "Przekrzywia rzeczy" | Macierz, która przesuwa jedną współrzędną proporcjonalnie do innej, zamieniając prostokąty w równoległoboki. Wyznacznik równy 1. |
+| Odbicie (reflection) | "Odbija rzeczy lustrzanie" | Macierz, która odwraca przestrzeń względem osi lub płaszczyzny. Wyznacznik równy -1. |
+| Złożenie (composition) | "Zrób dwie rzeczy" | Mnożenie macierzy transformacji w celu połączenia operacji. Kolejność ma znaczenie: B @ A oznacza najpierw zastosowanie A, a następnie B. |
+| Wektor własny (eigenvector) | "Specjalny kierunek" | Kierunek, który macierz tylko skaluje, nigdy nie obraca. Odcisk palca transformacji. |
+| Wartość własna (eigenvalue) | "O ile rozciąga" | Skalarny współczynnik, przez który macierz skaluje swój wektor własny. Może być ujemny (odwrócenie) lub zespolony (obrót). |
+| Dekompozycja własna (eigendecomposition) | "Rozłóż macierz na czynniki" | Zapisanie macierzy jako V @ D @ V^(-1), rozdzielając ją na fundamentalne kierunki i wielkości skalowania. |
+| Wyznacznik (determinant) | "Pojedyncza liczba z macierzy" | Współczynnik, przez który transformacja skaluje pole powierzchni (2D) lub objętość (3D). Zero oznacza, że transformacja jest nieodwracalna. |
+| Równanie charakterystyczne (characteristic equation) | "Skąd biorą się wartości własne" | det(A - lambda * I) = 0. Wielomian, którego pierwiastki są wartościami własnymi. |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-– [3Blue1Brown: Transformacje liniowe](https://www.3blue1brown.com/lessons/linear-transformations) – wizualna intuicja pokazująca, jak macierze przekształcają przestrzeń
-- [3Blue1Brown: Wektory własne i wartości własne](https://www.3blue1brown.com/lessons/eigenvalues) — najlepsze wizualne wyjaśnienie znaczenia wektorów własnych w aspekcie geometrycznym
-- [MIT 18.06 Wykład 21: Wartości własne i wektory własne](https://ocw.mit.edu/courses/18-06-linear-algebra-spring-2010/) - Klasyczne leczenie Gilberta Stranga
+- [3Blue1Brown: Linear Transformations](https://www.3blue1brown.com/lessons/linear-transformations) -- wizualna intuicja dotycząca tego, jak macierze przekształcają przestrzeń
+- [3Blue1Brown: Eigenvectors and Eigenvalues](https://www.3blue1brown.com/lessons/eigenvalues) -- najlepsze wizualne wyjaśnienie tego, czym są wektory własne geometrycznie
+- [MIT 18.06 Lecture 21: Eigenvalues and Eigenvectors](https://ocw.mit.edu/courses/18-06-linear-algebra-spring-2010/) -- klasyczne ujęcie Gilberta Stranga

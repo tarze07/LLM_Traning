@@ -1,22 +1,22 @@
 # API i klucze
 
-> Każde API AI działa w ten sam sposób: wyślij żądanie, uzyskaj odpowiedź. Szczegóły się zmieniają, wzór nie.
+> Każde API AI działa tak samo: wysyłasz zapytanie, otrzymujesz odpowiedź. Szczegóły się zmieniają, schemat nie.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python, TypeScript
-**Wymagania:** Faza 0, Lekcja 01
+**Wymagania wstępne:** Faza 0, Lekcja 01
 **Czas:** ~30 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Bezpiecznie przechowuj klucze API przy użyciu zmiennych środowiskowych i plików `.env`
-- Wykonaj wywołanie API LLM, używając zarówno zestawu Anthropic Python SDK, jak i surowego protokołu HTTP
-- Porównaj formaty żądań/odpowiedzi oparte na SDK i surowym HTTP na potrzeby debugowania
-- Identyfikuj i obsługuj typowe błędy API, w tym ograniczenia uwierzytelniania i szybkości
+- Bezpieczne przechowywanie kluczy API przy użyciu zmiennych środowiskowych i plików `.env`
+- Wykonanie zapytania do API LLM zarówno za pomocą Anthropic Python SDK, jak i surowego HTTP
+- Porównanie formatów zapytań/odpowiedzi opartych na SDK i surowym HTTP pod kątem debugowania
+- Identyfikacja i obsługa typowych błędów API, w tym błędów uwierzytelniania i limitów żądań (rate limits)
 
 ## Problem
 
-Począwszy od fazy 11, będziesz wywoływać interfejsy API LLM (Anthropic, OpenAI, Google). W fazach 13–16 zbudujesz agentów korzystających z tych interfejsów API w pętlach. Musisz wiedzieć, jak działają klucze API, jak je bezpiecznie przechowywać i jak wykonać pierwsze wywołanie API.
+Począwszy od Fazy 11, będziesz wywoływać API LLM (Anthropic, OpenAI, Google). W Fazach 13-16 zbudujesz agenty, które używają tych API w pętlach. Musisz wiedzieć, jak działają klucze API, jak je bezpiecznie przechowywać i jak wykonać swoje pierwsze zapytanie do API.
 
 ## Koncepcja
 
@@ -28,31 +28,31 @@ sequenceDiagram
     S->>C: HTTP Response (JSON)
 ```
 
-Każde wywołanie API ma:
-1. Punkt końcowy (URL)
-2. Klucz API (uwierzytelnienie)
-3. Treść żądania (co chcesz)
-4. Treść odpowiedzi (co otrzymasz w zamian)
+Każde wywołanie API składa się z:
+1. Endpointu (URL)
+2. Klucza API (uwierzytelnienie)
+3. Treści zapytania (czego chcesz)
+4. Treści odpowiedzi (co otrzymujesz)
 
 ## Zbuduj to
 
-### Krok 1: Bezpiecznie przechowuj klucze API
+### Krok 1: Bezpieczne przechowywanie kluczy API
 
-Nigdy nie umieszczaj kluczy API w kodzie. Użyj zmiennych środowiskowych.
+Nigdy nie umieszczaj kluczy API w kodzie. Używaj zmiennych środowiskowych.
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
 export OPENAI_API_KEY="sk-..."
 ```
 
-Lub użyj pliku `.env` (dodaj go do `.gitignore`):
+Albo użyj pliku `.env` (dodaj go do `.gitignore`):
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 ```
 
-### Krok 2: Pierwsze wywołanie API (Python)
+### Krok 2: Pierwsze zapytanie do API (Python)
 
 ```python
 import anthropic
@@ -68,7 +68,7 @@ response = client.messages.create(
 print(response.content[0].text)
 ```
 
-### Krok 3: Pierwsze wywołanie API (TypeScript)
+### Krok 3: Pierwsze zapytanie do API (TypeScript)
 
 ```typescript
 import Anthropic from "@anthropic-ai/sdk";
@@ -109,36 +109,36 @@ with urllib.request.urlopen(req) as resp:
     print(result["content"][0]["text"])
 ```
 
-To właśnie robią SDK pod maską. Zrozumienie surowego wywołania HTTP pomaga podczas debugowania.
+To właśnie robią SDK pod spodem. Zrozumienie surowego zapytania HTTP pomaga przy debugowaniu.
 
-## Użyj tego
+## Zastosuj to
 
-Dla tego kursu:
+Na potrzeby tego kursu:
 
-| API | Kiedy tego potrzebujesz | Poziom bezpłatny |
-|-----|-----------------|----------|
-| Antropiczny (Claude) | Fazy ​​11-16 (agenci, narzędzia) | 5 dolarów kredytu przy rejestracji |
-| OpenAI | Faza 11 (porównanie) | 5 dolarów kredytu przy rejestracji |
-| Przytulanie twarzy | Fazy ​​4-10 (modele, zbiory danych) | Bezpłatne |
+| API | Kiedy będzie potrzebne | Darmowy pakiet |
+|-----|-----------------|-----------|
+| Anthropic (Claude) | Fazy 11-16 (agenty, narzędzia) | 5$ kredytu przy rejestracji |
+| OpenAI | Faza 11 (porównanie) | 5$ kredytu przy rejestracji |
+| Hugging Face | Fazy 4-10 (modele, datasety) | Darmowe |
 
-Nie potrzebujesz ich wszystkich teraz. Ustaw je, gdy wymaga tego lekcja.
+Nie potrzebujesz wszystkich tych API od razu. Skonfiguruj je, gdy wymaga tego dana lekcja.
 
-## Wyślij to
+## Dostarcz efekt końcowy
 
-Ta lekcja daje:
-- `outputs/prompt-api-troubleshooter.md` - diagnozuj typowe błędy API
+Ta lekcja prowadzi do powstania:
+- `outputs/prompt-api-troubleshooter.md` - diagnozowanie typowych błędów API
 
 ## Ćwiczenia
 
-1. Zdobądź klucz Anthropic API i wykonaj pierwsze wywołanie API
-2. Wypróbuj surową wersję HTTP i porównaj format odpowiedzi z wersją SDK
-3. Celowo użyj nieprawidłowego klucza API i przeczytaj komunikat o błędzie
+1. Uzyskaj klucz API Anthropic i wykonaj swoje pierwsze zapytanie do API
+2. Wypróbuj wersję z surowym HTTP i porównaj format odpowiedzi z wersją SDK
+3. Celowo użyj błędnego klucza API i przeczytaj komunikat błędu
 
-## Kluczowe terminy
+## Kluczowe pojęcia
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Pojęcie | Co mówią ludzie | Co to faktycznie oznacza |
 |------|----------------|----------------------|
-| Klucz API | „Hasło do API” | Unikalny ciąg znaków identyfikujący Twoje konto i autoryzujący żądania |
-| Limit stawki | „Duszają mnie” | Maksymalna liczba żądań na minutę/godzinę, aby zapobiec nadużyciom i zapewnić uczciwe wykorzystanie |
-| Znak | „Słowo” (w kontekście API) | Jednostka rozliczeniowa: żetony wejściowe i wyjściowe są liczone i pobierane oddzielnie |
-| Transmisja | „Odpowiedzi w czasie rzeczywistym” | Uzyskiwanie odpowiedzi słowo po słowie zamiast czekania na pełną odpowiedź |
+| Klucz API | "Hasło do API" | Unikalny ciąg znaków identyfikujący Twoje konto i autoryzujący zapytania |
+| Rate limit | "Ograniczają mi przepustowość" | Maksymalna liczba zapytań na minutę/godzinę, mająca zapobiegać nadużyciom i zapewniać sprawiedliwe korzystanie |
+| Token | "Słowo" (w kontekście API) | Jednostka rozliczeniowa: tokeny wejściowe i wyjściowe są liczone i rozliczane osobno |
+| Streaming | "Odpowiedzi w czasie rzeczywistym" | Otrzymywanie odpowiedzi słowo po słowie zamiast czekania na pełną odpowiedź |

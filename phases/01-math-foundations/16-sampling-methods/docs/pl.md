@@ -1,445 +1,445 @@
-# Metody pobierania próbek
+# Metody samplowania
 
-> Próbkowanie to sposób, w jaki sztuczna inteligencja bada przestrzeń możliwości.
+> Samplowanie to sposób, w jaki AI eksploruje przestrzeń możliwości.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Język:** Python
-**Wymagania wstępne:** Faza 1, lekcje 06-07 (Prawdopodobieństwo, Twierdzenie Bayesa)
+**Wymagania wstępne:** Faza 1, Lekcje 06-07 (Prawdopodobieństwo, Teorem Bayesa)
 **Czas:** ~120 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zaimplementuj od zera odwrotny CDF, odrzucanie i próbkowanie ważności, używając tylko jednolitych liczb losowych
-- Próbkowanie temperatury, top-k i top-p (jądro) w celu generowania tokenów modelu języka
-- Wyjaśnij sztuczkę z reparametryzacją i dlaczego umożliwia ona propagację wsteczną poprzez próbkowanie w VAE
-- Uruchom Metropolis-Hastings MCMC, aby pobrać próbkę z nieznormalizowanego rozkładu docelowego
+- Zaimplementuj odwrotny CDF, sampling odrzucania (rejection sampling) i sampling istotnościowy (importance sampling) od zera, używając tylko liczb losowych z rozkładu jednostajnego
+- Zbuduj sampling z temperaturą, top-k oraz top-p (nucleus) do generowania tokenów w modelach językowych
+- Wyjaśnij trik reparametryzacji (reparameterization trick) i dlaczego umożliwia propagację wsteczną przez samplowanie w VAE
+- Uruchom MCMC Metropolis-Hastings, aby samplować z nieznormalizowanego rozkładu docelowego
 
 ## Problem
 
-Model językowy kończy przetwarzanie podpowiedzi i generuje wektor 50 000 logitów. Po jednym na każdy żeton w swoim słownictwie. Teraz musi wybrać jednego. Jak?
+Model językowy kończy przetwarzanie twojego promptu i produkuje wektor 50 000 logitów. Jeden dla każdego tokena w jego słowniku. Teraz musi wybrać jeden. Jak?
 
-Jeśli zawsze wybiera żeton o najwyższym prawdopodobieństwie, każda odpowiedź jest identyczna. Deterministyczny. Nudny. Jeśli wybiera równomiernie i losowo, wynik jest bełkotliwy. Odpowiedź leży gdzieś pomiędzy tymi skrajnościami i jest ona kontrolowana przez samplowanie.
+Jeśli zawsze wybiera token o najwyższym prawdopodobieństwie, każda odpowiedź jest identyczna. Deterministyczna. Nudna. Jeśli wybiera jednostajnie losowo, wynik to bełkot. Odpowiedź leży gdzieś między tymi ekstremami, i to "gdzieś" jest kontrolowane przez samplowanie.
 
-Próbkowanie nie ogranicza się do generowania tekstu. Uczenie się przez wzmacnianie szacuje gradienty polityki poprzez próbkowanie trajektorii. VAE uczą się ukrytych reprezentacji poprzez próbkowanie z wyuczonych rozkładów i propagację wsteczną poprzez losowość. Modele dyfuzyjne generują obrazy poprzez próbkowanie szumu i iteracyjne usuwanie szumu. Metody Monte Carlo szacują całki, które nie mają rozwiązania w postaci zamkniętej. Algorytmy MCMC badają wielowymiarowe rozkłady późniejsze, których nie da się wyliczyć.
+Samplowanie nie ogranicza się do generowania tekstu. Uczenie ze wzmocnieniem (reinforcement learning) szacuje gradienty polityki poprzez samplowanie trajektorii. VAE uczą się reprezentacji ukrytych (latent representations) poprzez samplowanie z wyuczonych rozkładów i propagację wsteczną przez losowość. Modele dyfuzyjne generują obrazy poprzez samplowanie szumu i iteracyjne odszumianie. Metody Monte Carlo estymują całki, które nie mają rozwiązania w postaci zamkniętej. Algorytmy MCMC eksplorują rozkłady posterior o wysokiej wymiarowości, których nie da się wyliczyć w pełni.
 
-Każdy generatywny system AI jest systemem próbkowania. Strategia próbkowania określa jakość, różnorodność i możliwość kontrolowania wyników. W tej lekcji omówiono od podstaw każdą główną metodę próbkowania, zaczynając od jednolitych liczb losowych, a kończąc na technikach, które stanowią podstawę nowoczesnych LLM i modeli generatywnych.
+Każdy generatywny system AI jest systemem samplującym. Strategia samplowania determinuje jakość, różnorodność i kontrolowalność wyniku. Ta lekcja buduje każdą główną metodę samplowania od zera, zaczynając od liczb losowych z rozkładu jednostajnego, a kończąc na technikach, które zasilają współczesne LLM-y i modele generatywne.
 
 ## Koncepcja
 
-### Dlaczego próbkowanie ma znaczenie
+### Czemu samplowanie ma znaczenie
 
-Próbkowanie pojawia się w czterech podstawowych rolach w sztucznej inteligencji i uczeniu maszynowym:
+Samplowanie pojawia się w czterech fundamentalnych rolach w AI i uczeniu maszynowym:
 
-**Generacja.** Modele językowe, modele dyfuzji i sieci GAN generują dane wyjściowe poprzez próbkowanie. Algorytm próbkowania bezpośrednio kontroluje kreatywność, spójność i różnorodność. Temperatura, top-k i próbkowanie jądra to pokrętła, którymi inżynierowie codziennie kręcą.
+**Generacja.** Modele językowe, modele dyfuzyjne i GAN-y produkują wynik poprzez samplowanie. Algorytm samplowania bezpośrednio kontroluje kreatywność, spójność i różnorodność. Temperatura, top-k i nucleus sampling są pokrętłami, które inżynierowie codziennie obracają.
 
-**Szkolenie.** Minipartie próbek z gradientem stochastycznym. Porzucanie próbek neuronów w celu dezaktywacji. Rozszerzanie danych próbkuje losowe przekształcenia. Próbkowanie wagowe ponownie waży próbki, aby zmniejszyć wariancję gradientu w uczeniu się przez wzmacnianie (PPO, TRPO).
+**Trening.** Stochastic gradient descent samplujeje mini-partie (mini-batches). Dropout samplujeje neurony do dezaktywacji. Augmentacja danych samplujeje losowe transformacje. Importance sampling przeważa próbki, aby zmniejszyć wariancję gradientu w uczeniu ze wzmocnieniem (PPO, TRPO).
 
-**Oszacowanie.** Wiele wielkości w ML nie ma rozwiązania w postaci zamkniętej. Oczekiwana strata w rozkładzie danych, funkcja podziału modelu opartego na energii, dowody w wnioskowaniu bayesowskim. Estymacja Monte Carlo przybliża to wszystko poprzez uśrednianie próbek.
+**Estymacja.** Wiele wielkości w ML nie ma rozwiązania w postaci zamkniętej. Oczekiwana strata po rozkładzie danych, funkcja podziału (partition function) modelu energetycznego, evidence w inferencji bayesowskiej. Estymacja Monte Carlo aproksymuje wszystkie te wielkości poprzez średnią z próbek.
 
-**Eksploracja.** Algorytmy MCMC badają rozkłady późniejsze metodą wnioskowania bayesowskiego. Strategie ewolucyjne próbkują zaburzenia parametrów. Próbkowanie Thompsona równoważy eksplorację i wyzysk u bandytów.
+**Eksploracja.** Algorytmy MCMC eksplorują rozkłady posterior w inferencji bayesowskiej. Strategie ewolucyjne samplują perturbacje parametrów. Thompson sampling balansuje eksplorację i eksploatację w bandytach (bandits).
 
-Podstawowe wyzwanie: możesz próbkować tylko bezpośrednio z prostych rozkładów (jednolity, normalny). Do wszystkiego innego potrzebna jest metoda konwersji prostych próbek na próbki z docelowej dystrybucji.
+Główne wyzwanie: można samplować bezpośrednio tylko z prostych rozkładów (jednostajny, normalny). Dla wszystkiego innego potrzebna jest metoda przekształcania prostych próbek na próbki z rozkładu docelowego.
 
-### Jednolite próbkowanie losowe
+### Sampling jednostajny (uniform)
 
-Każda metoda pobierania próbek rozpoczyna się tutaj. Generator jednolitych liczb losowych generuje wartości w [0, 1), gdzie każdy podprzedział o równej długości ma równe prawdopodobieństwo.
+Każda metoda samplowania zaczyna się tutaj. Generator liczb losowych z rozkładu jednostajnego produkuje wartości w [0, 1), gdzie każdy podprzedział o równej długości ma równe prawdopodobieństwo.
 
 ```
 U ~ Uniform(0, 1)
 
-P(a <= U <= b) = b - a    for 0 <= a <= b <= 1
+P(a <= U <= b) = b - a    dla 0 <= a <= b <= 1
 
-Properties:
+Właściwości:
   E[U] = 0.5
   Var(U) = 1/12
 ```
 
-Aby próbkować równomiernie z dyskretnego zbioru n elementów, wygeneruj U i zwróć minimalny poziom (n * U). Aby pobrać próbkę z zakresu ciągłego [a, b], oblicz a + (b - a) * U.
+Aby samplować jednostajnie z dyskretnego zbioru n elementów, generujemy U i zwracamy floor(n * U). Aby samplować z ciągłego zakresu [a, b], obliczamy a + (b - a) * U.
 
-Kluczowy wniosek: pojedyncza jednolita liczba losowa zawiera dokładnie taką ilość losowości, aby wygenerować jedną próbkę z dowolnego rozkładu. Sztuka polega na znalezieniu właściwej transformacji.
+Kluczowy wgląd: pojedyncza liczba losowa z rozkładu jednostajnego zawiera dokładnie odpowiednią ilość losowości, by wyprodukować jedną próbkę z dowolnego rozkładu. Sztuczka polega na znalezieniu odpowiedniej transformacji.
 
-### Metoda odwrotnego CDF (próbkowanie z odwrotną transformacją)
+### Metoda odwrotnego CDF (Inverse Transform Sampling)
 
-Funkcja dystrybucji skumulowanej (CDF) odwzorowuje wartości na prawdopodobieństwa:
+Funkcja dystrybucji kumulatywnej (CDF) odwzorowuje wartości na prawdopodobieństwa:
 
 ```
 F(x) = P(X <= x)
 
-Properties:
-  F is non-decreasing
+Właściwości:
+  F jest niemalejąca
   F(-inf) = 0
   F(+inf) = 1
-  F maps the real line to [0, 1]
+  F odwzorowuje linię rzeczywistą na [0, 1]
 ```
 
-Odwrotna CDF odwzorowuje prawdopodobieństwa z powrotem na wartości. Jeśli U ~ Uniform(0, 1), to X = F_inverse(U) ma rozkład docelowy.
+Odwrotny CDF odwzorowuje prawdopodobieństwa z powrotem na wartości. Jeśli U ~ Uniform(0, 1), to X = F_inverse(U) jest zgodne z rozkładem docelowym.
 
 ```
-Algorithm:
-  1. Generate u ~ Uniform(0, 1)
-  2. Return F_inverse(u)
+Algorytm:
+  1. Wygeneruj u ~ Uniform(0, 1)
+  2. Zwróć F_inverse(u)
 
-Why it works:
+Czemu to działa:
   P(X <= x) = P(F_inverse(U) <= x) = P(U <= F(x)) = F(x)
 ```
 
-**Przykład rozkładu wykładniczego:**
+**Przykład: rozkład wykładniczy (exponential):**
 
 ```
 PDF: f(x) = lambda * exp(-lambda * x),   x >= 0
 CDF: F(x) = 1 - exp(-lambda * x)
 
-Solve F(x) = u for x:
+Rozwiąż F(x) = u dla x:
   u = 1 - exp(-lambda * x)
   exp(-lambda * x) = 1 - u
   x = -ln(1 - u) / lambda
 
-Since (1 - U) and U have the same distribution:
+Ponieważ (1 - U) i U mają ten sam rozkład:
   x = -ln(u) / lambda
 ```
 
-Działa to doskonale, gdy możesz zapisać F_inverse w formie zamkniętej. W przypadku rozkładu normalnego nie ma odwrotnego CDF w postaci zamkniętej, dlatego stosujemy inne metody (Box-Muller lub przybliżenie numeryczne).
+To działa idealnie, gdy można zapisać F_inverse w postaci zamkniętej. Dla rozkładu normalnego nie istnieje odwrotny CDF w postaci zamkniętej, więc używamy innych metod (Box-Muller lub numeryczna aproksymacja).
 
-**Wersja dyskretna:** W przypadku dystrybucji dyskretnych zbuduj CDF jako sumę skumulowaną, wygeneruj U i znajdź pierwszy indeks, w którym suma skumulowana przekracza U. Oto jak działa `sample_categorical` z lekcji 06.
+**Wersja dyskretna:** Dla rozkładów dyskretnych budujemy CDF jako sumę kumulatywną, generujemy U i znajdujemy pierwszy indeks, w którym suma kumulatywna przekracza U. Tak działa `sample_categorical` z Lekcji 06.
 
-### Próbkowanie odrzucone
+### Sampling odrzucania (Rejection Sampling)
 
-Jeśli nie można odwrócić CDF, ale można ocenić docelowy plik PDF do stałej wartości, próbkowanie odrzucone działa.
-
-```
-Target distribution: p(x)  (can evaluate, possibly unnormalized)
-Proposal distribution: q(x)  (can sample from)
-Bound: M such that p(x) <= M * q(x) for all x
-
-Algorithm:
-  1. Sample x ~ q(x)
-  2. Sample u ~ Uniform(0, 1)
-  3. If u < p(x) / (M * q(x)), accept x
-  4. Otherwise, reject and go to step 1
-
-Acceptance rate = 1/M
-```
-
-Im ściślejsze ograniczenie M, tym wyższy współczynnik akceptacji. W przypadku małych wymiarów (1-3) próbkowanie przez odrzucenie działa dobrze. W przypadku dużych wymiarów współczynnik akceptacji spada wykładniczo, ponieważ większość ofert zostaje odrzucona. Jest to przekleństwo wymiarowości w próbkowaniu odrzuconym.
-
-**Przykład: próbkowanie z obciętej normalnej.** Użyj jednolitej propozycji w obciętym zakresie. Koperta M to maksimum normalnego pliku PDF w tym zakresie.
-
-**Przykład: próbkowanie z półkola.** Proponuj równomiernie w prostokącie ograniczającym. Zaakceptuj, jeśli punkt mieści się w półkolu. W ten sposób Monte Carlo oblicza pi: współczynnik akceptacji jest równy stosunkowi powierzchni pi/4.
-
-### Próbkowanie ważności
-
-Czasami nie są potrzebne próbki z docelowego rozkładu p(x). Musisz oszacować wartość oczekiwaną pod p(x) i masz próbki o innym rozkładzie q(x).
+Gdy nie można odwrócić CDF, ale można obliczyć wartość docelowego PDF z dokładnością do stałej, działa sampling odrzucania.
 
 ```
-Goal: estimate E_p[f(x)] = integral of f(x) * p(x) dx
+Rozkład docelowy: p(x)  (można obliczyć, możliwie nieznormalizowany)
+Rozkład proponujący: q(x)  (można z niego samplować)
+Granica: M taka, że p(x) <= M * q(x) dla wszystkich x
 
-Rewrite:
-  E_p[f(x)] = integral of f(x) * (p(x)/q(x)) * q(x) dx
+Algorytm:
+  1. Wylosuj x ~ q(x)
+  2. Wylosuj u ~ Uniform(0, 1)
+  3. Jeśli u < p(x) / (M * q(x)), zaakceptuj x
+  4. W przeciwnym razie odrzuć i wróć do kroku 1
+
+Współczynnik akceptacji = 1/M
+```
+
+Im ściślejsza granica M, tym wyższy współczynnik akceptacji. W niskich wymiarach (1-3) sampling odrzucania działa dobrze. W wysokich wymiarach współczynnik akceptacji spada wykładniczo, ponieważ większość objętości propozycji jest odrzucana. To jest przekleństwo wymiarowości (curse of dimensionality) dla samplingu odrzucania.
+
+**Przykład: samplowanie z obciętego rozkładu normalnego (truncated normal).** Użyj jednostajnej propozycji w obciętym zakresie. Otoczka M to maksimum PDF rozkładu normalnego w tym zakresie.
+
+**Przykład: samplowanie z półokręgu.** Proponuj jednostajnie w obejmującym prostokącie. Akceptuj, jeśli punkt znajduje się wewnątrz półokręgu. Tak Monte Carlo oblicza pi: współczynnik akceptacji jest równy stosunkowi obszarów pi/4.
+
+### Sampling istotnościowy (Importance Sampling)
+
+Czasami nie potrzebujesz próbek z rozkładu docelowego p(x). Potrzebujesz oszacować wartość oczekiwaną pod p(x), a masz próbki z innego rozkładu q(x).
+
+```
+Cel: oszacować E_p[f(x)] = integral z f(x) * p(x) dx
+
+Przekształć:
+  E_p[f(x)] = integral z f(x) * (p(x)/q(x)) * q(x) dx
             = E_q[f(x) * w(x)]
 
-where w(x) = p(x) / q(x)  are the importance weights.
+gdzie w(x) = p(x) / q(x)  to wagi istotnościowe (importance weights).
 
-Estimator:
-  E_p[f(x)] ~ (1/N) * sum(f(x_i) * w(x_i))    where x_i ~ q(x)
+Estymator:
+  E_p[f(x)] ~ (1/N) * sum(f(x_i) * w(x_i))    gdzie x_i ~ q(x)
 ```
 
-Ma to kluczowe znaczenie w procesie uczenia się przez wzmacnianie. W PPO (Proximal Policy Optimization) zbierasz trajektorie w ramach starej polityki pi_old, ale chcesz zoptymalizować nową politykę pi_new. Waga ważności to pi_new(a|s) / pi_old(a|s). PPO obcina te wagi, aby nowa polityka nie odbiegała zbytnio od starej.
+To jest krytyczne w uczeniu ze wzmocnieniem. W PPO (Proximal Policy Optimization) zbierasz trajektorie pod starą polityką pi_old, ale chcesz zoptymalizować nową politykę pi_new. Waga istotnościowa to pi_new(a|s) / pi_old(a|s). PPO przycina (clips) te wagi, aby zapobiec nadmiernemu odchyleniu nowej polityki od starej.
 
-Wariancja estymatora próbkowania ważności zależy od stopnia podobieństwa q do p. Jeśli q bardzo różni się od p, kilka próbek uzyskuje ogromne wagi i dominują w oszacowaniu. Próbkowanie o samonormalizowanej ważności dzieli się przez sumę wag, aby zmniejszyć ten problem:
+Wariancja estymatora samplingu istotnościowego zależy od tego, jak podobne jest q do p. Jeśli q jest bardzo różne od p, kilka próbek otrzymuje ogromne wagi i dominuje estymację. Self-normalized importance sampling dzieli przez sumę wag, aby zmniejszyć ten problem:
 
 ```
 E_p[f(x)] ~ sum(w_i * f(x_i)) / sum(w_i)
 ```
 
-### Szacowanie Monte Carlo
+### Estymacja Monte Carlo
 
-Estymacja Monte Carlo przybliża całki poprzez uśrednianie próbek losowych. Prawo wielkich liczb gwarantuje zbieżność.
-
-```
-Goal: estimate I = integral of g(x) dx over domain D
-
-Method:
-  1. Sample x_1, ..., x_N uniformly from D
-  2. I ~ (Volume of D / N) * sum(g(x_i))
-
-Error: O(1 / sqrt(N))   regardless of dimension
-```
-
-Poziom błędu jest niezależny od wymiaru. Z tego powodu metody Monte Carlo dominują w dużych wymiarach, gdzie integracja oparta na siatce jest niemożliwa.
-
-**Szacowanie pi:**
+Estymacja Monte Carlo aproksymuje całki poprzez średnią z losowych próbek. Prawo wielkich liczb gwarantuje zbieżność.
 
 ```
-Sample (x, y) uniformly from [-1, 1] x [-1, 1]
-Count how many fall inside the unit circle: x^2 + y^2 <= 1
-pi ~ 4 * (count inside) / (total count)
+Cel: oszacować I = integral z g(x) dx po domenie D
+
+Metoda:
+  1. Wylosuj x_1, ..., x_N jednostajnie z D
+  2. I ~ (Objętość D / N) * sum(g(x_i))
+
+Błąd: O(1 / sqrt(N))   niezależnie od wymiaru
 ```
 
-**Szacowanie oczekiwań:**
+Tempo błędu jest niezależne od wymiaru. To jest powód, dla którego metody Monte Carlo dominują w wysokich wymiarach, gdzie integracja oparta na siatce jest niemożliwa.
+
+**Estymacja pi:**
 
 ```
-E[f(X)] ~ (1/N) * sum(f(x_i))    where x_i ~ p(x)
-
-The sample mean converges to the true expectation.
-Variance of the estimator = Var(f(X)) / N
+Wylosuj (x, y) jednostajnie z [-1, 1] x [-1, 1]
+Zlicz, ile punktów wpada wewnątrz okręgu jednostkowego: x^2 + y^2 <= 1
+pi ~ 4 * (liczba wewnątrz) / (liczba całkowita)
 ```
 
-### Łańcuch Markowa Monte Carlo (MCMC): Metropolis-Hastings
-
-MCMC konstruuje łańcuch Markowa, którego rozkład stacjonarny jest rozkładem docelowym p(x). Po wystarczającej liczbie kroków próbki z łańcucha są (w przybliżeniu) próbkami z p(x).
+**Estymacja wartości oczekiwanych:**
 
 ```
-Target: p(x)  (known up to a normalizing constant)
-Proposal: q(x'|x)  (how to propose the next state given the current state)
+E[f(X)] ~ (1/N) * sum(f(x_i))    gdzie x_i ~ p(x)
 
-Metropolis-Hastings algorithm:
-  1. Start at some x_0
-  2. For t = 1, 2, ..., T:
-     a. Propose x' ~ q(x'|x_t)
-     b. Compute acceptance ratio:
+Średnia z próbki zbiega się do prawdziwej wartości oczekiwanej.
+Wariancja estymatora = Var(f(X)) / N
+```
+
+### Markov Chain Monte Carlo (MCMC): Metropolis-Hastings
+
+MCMC konstruuje łańcuch Markowa, którego rozkład stacjonarny jest rozkładem docelowym p(x). Po wystarczającej liczbie kroków, próbki z łańcucha są (w przybliżeniu) próbkami z p(x).
+
+```
+Cel: p(x)  (znany z dokładnością do stałej normalizującej)
+Propozycja: q(x'|x)  (jak proponować następny stan dany stan obecny)
+
+Algorytm Metropolis-Hastings:
+  1. Zacznij od pewnego x_0
+  2. Dla t = 1, 2, ..., T:
+     a. Zaproponuj x' ~ q(x'|x_t)
+     b. Oblicz współczynnik akceptacji:
         alpha = [p(x') * q(x_t|x')] / [p(x_t) * q(x'|x_t)]
-     c. Accept with probability min(1, alpha):
-        - If u < alpha (u ~ Uniform(0,1)): x_{t+1} = x'
-        - Otherwise: x_{t+1} = x_t
-  3. Discard first B samples (burn-in)
-  4. Return remaining samples
+     c. Zaakceptuj z prawdopodobieństwem min(1, alpha):
+        - Jeśli u < alpha (u ~ Uniform(0,1)): x_{t+1} = x'
+        - W przeciwnym razie: x_{t+1} = x_t
+  3. Odrzuć pierwsze B próbek (burn-in)
+  4. Zwróć pozostałe próbki
 ```
 
-W przypadku propozycji symetrycznych (q(x'|x) = q(x|x')) stosunek upraszcza się do p(x')/p(x). To jest oryginalny algorytm Metropolis.
+Dla symetrycznych propozycji (q(x'|x) = q(x|x')), współczynnik redukuje się do p(x')/p(x). To jest oryginalny algorytm Metropolis.
 
-**Dlaczego to działa.** Reguła akceptacji zapewnia szczegółową równowagę: prawdopodobieństwo znalezienia się w x i przejścia do x' jest równe prawdopodobieństwu znalezienia się w x' i przejścia do x. Bilans szczegółowy implikuje, że p(x) jest rozkładem stacjonarnym łańcucha.
+**Czemu to działa.** Reguła akceptacji zapewnia szczegółowy bilans (detailed balance): prawdopodobieństwo bycia w x i przejścia do x' jest równe prawdopodobieństwu bycia w x' i przejścia do x. Szczegółowy bilans implikuje, że p(x) jest rozkładem stacjonarnym łańcucha.
 
-**Względy praktyczne:**
-- Wypalenie: wyrzucić wczesne próbki, zanim łańcuch osiągnie równowagę
-- Rozcieńczanie: zachowaj każdą k-tą próbkę, aby zmniejszyć autokorelację
-- Skala propozycji: zbyt mała i łańcuch porusza się powoli (wysoka akceptacja, powolna eksploracja); zbyt duży i większość propozycji jest odrzucana (niska akceptacja, utknięcie w miejscu)
-- Optymalny współczynnik akceptacji propozycji Gaussa w dużych wymiarach wynosi około 0,234
+**Praktyczne rozważania:**
+- Burn-in: odrzuć wczesne próbki, zanim łańcuch osiągnie równowagę
+- Thinning: zachowuj co k-tą próbkę, aby zredukować autokorelację
+- Skala propozycji: zbyt mała i łańcuch przemieszcza się powoli (wysoka akceptacja, wolna eksploracja); zbyt duża i większość propozycji jest odrzucana (niska akceptacja, zablokowanie w miejscu)
+- Optymalny współczynnik akceptacji dla propozycji gaussowskiej w wysokich wymiarach to około 0.234
 
-### Próbkowanie Gibbsa
+### Gibbs Sampling
 
-Próbkowanie Gibbsa jest szczególnym przypadkiem MCMC dla rozkładów wielowymiarowych. Zamiast proponować ruch we wszystkich wymiarach na raz, aktualizuje jedną zmienną na raz na podstawie rozkładu warunkowego.
+Gibbs sampling jest specjalnym przypadkiem MCMC dla rozkładów wielowymiarowych. Zamiast proponować ruch we wszystkich wymiarach na raz, aktualizuje jedną zmienną na raz z jej rozkładu warunkowego.
 
 ```
-Target: p(x_1, x_2, ..., x_d)
+Cel: p(x_1, x_2, ..., x_d)
 
-Algorithm:
-  For each iteration t:
-    Sample x_1^{t+1} ~ p(x_1 | x_2^t, x_3^t, ..., x_d^t)
-    Sample x_2^{t+1} ~ p(x_2 | x_1^{t+1}, x_3^t, ..., x_d^t)
+Algorytm:
+  Dla każdej iteracji t:
+    Wylosuj x_1^{t+1} ~ p(x_1 | x_2^t, x_3^t, ..., x_d^t)
+    Wylosuj x_2^{t+1} ~ p(x_2 | x_1^{t+1}, x_3^t, ..., x_d^t)
     ...
-    Sample x_d^{t+1} ~ p(x_d | x_1^{t+1}, x_2^{t+1}, ..., x_{d-1}^{t+1})
+    Wylosuj x_d^{t+1} ~ p(x_d | x_1^{t+1}, x_2^{t+1}, ..., x_{d-1}^{t+1})
 ```
 
-Próbkowanie Gibbsa wymaga próbkowania z każdego rozkładu warunkowego p(x_i | x_{-i}). Jest to proste w przypadku wielu modeli:
-- Sieci Bayesa: warunki warunkowe wynikają ze struktury grafu
-- Mieszanki Gaussa: warunki warunkowe są gaussowskie
-- Modele Isinga: warunek każdego spinu zależy tylko od sąsiadów
+Gibbs sampling wymaga, aby można było samplować z każdego rozkładu warunkowego p(x_i | x_{-i}). To jest proste dla wielu modeli:
+- Sieci bayesowskie: rozkłady warunkowe wynikają ze struktury grafu
+- Mieszaniny gaussowskie (Gaussian mixtures): rozkłady warunkowe są gaussowskie
+- Modele Isinga: warunkowy rozkład każdego spinu zależy tylko od jego sąsiadów
 
-Wskaźnik akceptacji wynosi zawsze 1 (każda propozycja jest akceptowana), ponieważ próbkowanie na podstawie dokładnego warunku automatycznie zapewnia osiągnięcie salda szczegółowego.
+Współczynnik akceptacji jest zawsze równy 1 (każda propozycja jest akceptowana), ponieważ samplowanie z dokładnego rozkładu warunkowego automatycznie spełnia szczegółowy bilans.
 
-**Ograniczenia.** Gdy zmienne są silnie skorelowane, próbkowanie Gibbsa miesza się powoli, ponieważ aktualizacja jednej zmiennej na raz nie może spowodować dużych przesunięć ukośnych w rozkładzie.
+**Ograniczenie.** Gdy zmienne są silnie skorelowane, Gibbs sampling miesza się wolno, ponieważ aktualizowanie jednej zmiennej na raz nie może wykonać dużych ruchów po przekątnej przez rozkład.
 
-### Próbkowanie temperatury (używane w LLM)
+### Temperature Sampling (używany w LLM)
 
-Modele językowe wyprowadzają logity z_1, ..., z_V dla każdego tokenu w słowniku. Softmax konwertuje je na prawdopodobieństwa. Temperatura przeskalowuje logity przed softmaxem:
+Modele językowe wyprowadzają logity z_1, ..., z_V dla każdego tokena w słowniku. Softmax przekształca te wartości w prawdopodobieństwa. Temperatura przeskalowuje logity przed softmax:
 
 ```
 p_i = exp(z_i / T) / sum(exp(z_j / T))
 
-T = 1.0: standard softmax (original distribution)
-T -> 0:  argmax (deterministic, always picks highest logit)
-T -> inf: uniform (all tokens equally likely)
-T < 1.0: sharpens the distribution (more confident, less diverse)
-T > 1.0: flattens the distribution (less confident, more diverse)
+T = 1.0: standardowy softmax (oryginalny rozkład)
+T -> 0:  argmax (deterministyczny, zawsze wybiera najwyższy logit)
+T -> inf: jednostajny (wszystkie tokeny równie prawdopodobne)
+T < 1.0: zaostrza rozkład (bardziej pewny, mniej różnorodny)
+T > 1.0: spłaszcza rozkład (mniej pewny, bardziej różnorodny)
 ```
 
-**Dlaczego to działa.** Dzielenie logitów przez T < 1 wzmacnia różnice między logitami. Jeżeli z_1 = 2 i z_2 = 1, podzielenie przez T = 0,5 daje z_1/T = 4 i z_2/T = 2, co zwiększa odstęp. Po softmax token o najwyższym logicie otrzymuje znacznie większy udział.
+**Czemu to działa.** Dzielenie logitów przez T < 1 wzmacnia różnice między logitami. Jeśli z_1 = 2 i z_2 = 1, dzielenie przez T = 0.5 daje z_1/T = 4 i z_2/T = 2, powiększając różnicę. Po softmax token o najwyższym logicie otrzymuje znacznie większy udział.
 
 **W praktyce:**
-- T = 0,0: dekodowanie zachłanne, najlepsze w przypadku pytań i odpowiedzi opartych na faktach
-- T = 0,3-0,7: lekko kreatywny, dobry do generowania kodu
-- T = 0,7-1,0: zrównoważony, dobry do ogólnej rozmowy
-- T = 1,0-1,5: twórcze pisanie, burza mózgów
-- T > 1,5: coraz bardziej losowe, rzadko przydatne
+- T = 0.0: greedy decoding, najlepsze dla faktograficznych Q&A
+- T = 0.3-0.7: lekko kreatywny, dobry dla generowania kodu
+- T = 0.7-1.0: zbalansowany, dobry dla ogólnej konwersacji
+- T = 1.0-1.5: twórcze pisanie, brainstorming
+- T > 1.5: coraz bardziej losowy, rzadko użyteczny
 
-Temperatura nie zmienia tego, które tokeny są możliwe. Zmienia masę prawdopodobieństwa przypisaną do każdego żetonu.
+Temperatura nie zmienia, które tokeny są możliwe. Zmienia masę prawdopodobieństwa przypisaną do każdego tokena.
 
-### Próbkowanie z góry k
+### Top-k Sampling
 
-Próbkowanie top-k ogranicza zbiór kandydatów do k żetonów o najwyższym prawdopodobieństwie, następnie renormalizuje i pobiera próbki z tego ograniczonego zestawu.
+Top-k sampling ogranicza zbiór kandydatów do k tokenów o najwyższych prawdopodobieństwach, następnie renormalizuje i sampluje z tego ograniczonego zbioru.
 
 ```
-Algorithm:
-  1. Compute softmax probabilities for all V tokens
-  2. Sort tokens by probability (descending)
-  3. Keep only the top k tokens
-  4. Renormalize: p_i' = p_i / sum(p_j for j in top-k)
-  5. Sample from the renormalized distribution
+Algorytm:
+  1. Oblicz prawdopodobieństwa softmax dla wszystkich V tokenów
+  2. Sortuj tokeny według prawdopodobieństwa (malejąco)
+  3. Zachowaj tylko top k tokenów
+  4. Renormalizuj: p_i' = p_i / sum(p_j dla j w top-k)
+  5. Sampluj z renormalizowanego rozkładu
 
 k = 1:  greedy decoding
-k = V:  no filtering (standard sampling)
-k = 40: typical setting, removes long tail of unlikely tokens
+k = V:  brak filtrowania (standardowy sampling)
+k = 40: typowe ustawienie, usuwa długi ogon nieprawdopodobnych tokenów
 ```
 
-Top-k zapobiega wybieraniu przez model niezwykle mało prawdopodobnych tokenów (literówek, nonsensów), które istnieją na długim ogonie rozkładu słownictwa. Problem: k został naprawiony niezależnie od kontekstu. Gdy model jest pewny (jeden żeton ma 95% prawdopodobieństwa), k = 40 nadal pozwala na 39 alternatyw. Gdy model jest niepewny (prawdopodobieństwo rozkłada się na 1000 żetonów), k = 40 odcina prawdopodobne opcje.
+Top-k zapobiega wybieraniu przez model wyjątkowo nieprawdopodobnych tokenów (literówki, nonsens), które istnieją w długim ogonie rozkładu słownictwa. Problem: k jest ustalone niezależnie od kontekstu. Gdy model jest pewny (jeden token ma 95% prawdopodobieństwa), k = 40 wciąż pozwala na 39 alternatyw. Gdy model jest niepewny (prawdopodobieństwo jest rozłożone na 1000 tokenów), k = 40 odcina prawdopodobne opcje.
 
-### Próbkowanie z góry (jądro).
+### Top-p (Nucleus) Sampling
 
-Próbkowanie Top-p dynamicznie dostosowuje rozmiar zestawu kandydującego. Zamiast utrzymywać stałą liczbę żetonów, zatrzymuje najmniejszy zestaw żetonów, których skumulowane prawdopodobieństwo przekracza p.
-
-```
-Algorithm:
-  1. Compute softmax probabilities for all V tokens
-  2. Sort tokens by probability (descending)
-  3. Find smallest k such that sum of top-k probabilities >= p
-  4. Keep only those k tokens
-  5. Renormalize and sample
-
-p = 0.9:  keeps tokens covering 90% of probability mass
-p = 1.0:  no filtering
-p = 0.1:  very restrictive, nearly greedy
-```
-
-Gdy model jest pewny, próbkowanie jądra pozwala zachować kilka tokenów (może 2-3). Gdy model jest niepewny, przechowuje wiele (może 200). To zachowanie adaptacyjne jest powodem, dla którego próbkowanie jądra generalnie daje lepszy tekst niż górne-k.
-
-**Typowe kombinacje:**
-- Temperatura 0,7 + góra-p 0,9: dobre ustawienie ogólnego przeznaczenia
-- Temperatura 0,0 (zachłanny): najlepsza dla zadań deterministycznych
-- Temperatura 1,0 + top-k 50: Fan i in. (2018) oryginalne ustawienie papieru
-
-Top-k i top-p można łączyć. Najpierw zastosuj top-k, a następnie top-p na pozostałym zestawie.
-
-### Sztuczka reparametryzacyjna (używana w VAE)
-
-Autoenkodery wariacyjne (VAE) uczą się poprzez kodowanie danych wejściowych do rozkładu w przestrzeni utajonej, próbkowanie z tego rozkładu i ponowne dekodowanie próbki. Problem: nie można propagować wstecznie poprzez operację próbkowania.
+Top-p sampling dynamicznie dostosowuje rozmiar zbioru kandydatów. Zamiast zachowywać ustaloną liczbę tokenów, zachowuje najmniejszy zbiór tokenów, których kumulatywne prawdopodobieństwo przekracza p.
 
 ```
-Standard sampling (not differentiable):
+Algorytm:
+  1. Oblicz prawdopodobieństwa softmax dla wszystkich V tokenów
+  2. Sortuj tokeny według prawdopodobieństwa (malejąco)
+  3. Znajdź najmniejsze k takie, że suma top-k prawdopodobieństw >= p
+  4. Zachowaj tylko te k tokenów
+  5. Renormalizuj i sampluj
+
+p = 0.9:  zachowuje tokeny pokrywające 90% masy prawdopodobieństwa
+p = 1.0:  brak filtrowania
+p = 0.1:  bardzo restrykcyjny, prawie greedy
+```
+
+Gdy model jest pewny, nucleus sampling zachowuje mało tokenów (może 2-3). Gdy model jest niepewny, zachowuje wiele (może 200). To adaptacyjne zachowanie jest powodem, dla którego nucleus sampling generalnie produkuje lepszy tekst niż top-k.
+
+**Powszechne kombinacje:**
+- Temperatura 0.7 + top-p 0.9: dobre ustawienie ogólnego przeznaczenia
+- Temperatura 0.0 (greedy): najlepsze dla zadań deterministycznych
+- Temperatura 1.0 + top-k 50: ustawienie z oryginalnego artykułu Fan et al. (2018)
+
+Top-k i top-p mogą być łączone. Zastosuj najpierw top-k, a następnie top-p na pozostałym zbiorze.
+
+### Trik reparametryzacji (Reparameterization Trick) (używany w VAE)
+
+Wariacyjne autoenkodery (VAE) uczą się poprzez kodowanie wejść w rozkład w przestrzeni ukrytej (latent space), samplowanie z tego rozkładu i dekodowanie próbki z powrotem. Problem: nie można propagować wstecznie przez operację samplowania.
+
+```
+Standardowe samplowanie (niedyferencjowalne):
   z ~ N(mu, sigma^2)
 
-  The randomness blocks gradient flow.
-  d/d_mu [sample from N(mu, sigma^2)] = ???
+  Losowość blokuje przepływ gradientu.
+  d/d_mu [próbka z N(mu, sigma^2)] = ???
 ```
 
-Sztuczka reparametryzacji oddziela losowość od parametrów:
+Trik reparametryzacji separuje losowość od parametrów:
 
 ```
-Reparameterized sampling:
-  epsilon ~ N(0, 1)          (fixed random noise, no parameters)
-  z = mu + sigma * epsilon   (deterministic function of parameters)
+Reparametryzowane samplowanie:
+  epsilon ~ N(0, 1)          (ustalony losowy szum, bez parametrów)
+  z = mu + sigma * epsilon   (deterministyczna funkcja parametrów)
 
-  Now z is a deterministic, differentiable function of mu and sigma.
+  Teraz z jest deterministyczną, dyferencjowalną funkcją mu i sigma.
   d(z)/d(mu) = 1
   d(z)/d(sigma) = epsilon
 
-  Gradients flow through mu and sigma.
+  Gradienty przepływają przez mu i sigma.
 ```
 
-Działa to, ponieważ N(mu, sigma^2) ma taki sam rozkład jak mu + sigma * N(0, 1). Kluczowy wniosek: przenieś losowość do źródła wolnego od parametrów (epsilon), a następnie wyraź próbkę jako różniczkowalną transformację parametrów.
+To działa, ponieważ N(mu, sigma^2) ma ten sam rozkład jak mu + sigma * N(0, 1). Kluczowy wgląd: przenieś losowość do źródła bez parametrów (epsilon), a następnie wyraź próbkę jako dyferencjowalną transformację parametrów.
 
-**W pętli szkoleniowej VAE:**
-1. Koder wyprowadza mu i log(sigma^2) dla każdego wejścia
-2. Próbka epsilon ~ N(0, 1)
+**W pętli treningowej VAE:**
+1. Enkoder wyprowadza mu i log(sigma^2) dla każdego wejścia
+2. Sampluj epsilon ~ N(0, 1)
 3. Oblicz z = mu + sigma * epsilon
-4. Zdekoduj z, aby zrekonstruować dane wejściowe
-5. Propaguj wstecznie przez kroki 4, 3, 2, 1 (możliwe, ponieważ krok 3 jest różniczkowalny)
+4. Zdekoduj z, aby zrekonstruować wejście
+5. Propaguj wstecznie przez kroki 4, 3, 2, 1 (możliwe, ponieważ krok 3 jest dyferencjowalny)
 
-Bez sztuczki z reparametryzacją VAE nie mogą być trenowane przy użyciu standardowej propagacji wstecznej. Dzięki temu pojedynczemu spostrzeżeniu VAE stały się praktyczne.
+Bez triku reparametryzacji VAE nie mogą być trenowane standardową propagacją wsteczną. Ten jeden wgląd uczynił VAE praktycznymi.
 
-### Gumbel-Softmax (różnicowane próbkowanie kategoryczne)
+### Gumbel-Softmax (Dyferencjowalne samplowanie kategoryczne)
 
-Sztuczka reparametryzacji działa w przypadku rozkładów ciągłych (Gaussa). W przypadku dyskretnych rozkładów kategorycznych potrzebujemy innego podejścia. Gumbel-Softmax zapewnia różniczkowe przybliżenie próbkowania kategorycznego.
+Trik reparametryzacji działa dla rozkładów ciągłych (gaussowski). Dla dyskretnych rozkładów kategorycznych potrzebujemy innego podejścia. Gumbel-Softmax dostarcza dyferencjowalną aproksymację samplowania kategorycznego.
 
-**Sztuczka Gumbel-Maxa (nieróżniczkowalna):**
-
-```
-To sample from a categorical distribution with log-probabilities log(p_1), ..., log(p_k):
-  1. Sample g_i ~ Gumbel(0, 1) for each category
-     (g = -log(-log(u)), where u ~ Uniform(0, 1))
-  2. Return argmax(log(p_i) + g_i)
-
-This produces exact categorical samples.
-```
-
-**Gumbel-Softmax (przybliżenie różniczkowalne):**
+**Trik Gumbel-Max (niedyferencjowalny):**
 
 ```
-Replace the hard argmax with a soft softmax:
+Aby samplować z rozkładu kategorycznego z log-prawdopodobieństwami log(p_1), ..., log(p_k):
+  1. Wylosuj g_i ~ Gumbel(0, 1) dla każdej kategorii
+     (g = -log(-log(u)), gdzie u ~ Uniform(0, 1))
+  2. Zwróć argmax(log(p_i) + g_i)
+
+To produkuje dokładne próbki kategoryczne.
+```
+
+**Gumbel-Softmax (dyferencjowalna aproksymacja):**
+
+```
+Zastąp twardy argmax miękkim softmax:
   y_i = exp((log(p_i) + g_i) / tau) / sum(exp((log(p_j) + g_j) / tau))
 
-tau (temperature) controls the approximation:
-  tau -> 0:  approaches a one-hot vector (hard categorical)
-  tau -> inf: approaches uniform (1/k, 1/k, ..., 1/k)
-  tau = 1.0: soft approximation
+tau (temperatura) kontroluje aproksymację:
+  tau -> 0:  zbliża się do wektora one-hot (twardy kategoryczny)
+  tau -> inf: zbliża się do jednostajnego (1/k, 1/k, ..., 1/k)
+  tau = 1.0: miękka aproksymacja
 ```
 
-Gumbel-Softmax zapewnia ciągłą relaksację dyskretnej próbki. Dane wyjściowe to wektor prawdopodobieństwa (miękki, jeden gorący), a nie twardy, jeden gorący. Gradienty przepływają przez softmax. Podczas treningu w przód możesz użyć estymatora „prostego”: użyj twardego argmax dla podania w przód, ale miękkiego gradientu Gumbel-Softmax dla podania w tył.
+Gumbel-Softmax produkuje ciągłą relaksację dyskretnej próbki. Wynikiem jest wektor prawdopodobieństwa (miękki one-hot) zamiast twardego one-hot. Gradienty przepływają przez softmax. Podczas przejścia w przód (forward pass) w treningu, można użyć estymatora "straight-through": użyj twardego argmax dla przejścia w przód, ale miękkich gradientów Gumbel-Softmax dla przejścia w tył (backward pass).
 
 **Zastosowania:**
 - Dyskretne zmienne ukryte w VAE
-- Wyszukiwanie architektury neuronowej (wybór operacji dyskretnych)
-- Mechanizmy twardej uwagi
-- Uczenie się ze wzmocnieniem za pomocą dyskretnych działań
+- Neural architecture search (wybieranie dyskretnych operacji)
+- Mechanizmy hard attention
+- Uczenie ze wzmocnieniem z dyskretnymi akcjami
 
-### Próbkowanie warstwowe
+### Stratified Sampling
 
-Standardowe próbkowanie Monte Carlo może przez przypadek pozostawić luki w przestrzeni próbki. Próbkowanie warstwowe wymusza równomierne pokrycie poprzez podzielenie przestrzeni na warstwy i pobieranie próbek z każdej z nich.
+Standardowy sampling Monte Carlo może przypadkowo zostawiać dziury w przestrzeni próbek. Stratified sampling wymusza równomierne pokrycie poprzez podzielenie przestrzeni na warstwy (strata) i samplowanie z każdej.
 
 ```
-Standard Monte Carlo:
-  Sample N points uniformly from [0, 1]
-  Some regions may have clusters, others gaps
+Standardowy Monte Carlo:
+  Wylosuj N punktów jednostajnie z [0, 1]
+  Niektóre regiony mogą mieć skupiska, inne dziury
 
 Stratified sampling:
-  Divide [0, 1] into N equal strata: [0, 1/N), [1/N, 2/N), ..., [(N-1)/N, 1)
-  Sample one point uniformly within each stratum
-  x_i = (i + u_i) / N   where u_i ~ Uniform(0, 1),  i = 0, ..., N-1
+  Podziel [0, 1] na N równych warstw: [0, 1/N), [1/N, 2/N), ..., [(N-1)/N, 1)
+  Wylosuj jeden punkt jednostajnie w każdej warstwie
+  x_i = (i + u_i) / N   gdzie u_i ~ Uniform(0, 1),  i = 0, ..., N-1
 ```
 
-Próbkowanie warstwowe zawsze ma mniejszą lub równą wariancję w porównaniu ze standardowym Monte Carlo:
+Stratified sampling ma zawsze mniejszą lub równą wariancję w porównaniu do standardowego Monte Carlo:
 
 ```
-Var(stratified) <= Var(standard Monte Carlo)
+Var(stratified) <= Var(standardowy Monte Carlo)
 
-The improvement is largest when f(x) varies smoothly.
-For piecewise-constant functions, stratified sampling is exact.
+Ulepszenie jest największe, gdy f(x) zmienia się gładko.
+Dla funkcji kawałkami stałych, stratified sampling jest dokładny.
 ```
 
 **Zastosowania:**
-- Całkowanie numeryczne (quasi-Monte Carlo)
-- Podział danych treningowych (zapewniający równowagę klas w każdym przypadku)
-- Próbkowanie według ważności z stratyfikację (połączenie obu technik)
-- NeRF (Neural Radiance Fields) wykorzystuje próbkowanie warstwowe wzdłuż promieni kamery
+- Integracja numeryczna (quasi-Monte Carlo)
+- Podziały danych treningowych (zapewnienie balansu klas w każdym foldzie)
+- Sampling istotnościowy ze stratyfikacją (łączenie obu technik)
+- NeRF (Neural Radiance Fields) używa stratified sampling wzdłuż promieni kamery
 
 ### Połączenie z modelami dyfuzyjnymi
 
-Modele dyfuzyjne generują obrazy w procesie próbkowania. Proces do przodu dodaje szum Gaussa do obrazu w T krokach, aż stanie się czystym szumem. Proces odwrotny uczy się odszumiania, krok po kroku odzyskując oryginalny obraz.
+Modele dyfuzyjne generują obrazy poprzez proces samplowania. Proces w przód (forward process) dodaje szum gaussowski do obrazu w T krokach, aż staje się czystym szumem. Proces w tył (reverse process) uczy się odszumiać, odzyskując oryginalny obraz krok po kroku.
 
 ```
-Forward process (known):
+Proces w przód (znany):
   x_t = sqrt(alpha_t) * x_{t-1} + sqrt(1 - alpha_t) * epsilon
-  where epsilon ~ N(0, I)
+  gdzie epsilon ~ N(0, I)
 
-  After T steps: x_T ~ N(0, I)  (pure noise)
+  Po T krokach: x_T ~ N(0, I)  (czysty szum)
 
-Reverse process (learned):
+Proces w tył (wyuczony):
   x_{t-1} = (1/sqrt(alpha_t)) * (x_t - (1 - alpha_t)/sqrt(1 - alpha_bar_t) * epsilon_theta(x_t, t)) + sigma_t * z
-  where z ~ N(0, I)
+  gdzie z ~ N(0, I)
 
-  Each denoising step is a sampling step.
+  Każdy krok odszumiania jest krokiem samplowania.
 ```
 
 Połączenie z metodami z tej lekcji:
-- Każdy krok odszumiania wykorzystuje sztuczkę ponownej parametryzacji (próbka szumu, zastosowanie transformacji deterministycznej)
-- Harmonogram szumów {alpha_t} kontroluje formę wyżarzania temperaturowego
-- Trening wykorzystuje estymację Monte Carlo w celu przybliżenia ELBO (dolna granica dowodu)
-- Próbkowanie przodków w modelach dyfuzyjnych to łańcuch Markowa (każdy krok zależy tylko od stanu bieżącego)
+- Każdy krok odszumiania używa triku reparametryzacji (sampluje szum, zastosuj deterministyczną transformację)
+- Harmonogram szumu {alpha_t} kontroluje formę wygaszania (annealing) temperatury
+- Trening używa estymacji Monte Carlo do aproksymacji ELBO (evidence lower bound)
+- Ancestral sampling w modelach dyfuzyjnych jest łańcuchem Markowa (każdy krok zależy tylko od aktualnego stanu)
 
-Cały proces generowania obrazu polega na próbkowaniu iteracyjnym: zacznij od szumu i na każdym etapie próbkuj wersję nieco mniej zaszumioną, uwarunkowaną wyuczonym modelem odszumiania.
+Cały proces generowania obrazu jest iteracyjnym samplowaniem: zacznij od szumu i na każdym kroku sampluj nieco mniej zaszumioną wersję, warunkowaną na wyuczonym modelu odszumiania.
 
 ## Zbuduj to
 
-### Krok 1: Próbkowanie jednolite i odwrotne CDF
+### Krok 1: Sampling jednostajny i odwrotny CDF
 
 ```python
 import math
@@ -453,9 +453,9 @@ def sample_exponential_inverse_cdf(lam):
     return -math.log(u) / lam
 ```
 
-Wygeneruj 10 000 próbek wykładniczych i sprawdź, czy średnia wynosi 1/lambda.
+Wygeneruj 10 000 próbek wykładniczych i zweryfikuj, że średnia wynosi 1/lambda.
 
-### Krok 2: Próbkowanie odrzucone
+### Krok 2: Sampling odrzucania
 
 ```python
 def rejection_sample(target_pdf, proposal_sample, proposal_pdf, M):
@@ -466,9 +466,9 @@ def rejection_sample(target_pdf, proposal_sample, proposal_pdf, M):
             return x
 ```
 
-Użyj próbkowania przez odrzucenie, aby wyciągnąć z obciętego rozkładu normalnego. Sprawdź kształt poprzez histogram próbek.
+Użyj samplingu odrzucania, aby wygenerować próbki z obciętego rozkładu normalnego (truncated normal). Zweryfikuj kształt poprzez histogramowanie próbek.
 
-### Krok 3: Próbkowanie ważności
+### Krok 3: Sampling istotnościowy
 
 ```python
 def importance_sampling_estimate(f, target_pdf, proposal_pdf, proposal_sample, n):
@@ -480,9 +480,9 @@ def importance_sampling_estimate(f, target_pdf, proposal_pdf, proposal_sample, n
     return total / n
 ```
 
-Oszacuj E[X^2] w rozkładzie normalnym, korzystając z jednolitej propozycji. Porównaj ze znaną odpowiedzią (mu^2 + sigma^2).
+Oszacuj E[X^2] pod rozkładem normalnym, używając jednostajnej propozycji. Porównaj z znaną odpowiedzią (mu^2 + sigma^2).
 
-### Krok 4: Oszacowanie liczby pi metodą Monte Carlo
+### Krok 4: Estymacja Monte Carlo dla pi
 
 ```python
 def monte_carlo_pi(n):
@@ -495,7 +495,7 @@ def monte_carlo_pi(n):
     return 4 * inside / n
 ```
 
-### Krok 5: MCMC Metropolis-Hastings
+### Krok 5: Metropolis-Hastings MCMC
 
 ```python
 def metropolis_hastings(target_log_pdf, proposal_sample, proposal_log_pdf, x0, n_samples, burn_in):
@@ -512,9 +512,9 @@ def metropolis_hastings(target_log_pdf, proposal_sample, proposal_log_pdf, x0, n
     return samples
 ```
 
-Próbka z rozkładu bimodalnego (mieszanina dwóch Gaussów). Wizualizuj trajektorię łańcucha.
+Sampluj z rozkładu bimodalnego (mieszanina dwóch rozkładów Gaussa). Zwizualizuj trajektorię łańcucha.
 
-### Krok 6: Próbkowanie Gibbsa
+### Krok 6: Gibbs Sampling
 
 ```python
 def gibbs_sampling_2d(conditional_x_given_y, conditional_y_given_x, x0, y0, n_samples, burn_in):
@@ -528,7 +528,7 @@ def gibbs_sampling_2d(conditional_x_given_y, conditional_y_given_x, x0, y0, n_sa
     return samples
 ```
 
-### Krok 7: Próbkowanie temperatury
+### Krok 7: Temperature Sampling
 
 ```python
 def softmax(logits):
@@ -543,9 +543,9 @@ def temperature_sample(logits, temperature):
     return sample_from_probs(probs)
 ```
 
-Pokaż, jak temperatura zmienia rozkład wyjściowy dla zestawu logitów symbolicznych.
+Pokaż, jak temperatura zmienia rozkład wyjściowy dla zbioru logitów tokenów.
 
-### Krok 8: Próbkowanie top-k i top-p
+### Krok 8: Top-k i Top-p Sampling
 
 ```python
 def top_k_sample(logits, k):
@@ -573,7 +573,7 @@ def top_p_sample(logits, p):
     return selected[idx][0]
 ```
 
-### Krok 9: Sztuczka z ponowną parametryzacją
+### Krok 9: Trik reparametryzacji
 
 ```python
 def reparam_sample(mu, sigma):
@@ -586,7 +586,7 @@ def reparam_gradient(mu, sigma, epsilon):
     return dz_dmu, dz_dsigma
 ```
 
-Wykazać, że gradienty przepływają przez ponownie sparametryzowaną próbkę, ale nie przez bezpośrednie próbkowanie.
+Zademonstruj, że gradienty przepływają przez reparametryzowaną próbkę, ale nie przez bezpośrednie samplowanie.
 
 ### Krok 10: Gumbel-Softmax
 
@@ -600,13 +600,13 @@ def gumbel_softmax(logits, temperature):
     return softmax([g / temperature for g in gumbels])
 ```
 
-Pokaż, jak malejąca temperatura powoduje, że sygnał wyjściowy zbliża się do wektora jednego gorącego.
+Pokaż, jak zmniejszanie temperatury powoduje, że wynik zbliża się do wektora one-hot.
 
-Pełne wdrożenia wraz ze wszystkimi wizualizacjami znajdują się w `code/sampling.py`.
+Pełne implementacje z wszystkimi wizualizacjami znajdują się w `code/sampling.py`.
 
 ## Użyj tego
 
-W przypadku NumPy i SciPy wersje produkcyjne:
+Z NumPy i SciPy, wersje produkcyjne:
 
 ```python
 import numpy as np
@@ -629,52 +629,52 @@ token = rng.choice(len(logits), p=probs)
 print(f"Sampled token index: {token}")
 ```
 
-W przypadku MCMC na dużą skalę użyj dedykowanych bibliotek:
-- PyMC: pełne modelowanie bayesowskie za pomocą NUTS (adaptacyjna HMC)
-- emcee: sampler zespołu MCMC
-- NumPyro/JAX: MCMC z akceleracją GPU
+Dla MCMC w dużej skali, użyj dedykowanych bibliotek:
+- PyMC: pełne modelowanie bayesowskie z NUTS (adaptive HMC)
+- emcee: ensemble MCMC sampler
+- NumPyro/JAX: MCMC akcelerowane na GPU
 
-Zbudowałeś je od zera. Teraz już wiesz, co robią wezwania do biblioteki.
+Zbudowałeś to od zera. Teraz wiesz, co robią wywołania bibliotek.
 
 ## Ćwiczenia
 
-1. Zaimplementuj odwrotne próbkowanie CDF dla rozkładu Cauchy'ego. CDF wynosi F(x) = 0,5 + arctan(x)/pi. Wygeneruj 10 000 próbek i porównaj histogram z prawdziwym plikiem PDF. Zwróć uwagę na ciężkie ogony (ekstremalne wartości daleko od środka).
+1. Zaimplementuj sampling odwrotnego CDF dla rozkładu Cauchy'ego. CDF wynosi F(x) = 0.5 + arctan(x)/pi. Wygeneruj 10 000 próbek i narysuj histogram na tle prawdziwego PDF. Zwróć uwagę na ciężkie ogony (heavy tails - wartości ekstremalne, dalekie od centrum).
 
-2. Użyj próbkowania odrzucającego, aby wygenerować próbki z rozkładu Beta(2, 5) przy użyciu propozycji Uniform(0, 1). Porównaj zaakceptowane próbki z prawdziwym plikiem Beta PDF. Jaki jest teoretyczny współczynnik akceptacji?
+2. Użyj samplingu odrzucania, aby wygenerować próbki z rozkładu Beta(2, 5), używając propozycji Uniform(0, 1). Narysuj zaakceptowane próbki na tle prawdziwego PDF rozkładu Beta. Jaki jest teoretyczny współczynnik akceptacji?
 
-3. Oszacuj całkę sin(x) od 0 do pi, stosując metodę Monte Carlo dla 1000, 10 000 i 100 000 próbek. Porównaj błąd na każdym poziomie. Sprawdź, czy błąd skaluje się jako O(1/sqrt(N)).
+3. Oszacuj całkę z sin(x) od 0 do pi, używając Monte Carlo z 1 000, 10 000 i 100 000 próbek. Porównaj błąd na każdym poziomie. Zweryfikuj, że błąd skaluje się jak O(1/sqrt(N)).
 
-4. Zaimplementuj Metropolis-Hastings, aby próbkować z rozkładu 2D p(x, y) proporcjonalnego do exp(-(x^2 * y^2 + x^2 + y^2 - 8*x - 8*y) / 2). Narysuj próbki i trajektorię łańcucha. Eksperymentuj z różnymi odchyleniami standardowymi propozycji.
+4. Zaimplementuj Metropolis-Hastings, aby samplować z 2D rozkładu p(x, y) proporcjonalnego do exp(-(x^2 * y^2 + x^2 + y^2 - 8*x - 8*y) / 2). Narysuj próbki i trajektorię łańcucha. Eksperymentuj z różnymi odchyleniami standardowymi propozycji.
 
-5. Zbuduj pełne demo generowania tekstu: mając słownictwo składające się z 10 słów z logitami, wygeneruj sekwencje 20 tokenów za pomocą (a) zachłannego, (b) temperatury=0,7, (c) top-k=3, (d) top-p=0,9. Porównaj różnorodność wyników w 5 seriach.
+5. Zbuduj kompletne demo generowania tekstu: dla słownika 10 słów z logitami, wygeneruj sekwencje 20 tokenów, używając (a) greedy, (b) temperature=0.7, (c) top-k=3, (d) top-p=0.9. Porównaj różnorodność wyników w 5 uruchomieniach.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co ludzie mówią | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Próbkowanie | „Rysowanie wartości losowych” | Generowanie wartości na podstawie rozkładu prawdopodobieństwa. Mechanizm stojący za całą generatywną sztuczną inteligencją |
-| Równomierny rozkład | „Wszystkie równie prawdopodobne” | Każda wartość w [a, b] ma równą gęstość prawdopodobieństwa 1/(b-a). Punkt wyjścia dla wszystkich metod pobierania próbek |
-| Odwrotna CDF | „Transformacja prawdopodobieństwa” | F_inverse(U) konwertuje próbkę jednorodną na próbkę z dowolnego rozkładu o znanej CDF. Dokładny i wydajny |
-| Próbkowanie odrzucone | „Zaproponuj i zaakceptuj/odrzuć” | Generuj na podstawie prostej propozycji, zaakceptuj z prawdopodobieństwem proporcjonalnym do stosunku cel/propozycja. Dokładne, ale marnuje próbki |
-| Próbkowanie znaczenia | „Ponowne zważenie próbek” | Oszacuj oczekiwania w ramach p(x), korzystając z próbek z q(x), ważąc każdą próbkę przez p(x)/q(x). Rdzeń do PPO w RL |
-| Monte Carlo | „Średnie próbki losowe” | Całki przybliżone jako średnie z próbek. Błąd O(1/sqrt(N)) niezależnie od wymiaru |
-| MCMC | „Losowy spacer, który zbiega się” | Skonstruuj łańcuch Markowa, którego rozkład stacjonarny jest celem. Metropolis-Hastings to podstawowy algorytm |
-| Metropolis-Hastings | „Akceptuj pod górę, czasem w dół” | Proponuj ruchy, akceptuj je na podstawie współczynnika gęstości. Szczegółowy bilans zapewnia zbieżność z dystrybucją docelową |
-| Próbkowanie Gibbsa | „Jedna zmienna na raz” | Zaktualizuj każdą zmienną na podstawie jej rozkładu warunkowego, pozostawiając inne stałe. 100% współczynnik akceptacji |
-| Temperatura | „Pokrętło pewności” | Dzieli logity przez T przed softmax. T<1 wyostrza (bardziej pewny siebie), T>1 spłaszcza (bardziej zróżnicowany) |
-| Próbkowanie top-k | „Zachowaj najlepsze wyniki” | Wyzeruj wszystkie oprócz k żetonów o najwyższym prawdopodobieństwie, renormalizuj, próbkuj. Naprawiono rozmiar zestawu kandydatów |
-| Pobieranie próbek jądra (góra-p) | „Zachowaj prawdopodobne” | Zachowaj najmniejszy zestaw żetonów, których skumulowane prawdopodobieństwo przekracza p. Rozmiar adaptacyjnego zestawu kandydatów |
-| Sztuczka reparametryzacyjna | „Przenieś losowość na zewnątrz” | Zapisz z = mu + sigma * epsilon gdzie epsilon ~ N(0,1). Umożliwia różnicowanie próbkowania. Niezbędne w szkoleniu VAE |
-| Gumbel-Softmax | „Miękkie próbkowanie kategoryczne” | Różniczkowe przybliżenie do próbkowania kategorycznego przy użyciu szumu Gumbela + softmax z temperaturą |
-| Próbkowanie warstwowe | „Przymusowy zasięg” | Podziel przestrzeń próbki na warstwy, pobierz próbkę z każdej. Zawsze niższa wariancja niż naiwne Monte Carlo |
-| Wypalenie | „Okres rozgrzewkowy” | Początkowe próbki MCMC odrzucone, zanim łańcuch osiągnie rozkład stacjonarny |
-| Bilans szczegółowy | „Warunek odwracalności” | p(x) * T(x->y) = p(y) * T(y->x). Warunek wystarczający, aby p było rozkładem stacjonarnym łańcucha Markowa |
-| Próbkowanie dyfuzyjne | „Iteracyjne odszumianie” | Generuj dane, zaczynając od szumu i stosując wyuczone kroki odszumiania. Każdy krok jest operacją próbkowania warunkowego |
+| Sampling | "Losowanie wartości" | Generowanie wartości zgodnie z rozkładem prawdopodobieństwa. Mechanizm leżący za całym generatywnym AI |
+| Rozkład jednostajny (Uniform distribution) | "Wszystko równie prawdopodobne" | Każda wartość w [a, b] ma równą gęstość prawdopodobieństwa 1/(b-a). Punkt wyjścia dla wszystkich metod samplowania |
+| Odwrotny CDF (Inverse CDF) | "Transformacja prawdopodobieństwa" | F_inverse(U) przekształca próbkę jednostajną w próbkę z dowolnego rozkładu o znanym CDF. Dokładny i efektywny |
+| Sampling odrzucania (Rejection sampling) | "Proponuj i akceptuj/odrzucaj" | Generuj z prostej propozycji, akceptuj z prawdopodobieństwem proporcjonalnym do stosunku target/proposal. Dokładny, ale marnuje próbki |
+| Sampling istotnościowy (Importance sampling) | "Przeważ próbki" | Oszacuj wartości oczekiwane pod p(x), używając próbek z q(x), wagując każdą próbkę przez p(x)/q(x). Kluczowy w PPO w RL |
+| Monte Carlo | "Średnia z losowych próbek" | Aproksymuj całki jako średnie z próbek. Błąd O(1/sqrt(N)) niezależnie od wymiaru |
+| MCMC | "Losowy spacer, który zbiega" | Konstrukcja łańcucha Markowa, którego rozkład stacjonarny jest celem. Metropolis-Hastings jest fundamentalnym algorytmem |
+| Metropolis-Hastings | "Akceptuj pod górę, czasem w dół" | Proponuj ruchy, akceptuj na podstawie stosunku gęstości. Szczegółowy bilans zapewnia zbieżność do rozkładu docelowego |
+| Gibbs sampling | "Jedna zmienna na raz" | Aktualizuj każdą zmienną z jej rozkładu warunkowego, trzymając inne ustalone. 100% współczynnik akceptacji |
+| Temperatura | "Pokrętło pewności" | Dzieli logity przez T przed softmax. T<1 zaostrza (bardziej pewny), T>1 spłaszcza (bardziej różnorodny) |
+| Top-k sampling | "Zachowaj k najlepszych" | Wyzeruj wszystko poza k tokenami o najwyższym prawdopodobieństwie, renormalizuj, sampluj. Ustalony rozmiar zbioru kandydatów |
+| Nucleus sampling (top-p) | "Zachowaj te prawdopodobne" | Zachowaj najmniejszy zbiór tokenów, których kumulatywne prawdopodobieństwo przekracza p. Adaptacyjny rozmiar zbioru kandydatów |
+| Trik reparametryzacji (Reparameterization trick) | "Przenieś losowość na zewnątrz" | Zapisz z = mu + sigma * epsilon, gdzie epsilon ~ N(0,1). Sprawia, że samplowanie jest dyferencjowalne. Niezbędny dla treningu VAE |
+| Gumbel-Softmax | "Miękkie samplowanie kategoryczne" | Dyferencjowalna aproksymacja samplowania kategorycznego, używająca szumu Gumbel + softmax z temperaturą |
+| Stratified sampling | "Wymuszone pokrycie" | Podziel przestrzeń próbek na warstwy (strata), sampluj z każdej. Zawsze mniejsza wariancja niż naiwny Monte Carlo |
+| Burn-in | "Okres rozgrzewki" | Początkowe próbki MCMC odrzucane, zanim łańcuch osiągnie swój rozkład stacjonarny |
+| Szczegółowy bilans (Detailed balance) | "Warunek odwracalności" | p(x) * T(x->y) = p(y) * T(y->x). Wystarczający warunek, by p było rozkładem stacjonarnym łańcucha Markowa |
+| Diffusion sampling | "Iteracyjne odszumianie" | Generuj dane, zaczynając od szumu i stosując wyuczone kroki odszumiania. Każdy krok jest warunkową operacją samplowania |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-- [Holbrook (2023): The Metropolis-Hastings Algorithm](https://arxiv.org/abs/2304.07010) - szczegółowy poradnik na temat podstaw MCMC
-- [Jang, Gu, Poole (2017): Kategoryczna reparametryzacja za pomocą Gumbel-Softmax](https://arxiv.org/abs/1611.01144) - oryginalna praca Gumbel-Softmax
-- [Holtzman i in. (2020): Ciekawy przypadek degeneracji tekstu neuronowego](https://arxiv.org/abs/1904.09751) – dokument dotyczący jądra (góra-p)
-- [Kingma & Welling (2014): Auto-Encoding Variational Bayes](https://arxiv.org/abs/1312.6114) - artykuł VAE przedstawiający sztuczkę reparametryzacji
-- [Ho, Jain, Abbeel (2020): Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239) – DDPM łączy próbkowanie z generowaniem obrazu
+- [Holbrook (2023): The Metropolis-Hastings Algorithm](https://arxiv.org/abs/2304.07010) - szczegółowy tutorial o podstawach MCMC
+- [Jang, Gu, Poole (2017): Categorical Reparameterization with Gumbel-Softmax](https://arxiv.org/abs/1611.01144) - oryginalny artykuł o Gumbel-Softmax
+- [Holtzman et al. (2020): The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751) - artykuł o nucleus (top-p) sampling
+- [Kingma & Welling (2014): Auto-Encoding Variational Bayes](https://arxiv.org/abs/1312.6114) - artykuł o VAE wprowadzający trik reparametryzacji
+- [Ho, Jain, Abbeel (2020): Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239) - DDPM łączy samplowanie z generowaniem obrazów

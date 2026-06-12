@@ -1,43 +1,43 @@
-# Rachunek dla uczenia maszynowego
+# Rachunek różniczkowy dla uczenia maszynowego
 
-> Instrumenty pochodne mówią Ci, która droga prowadzi w dół. To wszystko, czego sieć neuronowa musi się nauczyć.
+> Pochodne mówią, w którą stronę jest „w dół”. To wszystko, czego potrzebuje sieć neuronowa, żeby się uczyć.
 
-**Typ:** Ucz się
+**Typ:** Nauka
 **Język:** Python
-**Wymagania wstępne:** Faza 1, lekcje 01-03
+**Wymagania wstępne:** Faza 1, Lekcje 01-03
 **Czas:** ~60 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Oblicz pochodne numeryczne i analityczne dla typowych funkcji ML (x^2, sigmoida, entropia krzyżowa)
-- Zaimplementuj opadanie gradientu od podstaw, aby zminimalizować funkcję strat w 1D i 2D
-- Wyprowadź gradient modelu regresji liniowej i trenuj go za pomocą ręcznych aktualizacji wag
-- Wyjaśnić macierz Hessego, przybliżenia szeregów Taylora i ich związek z metodami optymalizacyjnymi
+- Obliczanie numerycznych i analitycznych pochodnych dla typowych funkcji w ML (x^2, sigmoid, cross-entropy)
+- Implementacja gradientu prostego (gradient descent) od podstaw, aby zminimalizować funkcję straty w 1D i 2D
+- Wyprowadzenie gradientu modelu regresji liniowej i wytrenowanie go poprzez ręczne aktualizacje wag
+- Wyjaśnienie macierzy Hessego, przybliżeń szeregiem Taylora oraz ich powiązania z metodami optymalizacji
 
 ## Problem
 
-Masz sieć neuronową z milionami ciężarków. Każdy ciężarek jest gałką. Musisz dowiedzieć się, w którą stronę obrócić każde pojedyncze pokrętło, aby model był nieco mniej błędny. Rachunek różniczkowy daje ci ten kierunek.
+Masz sieć neuronową z milionami wag. Każda waga to pokrętło. Musisz ustalić, w którą stronę przekręcić każde pojedyncze pokrętło, aby model był odrobinę mniej błędny. Rachunek różniczkowy daje ci ten kierunek.
 
-Bez rachunku różniczkowego szkolenie sieci neuronowej oznaczałoby wypróbowywanie przypadkowych zmian i nadzieję na najlepsze. W przypadku instrumentów pochodnych wiesz dokładnie, jak każda waga wpływa na błąd. Za każdym razem przekręcasz każde pokrętło we właściwą stronę.
+Bez rachunku różniczkowego trenowanie sieci neuronowej oznaczałoby próbowanie losowych zmian i liczenie na to, że się powiedzie. Z pochodnymi wiesz dokładnie, jak każda waga wpływa na błąd. Przekręcasz każde pokrętło we właściwą stronę, za każdym razem.
 
 ## Koncepcja
 
-### Co to jest pochodna?
+### Czym jest pochodna?
 
-Instrument pochodny mierzy tempo zmian. Dla funkcji y = f(x) pochodna f'(x) mówi: jeśli poruszysz x o niewielką wartość, jak bardzo zmieni się y?
+Pochodna mierzy szybkość zmiany. Dla funkcji y = f(x) pochodna f'(x) mówi: jeśli zmienisz x o bardzo małą wartość, o ile zmieni się y?
 
-Geometrycznie pochodną jest nachylenie stycznej w punkcie.
+Geometrycznie pochodna to nachylenie (slope) stycznej do wykresu w danym punkcie.
 
 **f(x) = x^2:**
 
 | x | f(x) | f'(x) (nachylenie) |
-|-------|------|--------------|
-| 0 | 0 | 0 (płaski, na dole) |
-| 1 | 1 | 2 |
-| 2 | 4 | 4 (nachylenie linii stycznej w tym punkcie) |
-| 3 | 9 | 6 |
+|---|------|---------------|
+| 0 | 0    | 0 (płasko, na dnie) |
+| 1 | 1    | 2 |
+| 2 | 4    | 4 (nachylenie stycznej w tym punkcie) |
+| 3 | 9    | 6 |
 
-Przy x=2 nachylenie wynosi 4. Jeśli przesuniesz x odrobinę w prawo, y wzrośnie około 4-krotnie. Przy x=0 nachylenie wynosi 0. Znajdujesz się na dnie miski.
+Przy x=2 nachylenie wynosi 4. Jeśli przesuniesz x o odrobinę w prawo, y zwiększy się o około 4-krotność tej zmiany. Przy x=0 nachylenie wynosi 0. Jesteś na dnie misy.
 
 Formalna definicja:
 
@@ -47,105 +47,105 @@ f'(x) = lim   f(x + h) - f(x)
                      h
 ```
 
-W kodzie pomijasz limit i po prostu używasz bardzo małego h. To jest pochodna liczbowa.
+W kodzie pomijasz granicę i po prostu używasz bardzo małego h. To jest pochodna numeryczna.
 
 ### Pochodne cząstkowe: jedna zmienna na raz
 
-Funkcje rzeczywiste mają wiele danych wejściowych. Strata sieci neuronowej zależy od tysięcy wag. Pochodna cząstkowa utrzymuje wszystkie zmienne na stałym poziomie z wyjątkiem jednej, a następnie oblicza pochodną względem tej zmiennej.
+Rzeczywiste funkcje mają wiele zmiennych wejściowych. Funkcja straty sieci neuronowej zależy od tysięcy wag. Pochodna cząstkowa traktuje wszystkie zmienne jako stałe poza jedną, a następnie liczy pochodną względem tej jednej.
 
 ```
 f(x, y) = x^2 + 3xy + y^2
 
-df/dx = 2x + 3y     (treat y as a constant)
-df/dy = 3x + 2y     (treat x as a constant)
+df/dx = 2x + 3y     (traktuj y jako stałą)
+df/dy = 3x + 2y     (traktuj x jako stałą)
 ```
 
-Każda pochodna cząstkowa odpowiada: jeśli szturchnę tylko tę jedną wagę, jak zmieni się strata?
+Każda pochodna cząstkowa odpowiada na pytanie: jeśli zmienię tylko tę jedną wagę, jak zmieni się strata?
 
 ### Gradient: wektor wszystkich pochodnych cząstkowych
 
-Gradient zbiera każdą pochodną cząstkową w jeden wektor. Dla funkcji f(x, y, z) gradient wynosi:
+Gradient zbiera wszystkie pochodne cząstkowe w jeden wektor. Dla funkcji f(x, y, z) gradient to:
 
 ```
 grad f = [ df/dx, df/dy, df/dz ]
 ```
 
-Nachylenie wskazuje w kierunku najbardziej stromego wzniesienia. Aby zminimalizować funkcję, należy postępować w przeciwnym kierunku.
+Gradient wskazuje kierunek najszybszego wzrostu funkcji. Aby zminimalizować funkcję, idź w przeciwnym kierunku.
 
-**Wykres konturowy f(x,y) = x^2 + y^2:**
+**Wykres warstwicowy f(x,y) = x^2 + y^2:**
 
-Funkcja tworzy kształt misy z koncentrycznymi okręgami jako liniami konturowymi. Minimum wynosi (0, 0).
+Funkcja tworzy kształt misy z koncentrycznymi okręgami jako liniami warstwicowymi. Minimum znajduje się w punkcie (0, 0).
 
-| Punkt | stopień f | -grad f (kierunek opadania) |
-|-------|-------|----------------------------|
-| (1, 1) | [2, 2] (punkty w górę, z dala od minimum) | [-2, -2] (wskazuje w dół, w kierunku minimum) |
-| (0, 0) | [0, 0] (płasko, co najmniej) | [0, 0] |
+| Punkt | grad f | -grad f (kierunek schodzenia) |
+|-------|--------|----------------------------|
+| (1, 1) | [2, 2] (wskazuje pod górę, w stronę przeciwną do minimum) | [-2, -2] (wskazuje w dół, w stronę minimum) |
+| (0, 0) | [0, 0] (płasko, w minimum) | [0, 0] |
 
-To jest gradientowe opadanie na zdjęciu. Oblicz gradient, zaneguj go, zrób krok.
+To właśnie gradient descent na obrazku. Oblicz gradient, odwróć jego znak, wykonaj krok.
 
-### Połączenie z optymalizacją
+### Powiązanie z optymalizacją
 
-Uczenie sieci neuronowej to optymalizacja. Masz funkcję straty L(w1, w2, ..., wn), która mierzy, jak błędny jest model. Chcesz to zminimalizować.
+Trenowanie sieci neuronowej to optymalizacja. Masz funkcję straty L(w1, w2, ..., wn), która mierzy, jak bardzo model się myli. Chcesz ją zminimalizować.
 
 ```
-Gradient descent update rule:
+Reguła aktualizacji w gradient descent:
 
   w_new = w_old - learning_rate * dL/dw
 
-For every weight:
-  1. Compute the partial derivative of loss with respect to that weight
-  2. Subtract a small multiple of it from the weight
-  3. Repeat
+Dla każdej wagi:
+  1. Oblicz pochodną cząstkową straty względem tej wagi
+  2. Odejmij od wagi małą wielokrotność tej pochodnej
+  3. Powtarzaj
 ```
 
-Szybkość uczenia się kontroluje wielkość kroku. Za duży i przesadzisz. Za mały i czołgasz się.
+Współczynnik uczenia (learning rate) kontroluje rozmiar kroku. Zbyt duży i przeskoczysz cel. Zbyt mały i będziesz się czołgać.
 
-**Krajobraz strat (wycinek 1D):**
+**Krajobraz straty (przekrój 1D):**
 
-Funkcja straty L(w) tworzy krzywą z wierzchołkami i dolinami w miarę zmiany ciężaru w.
+Funkcja straty L(w) tworzy krzywą z wzniesieniami i dolinami w miarę zmiany wagi w.
 
-| Funkcja | Opis |
-|--------|------------|
-| Globalne minimum | Najniższy punkt na całej krzywej – najlepsze rozwiązanie |
-| Minimum lokalne | Dolina niższa od sąsiadów, ale ogólnie nie najniższa |
-| Nachylenie | Zejście gradientowe następuje po zboczu w dół od dowolnego punktu początkowego |
+| Cecha | Opis |
+|---------|-------------|
+| Minimum globalne | Najniższy punkt na całej krzywej -- najlepsze rozwiązanie |
+| Minimum lokalne | Dolina niższa niż jej sąsiedztwo, ale nie najniższa ogólnie |
+| Nachylenie | Gradient descent podąża po nachyleniu w dół z dowolnego punktu startowego |
 
-Zejście gradientowe następuje po zboczu w dół. Może utknąć w lokalnych minimach, ale w przestrzeniach wielowymiarowych (miliony wag) rzadko jest to problem praktyczny.
+Gradient descent podąża po nachyleniu w dół. Może utknąć w minimach lokalnych, ale w przestrzeniach o wysokiej wymiarowości (miliony wag) jest to rzadko praktycznym problemem.
 
 ### Pochodne numeryczne a analityczne
 
 Istnieją dwa sposoby obliczania pochodnej.
 
-Analityczny: ręcznie stosuj reguły rachunku różniczkowego. Dla f(x) = x^2 pochodną jest f'(x) = 2x. Dokładny. Szybko.
+Analityczny: zastosuj reguły rachunku różniczkowego ręcznie. Dla f(x) = x^2 pochodna wynosi f'(x) = 2x. Dokładny. Szybki.
 
-Numeryczne: przybliżone na podstawie definicji. Oblicz f(x+h) i f(x-h) dla małego h, a następnie wykorzystaj różnicę.
+Numeryczny: przybliż za pomocą definicji. Oblicz f(x+h) i f(x-h) dla małego h, a następnie wykorzystaj różnicę.
 
 ```
-Numerical (central difference):
+Numeryczna (różnica centralna):
 
 f'(x) ~= f(x + h) - f(x - h)
           -----------------------
                   2h
 
-h = 0.0001 works well in practice
+h = 0.0001 sprawdza się w praktyce
 ```
 
-Pochodne numeryczne są wolniejsze, ale działają dla dowolnej funkcji. Pochodne analityczne są szybkie, ale wymagają wyprowadzenia wzoru. Struktury sieci neuronowych wykorzystują trzecie podejście: automatyczne różnicowanie, które mechanicznie oblicza dokładne pochodne. Zobaczysz to w fazie 3.
+Pochodne numeryczne są wolniejsze, ale działają dla dowolnej funkcji. Pochodne analityczne są szybkie, ale wymagają wyprowadzenia wzoru. Frameworki do sieci neuronowych stosują trzecie podejście: różniczkowanie automatyczne (automatic differentiation), które oblicza dokładne pochodne mechanicznie. Zobaczysz to w Fazie 3.
 
-### Ręczne pochodne prostych funkcji
+### Pochodne ręczne dla prostych funkcji
 
-Są to instrumenty pochodne, które będziesz stale widzieć w ML.
+To są pochodne, które będziesz widzieć w ML w kółko.
 
 ```
-Function        Derivative       Used in
---------        ----------       -------
-f(x) = x^2     f'(x) = 2x      Loss functions (MSE)
-f(x) = wx + b  f'(w) = x        Linear layer (gradient w.r.t. weight)
-                f'(b) = 1        Linear layer (gradient w.r.t. bias)
-                f'(x) = w        Linear layer (gradient w.r.t. input)
+Funkcja        Pochodna       Zastosowanie
+--------       ----------     -------
+f(x) = x^2     f'(x) = 2x      Funkcje straty (MSE)
+f(x) = wx + b  f'(w) = x        Warstwa liniowa (gradient względem wagi)
+                f'(b) = 1        Warstwa liniowa (gradient względem biasu)
+                f'(x) = w        Warstwa liniowa (gradient względem wejścia)
 f(x) = e^x     f'(x) = e^x     Softmax, attention
-f(x) = ln(x)   f'(x) = 1/x     Cross-entropy loss
-f(x) = 1/(1+e^-x)  f'(x) = f(x)(1-f(x))   Sigmoid activation
+f(x) = ln(x)   f'(x) = 1/x     Funkcja straty cross-entropy
+f(x) = 1/(1+e^-x)  f'(x) = f(x)(1-f(x))   Funkcja aktywacji sigmoid
 ```
 
 Dla f(x) = x^2:
@@ -153,62 +153,62 @@ Dla f(x) = x^2:
 ```
 f(x) = x^2    f'(x) = 2x
 
-  x    f(x)   f'(x)   meaning
-  -2    4      -4      slope tilts left (decreasing)
-  -1    1      -2      slope tilts left (decreasing)
-   0    0       0      flat (minimum!)
-   1    1       2      slope tilts right (increasing)
-   2    4       4      slope tilts right (increasing)
+  x    f(x)   f'(x)   znaczenie
+  -2    4      -4      nachylenie w lewo (malejące)
+  -1    1      -2      nachylenie w lewo (malejące)
+   0    0       0      płasko (minimum!)
+   1    1       2      nachylenie w prawo (rosnące)
+   2    4       4      nachylenie w prawo (rosnące)
 ```
 
-Dla f(w) = wx + b przy x=3, b=1:
+Dla f(w) = wx + b z x=3, b=1:
 
 ```
 f(w) = 3w + 1    f'(w) = 3
 
-The derivative with respect to w is just x.
-If x is big, a small change in w causes a big change in output.
+Pochodna względem w to po prostu x.
+Jeśli x jest duże, mała zmiana w powoduje dużą zmianę wyjścia.
 ```
 
-### Reguła łańcucha
+### Reguła łańcuchowa (chain rule)
 
-Kiedy funkcje są złożone, reguła łańcuchowa mówi, jak różnicować.
+Gdy funkcje są złożone, reguła łańcuchowa mówi, jak je różniczkować.
 
 ```
-If y = f(g(x)), then dy/dx = f'(g(x)) * g'(x)
+Jeśli y = f(g(x)), to dy/dx = f'(g(x)) * g'(x)
 
-Example: y = (3x + 1)^2
-  outer: f(u) = u^2       f'(u) = 2u
-  inner: g(x) = 3x + 1    g'(x) = 3
+Przykład: y = (3x + 1)^2
+  zewnętrzna: f(u) = u^2       f'(u) = 2u
+  wewnętrzna: g(x) = 3x + 1    g'(x) = 3
   dy/dx = 2(3x + 1) * 3 = 6(3x + 1)
 ```
 
-Sieci neuronowe to łańcuchy funkcji: wejście -> liniowe -> aktywacja -> liniowe -> aktywacja -> strata. Propagacja wsteczna to reguła łańcuchowa stosowana wielokrotnie od wyjścia do wejścia. To jest cały algorytm.
+Sieci neuronowe to łańcuchy funkcji: wejście -> warstwa liniowa -> aktywacja -> warstwa liniowa -> aktywacja -> strata. Backpropagation to reguła łańcuchowa zastosowana wielokrotnie od wyjścia do wejścia. To cały algorytm.
 
-### Macierz Hesji
+### Macierz Hessego
 
-Gradient informuje o nachyleniu. Hesjanin informuje Cię o krzywiźnie.
+Gradient mówi ci o nachyleniu. Hessian mówi ci o krzywiźnie.
 
-Hesjan jest macierzą pochodnych cząstkowych drugiego rzędu. Dla funkcji f(x1, x2, ..., xn) zapis (i, j) hesjanizmu ma postać:
+Hessian to macierz pochodnych cząstkowych drugiego rzędu. Dla funkcji f(x1, x2, ..., xn) element (i, j) macierzy Hessego to:
 
 ```
 H[i][j] = d^2f / (dx_i * dx_j)
 ```
 
-Dla funkcji dwóch zmiennych f(x, y):
+Dla funkcji dwuzmiennowej f(x, y):
 
 ```
 H = | d^2f/dx^2    d^2f/dxdy |
     | d^2f/dydx    d^2f/dy^2 |
 ```
 
-**Co mówi Ci Hesjan w punkcie krytycznym (gdzie gradient = 0):**
+**Co Hessian mówi ci w punkcie krytycznym (gdzie gradient = 0):**
 
-| Własność Hesji | Znaczenie | Przykładowa powierzchnia |
-|-----------------|--------|--------------------------------|
-| Dodatnio określony (wszystkie wartości własne > 0) | Minimum lokalne | Miska skierowana w górę |
-| Ujemnie określone (wszystkie wartości własne < 0) | Lokalne maksimum | Miska skierowana w dół |
-| Nieokreślone (mieszane wartości własne) | Punkt siodłowy | Kształt siodła konia |
+| Właściwość Hessianu | Znaczenie | Przykładowa powierzchnia |
+|-----------------|---------|-----------------|
+| Dodatnio określony (wszystkie wartości własne > 0) | Minimum lokalne | Misa skierowana do góry |
+| Ujemnie określony (wszystkie wartości własne < 0) | Maksimum lokalne | Misa skierowana do dołu |
+| Nieokreślony (mieszane wartości własne) | Punkt siodłowy | Kształt siodła końskiego |
 
 **Przykład:** f(x, y) = x^2 - y^2 (funkcja siodłowa)
 
@@ -219,131 +219,123 @@ d^2f/dx^2 = 2    d^2f/dy^2 = -2    d^2f/dxdy = 0
 H = | 2   0 |
     | 0  -2 |
 
-Eigenvalues: 2 and -2 (one positive, one negative)
---> Saddle point at (0, 0)
+Wartości własne: 2 i -2 (jedna dodatnia, jedna ujemna)
+--> Punkt siodłowy w (0, 0)
 ```
 
-Porównaj z f(x, y) = x^2 + y^2 (miska):
+Porównaj z f(x, y) = x^2 + y^2 (misa):
 
 ```
 H = | 2  0 |
     | 0  2 |
 
-Eigenvalues: 2 and 2 (both positive)
---> Local minimum at (0, 0)
+Wartości własne: 2 i 2 (obie dodatnie)
+--> Minimum lokalne w (0, 0)
 ```
 
-**Dlaczego Hesjan ma znaczenie w ML:**
+**Dlaczego Hessian ma znaczenie w ML:**
 
-Metoda Newtona wykorzystuje metodę Hesja do podjęcia lepszych kroków optymalizacyjnych niż opadanie gradientowe. Zamiast po prostu podążać za zboczem, uwzględnia krzywiznę:
+Metoda Newtona wykorzystuje Hessian do wykonywania lepszych kroków optymalizacji niż gradient descent. Zamiast po prostu podążać po nachyleniu, uwzględnia krzywiznę:
 
 ```
-Newton's update:    w_new = w_old - H^(-1) * gradient
-Gradient descent:   w_new = w_old - lr * gradient
+Aktualizacja Newtona:    w_new = w_old - H^(-1) * gradient
+Gradient descent:        w_new = w_old - lr * gradient
 ```
 
-Metoda Newtona osiąga zbieżność szybciej, ponieważ Hesjan „przeskalowuje” gradient — strome kierunki wymagają mniejszych kroków, płaskie kierunki — większe kroki.
+Metoda Newtona zbiega szybciej, ponieważ Hessian "przeskalowuje" gradient -- strome kierunki dostają mniejsze kroki, płaskie kierunki dostają większe kroki.
 
-Haczyk: w przypadku sieci neuronowej z N parametrami hesjan to N x N. Model z 1 milionem parametrów wymagałby macierzy zawierającej 1 bilion wpisów. Dlatego używamy przybliżeń.
+Haczyk: dla sieci neuronowej z N parametrami Hessian ma rozmiar N x N. Model z 1 milionem parametrów wymagałby macierzy o 1 bilionie elementów. Dlatego stosujemy przybliżenia.
 
-| Metoda | Czego używa | Koszt | Konwergencja |
-|------------|------------|------|------------|
-| Zejście gradientowe | Tylko pierwsze instrumenty pochodne | O(N) na krok | Powolny (liniowy) |
-| Metoda Newtona | Pełny Heski | O(N^3) na krok | Szybki (kwadratowy) |
-| L-BFGS | Przybliżony hesjan z historii gradientów | O(N) na krok | Średni (superliniowy) |
-| Adama | Współczynniki adaptacyjne według parametrów (w przybliżeniu ukośna Hesja) | O(N) na krok | Średni |
-| Naturalny gradient | Matryca informacji Fishera (statystyczna Hesja) | O(N^2) na krok | Szybki |
+| Metoda | Co wykorzystuje | Koszt | Zbieżność |
+|--------|-------------|------|-------------|
+| Gradient descent | Tylko pochodne pierwszego rzędu | O(N) na krok | Wolna (liniowa) |
+| Metoda Newtona | Pełny Hessian | O(N^3) na krok | Szybka (kwadratowa) |
+| L-BFGS | Przybliżony Hessian na podstawie historii gradientów | O(N) na krok | Średnia (superliniowa) |
+| Adam | Adaptacyjne tempo dla każdego parametru (przybliżenie diagonalnego Hessianu) | O(N) na krok | Średnia |
+| Gradient naturalny | Macierz informacji Fishera (statystyczny Hessian) | O(N^2) na krok | Szybka |
 
-W praktyce Adam jest domyślnym optymalizatorem głębokiego uczenia się. Niedrogo aproksymuje informacje drugiego rzędu, śledząc średnią bieżącą i wariancję gradientów dla każdego parametru.
+W praktyce Adam jest domyślnym optymalizatorem dla głębokiego uczenia. Przybliża informacje drugiego rzędu tanim kosztem, śledząc bieżącą średnią i wariancję gradientów dla każdego parametru.
 
-### Aproksymacja szeregu Taylora
+### Przybliżenie szeregiem Taylora
 
-Każdą gładką funkcję można aproksymować lokalnie wielomianem:
+Każdą gładką funkcję można lokalnie przybliżyć wielomianem:
 
 ```
 f(x + h) = f(x) + f'(x)*h + (1/2)*f''(x)*h^2 + (1/6)*f'''(x)*h^3 + ...
 ```
 
-Im więcej terminów uwzględnisz, tym lepsze przybliżenie - ale tylko w pobliżu punktu x.
+Im więcej wyrazów uwzględnisz, tym lepsze przybliżenie -- ale tylko w pobliżu punktu x.
 
 **Dlaczego szereg Taylora ma znaczenie dla ML:**
 
-- **Taylor pierwszego rzędu = zejście gradientowe.** Używając f(x + h) ~ f(x) + f'(x)*h, dokonujesz przybliżenia liniowego. Zejście gradientowe minimalizuje ten model liniowy, aby wybrać h = -lr * f'(x).
+- **Przybliżenie pierwszego rzędu = gradient descent.** Gdy używasz f(x + h) ~ f(x) + f'(x)*h, dokonujesz przybliżenia liniowego. Gradient descent minimalizuje ten model liniowy, wybierając h = -lr * f'(x).
 
-- **Taylor drugiego rzędu = metoda Newtona.** Używając f(x + h) ~ f(x) + f'(x)*h + (1/2)*f''(x)*h^2, otrzymujesz model kwadratowy. Minimalizowanie daje h = -f'(x)/f''(x) -- krok Newtona.
+- **Przybliżenie drugiego rzędu = metoda Newtona.** Używając f(x + h) ~ f(x) + f'(x)*h + (1/2)*f''(x)*h^2, otrzymujesz model kwadratowy. Jego minimalizacja daje h = -f'(x)/f''(x) -- krok Newtona.
 
-- **Projekt funkcji straty.** MSE i entropia krzyżowa są gładkie, co oznacza, że ​​ich rozwinięcia Taylora zachowują się prawidłowo. To nie jest wypadek. Płynne straty sprawiają, że optymalizacja jest przewidywalna.
+- **Projektowanie funkcji straty.** MSE i cross-entropy są gładkie, co oznacza, że ich rozwinięcia Taylora są dobrze zachowane. To nie jest przypadek. Gładkie funkcje straty czynią optymalizację przewidywalną.
 
 ```
-Approximation order    What it captures    Optimization method
--------------------    -----------------   -------------------
-0th order (constant)   Just the value      Random search
-1st order (linear)     Slope               Gradient descent
-2nd order (quadratic)  Curvature           Newton's method
-Higher orders          Finer structure     Rarely used in ML
+Rząd przybliżenia       Co opisuje          Metoda optymalizacji
+-------------------     -----------------   -------------------
+Rząd 0 (stała)          Tylko wartość       Przeszukiwanie losowe
+Rząd 1 (liniowy)        Nachylenie          Gradient descent
+Rząd 2 (kwadratowy)     Krzywizna           Metoda Newtona
+Wyższe rzędy            Drobniejsza struktura  Rzadko używane w ML
 ```
 
-Kluczowy spostrzeżenie: wszelka optymalizacja oparta na gradientach tak naprawdę polega na lokalnym przybliżeniu funkcji straty i przejściu do minimum tego przybliżenia.
+Kluczowa obserwacja: cała optymalizacja oparta na gradiencie polega tak naprawdę na lokalnym przybliżaniu funkcji straty i wykonywaniu kroku do minimum tego przybliżenia.
 
 ### Całki w ML
 
-Instrumenty pochodne informują o tempie zmian. Całki obliczają akumulacje – pole pod krzywą.
+Pochodne mówią o szybkości zmian. Całki obliczają akumulacje -- pole pod krzywą.
 
-W ML rzadko oblicza się całki ręcznie, ale koncepcja jest wszędzie:
+W ML rzadko liczy się całki ręcznie, ale ta koncepcja jest wszechobecna:
 
-**Prawdopodobieństwo.** Dla ciągłej zmiennej losowej o gęstości p(x):
-
+**Prawdopodobieństwo.** Dla ciągłej zmiennej losowej z gęstością p(x):
 ```
-P(a < X < b) = integral from a to b of p(x) dx
+P(a < X < b) = całka od a do b z p(x) dx
 ```
-
-Obszar pod krzywą gęstości prawdopodobieństwa pomiędzy a i b to prawdopodobieństwo lądowania w tym zakresie.
+Pole pod krzywą gęstości prawdopodobieństwa między a i b to prawdopodobieństwo trafienia w ten zakres.
 
 **Wartość oczekiwana.** Średni wynik ważony prawdopodobieństwem:
-
 ```
-E[f(X)] = integral of f(x) * p(x) dx
+E[f(X)] = całka z f(x) * p(x) dx
 ```
+Oczekiwana strata na rozkładzie danych jest całką. Trenowanie minimalizuje empiryczne przybliżenie tej wartości.
 
-Oczekiwana strata w wyniku dystrybucji danych jest całką. Trening minimalizuje empiryczne przybliżenie tego.
-
-**Rozbieżność KL.** Mierzy różnicę pomiędzy dwoma rozkładami:
-
+**Dywergencja KL.** Mierzy, jak bardzo różnią się dwa rozkłady:
 ```
-KL(p || q) = integral of p(x) * log(p(x) / q(x)) dx
+KL(p || q) = całka z p(x) * log(p(x) / q(x)) dx
 ```
-
-Używany w VAE, destylacji wiedzy i wnioskowaniu bayesowskim.
+Wykorzystywana w VAE, destylacji wiedzy (knowledge distillation) i wnioskowaniu bayesowskim.
 
 **Stałe normalizacyjne.** We wnioskowaniu bayesowskim:
-
 ```
-p(w | data) = p(data | w) * p(w) / integral of p(data | w) * p(w) dw
+p(w | data) = p(data | w) * p(w) / całka z p(data | w) * p(w) dw
 ```
+Mianownik to całka po wszystkich możliwych wartościach parametrów. Często jest nieobliczalna, dlatego stosujemy przybliżenia, takie jak MCMC i wnioskowanie wariacyjne.
 
-Mianownik jest całką po wszystkich możliwych wartościach parametrów. Często jest to trudne do rozwiązania, dlatego używamy przybliżeń, takich jak MCMC i wnioskowania wariacyjnego.
+| Pojęcie całkowe | Gdzie pojawia się w ML |
+|-----------------|----------------------|
+| Pole pod krzywą | Prawdopodobieństwo z funkcji gęstości |
+| Wartość oczekiwana | Funkcje straty, minimalizacja ryzyka |
+| Dywergencja KL | VAE, optymalizacja polityki, destylacja |
+| Normalizacja | Rozkłady a posteriori w Bayesie, mianownik softmax |
+| Wiarygodność brzegowa | Porównywanie modeli, evidence lower bound (ELBO) |
 
-| Integralna koncepcja | Gdzie pojawia się w ML |
-|----------------|----------------------|
-| Powierzchnia pod krzywą | Prawdopodobieństwo z funkcji gęstości |
-| Oczekiwana wartość | Funkcje straty, minimalizacja ryzyka |
-| Rozbieżność KL | VAE, optymalizacja polityki, destylacja |
-| Normalizacja | Tylne części Bayesa, mianownik softmax |
-| Prawdopodobieństwo krańcowe | Porównanie modeli, dolna granica dowodów (ELBO) |
+### Wielowymiarowa reguła łańcuchowa w grafie obliczeniowym
 
-### Reguła łańcucha wielu zmiennych na wykresie obliczeniowym
-
-Reguła łańcucha nie dotyczy tylko funkcji skalarnych w linii. W sieci neuronowej zmienne rozdzielają się i łączą. Oto jak instrumenty pochodne przepływają przez proste przejście w przód:
+Reguła łańcuchowa nie dotyczy tylko funkcji skalarnych ułożonych liniowo. W sieci neuronowej zmienne się rozgałęziają i łączą. Oto jak pochodne przepływają przez prosty przebieg w przód:
 
 ```mermaid
 graph LR
-    x["x (input)"] -->|"*w"| z1["z1 = w*x"]
+    x["x (wejście)"] -->|"*w"| z1["z1 = w*x"]
     z1 -->|"+b"| z2["z2 = w*x + b"]
     z2 -->|"sigmoid"| a["a = sigmoid(z2)"]
-    a -->|"loss fn"| L["L = -(y*log(a) + (1-y)*log(1-a))"]
+    a -->|"funkcja straty"| L["L = -(y*log(a) + (1-y)*log(1-a))"]
 ```
 
-Przejście wstecz oblicza gradienty od prawej do lewej:
+Przebieg wsteczny oblicza gradienty od prawej do lewej:
 
 ```mermaid
 graph RL
@@ -353,15 +345,15 @@ graph RL
     dz2 -->|"dz2/db = 1"| db["dL/db = dL/dz2 * 1"]
 ```
 
-Każda strzałka mnoży przez lokalną pochodną. Gradient dowolnego parametru jest iloczynem wszystkich lokalnych pochodnych na ścieżce od straty do tego parametru. Kiedy ścieżki rozgałęziają się i łączą, sumuje się wkłady (reguła łańcucha wieloczynnikowego).
+Każda strzałka mnoży przez lokalną pochodną. Gradient dla dowolnego parametru to iloczyn wszystkich lokalnych pochodnych wzdłuż ścieżki od straty do tego parametru. Gdy ścieżki się rozgałęziają i łączą, sumujesz wkłady (wielowymiarowa reguła łańcuchowa).
 
-To wszystko jest propagacją wsteczną: reguła łańcucha stosowana systematycznie poprzez wykres obliczeniowy, od wyjścia do wejść.
+To jest cała backpropagation: reguła łańcuchowa zastosowana systematycznie w grafie obliczeniowym, od wyjścia do wejść.
 
-### Macierz Jakobiana
+### Macierz Jacobiego
 
-Kiedy funkcja odwzorowuje wektor na wektor (jak warstwa sieci neuronowej), jej pochodną jest macierz. Jakobian zawiera każdą pochodną cząstkową każdego wyniku w odniesieniu do każdego wejścia.
+Gdy funkcja odwzorowuje wektor na wektor (jak warstwa sieci neuronowej), jej pochodna jest macierzą. Jacobian zawiera każdą pochodną cząstkową każdego wyjścia względem każdego wejścia.
 
-Dla f: R^n -> R^m, jakobian J jest macierzą m x n:
+Dla f: R^n -> R^m, Jacobian J jest macierzą m x n:
 
 | | x1 | x2 | ... | xn |
 |---|---|---|---|---|
@@ -370,31 +362,31 @@ Dla f: R^n -> R^m, jakobian J jest macierzą m x n:
 | ... | ... | ... | ... | ... |
 | fm | dfm/dx1 | dfm/dx2 | ... | dfm/dxn |
 
-Nie będziesz obliczać jakobianów ręcznie dla sieci neuronowych. PyTorch sobie z tym radzi. Ale wiedza o tym, że istnieje, pomaga zrozumieć kształty w propagacji wstecznej: jeśli warstwa odwzorowuje R^n na R^m, jej jakobian wynosi m x n. Gradient przepływa wstecz poprzez transpozycję tej macierzy.
+Nie będziesz ręcznie obliczać Jacobianów dla sieci neuronowych. PyTorch zajmuje się tym za ciebie. Ale wiedza, że istnieją, pomaga zrozumieć kształty (shapes) w backpropagation: jeśli warstwa odwzorowuje R^n na R^m, jej Jacobian ma rozmiar m x n. Gradient przepływa wstecz przez transpozycję tej macierzy.
 
-### Dlaczego ma to znaczenie w przypadku sieci neuronowych
+### Dlaczego ma to znaczenie dla sieci neuronowych
 
-Każdy ciężar w sieci neuronowej otrzymuje gradient. Gradient informuje Cię, jak dostosować ciężar, aby zmniejszyć stratę.
+Każda waga w sieci neuronowej otrzymuje gradient. Gradient mówi ci, jak dostosować tę wagę, aby zmniejszyć stratę.
 
 ```mermaid
 graph LR
-    subgraph Forward["Forward Pass"]
-        I["input"] --> W1["W1"] --> R["relu"] --> W2["W2"] --> S["softmax"] --> L["loss"]
+    subgraph Forward["Przebieg w przód"]
+        I["wejście"] --> W1["W1"] --> R["relu"] --> W2["W2"] --> S["softmax"] --> L["strata"]
     end
 ```
 
 ```mermaid
 graph RL
-    subgraph Backward["Backward Pass"]
+    subgraph Backward["Przebieg wsteczny"]
         dL["dL/dloss"] --> dW2["dL/dW2"] --> d2["..."] --> dW1["dL/dW1"]
     end
 ```
 
-Każda aktualizacja wagi:
+Każda aktualizacja wag:
 - `W1 = W1 - lr * dL/dW1`
 - `W2 = W2 - lr * dL/dW2`
 
-Przejście do przodu oblicza przewidywanie i stratę. Przejście wstecz oblicza gradient straty w odniesieniu do każdego ciężaru. Wtedy każdy ciężar robi mały krok w dół. Powtarzaj dla milionów kroków. To jest głębokie uczenie się.
+Przebieg w przód oblicza predykcję i stratę. Przebieg wsteczny oblicza gradient straty względem każdej wagi. Następnie każda waga wykonuje mały krok w dół. Powtórz to miliony razy. To jest deep learning.
 
 ## Zbuduj to
 
@@ -413,7 +405,7 @@ for x in [-2, -1, 0, 1, 2]:
     print(f"x={x:2d}  f'(x) numerical={numerical:.6f}  analytical={analytical:.1f}")
 ```
 
-Pochodna liczbowa dopasowuje pochodną analityczną do wielu miejsc po przecinku.
+Pochodna numeryczna pokrywa się z analityczną z dokładnością do wielu miejsc po przecinku.
 
 ### Krok 2: Pochodne cząstkowe i gradienty
 
@@ -438,7 +430,7 @@ print(f"Numerical gradient at (1,2): {[f'{g:.4f}' for g in grad]}")
 print(f"Analytical gradient at (1,2): [2*1+3*2, 3*1+2*2] = [{2*1+3*2}, {3*1+2*2}]")
 ```
 
-### Krok 3: Zniżanie gradientowe w celu znalezienia minimum f(x) = x^2
+### Krok 3: Gradient descent w celu znalezienia minimum f(x) = x^2
 
 ```python
 x = 5.0
@@ -449,9 +441,9 @@ for step in range(20):
     print(f"step {step:2d}  x={x:8.4f}  f(x)={x**2:10.6f}")
 ```
 
-Zaczynając od x=5, każdy krok zbliża się do x=0 (minimum).
+Zaczynając od x=5, każdy krok przybliża cię do x=0 (minimum).
 
-### Krok 4: Zejście gradientowe w funkcji 2D
+### Krok 4: Gradient descent na funkcji 2D
 
 ```python
 def f_2d(point):
@@ -491,7 +483,7 @@ for name, f, df in test_functions:
     print(f"{name:<12} {num:12.6f} {ana:12.6f} {err:12.2e}")
 ```
 
-### Krok 6: Obliczanie liczbowe Hesja
+### Krok 6: Numeryczne obliczanie Hessianu
 
 ```python
 def hessian_2d(f, x, y, h=1e-5):
@@ -512,7 +504,7 @@ print(f"Saddle Hessian: {H_saddle}")  # [[2, 0], [0, -2]] -- mixed signs
 print(f"Bowl Hessian:   {H_bowl}")    # [[2, 0], [0, 2]]  -- both positive
 ```
 
-Hesjan funkcji siodłowej ma wartości własne 2 i -2 (znaki mieszane, potwierdzające punkt siodłowy). Miska ma wartości własne 2 i 2 (obie dodatnie, potwierdzające minimum).
+Hessian funkcji siodłowej ma wartości własne 2 i -2 (mieszane znaki, co potwierdza punkt siodłowy). Misa ma wartości własne 2 i 2 (obie dodatnie, co potwierdza minimum).
 
 ### Krok 7: Przybliżenie Taylora w działaniu
 
@@ -535,7 +527,7 @@ for h in [0.1, 0.5, 1.0, 2.0]:
     print(f"h={h:.1f}  sin(h)={true_val:.4f}  order1={t1:.4f}  order2={t2:.4f}")
 ```
 
-Blisko x0=0, sin(x) ~ x (Taylor pierwszego rzędu). Przybliżenie jest doskonałe dla małych h, ale załamuje się dla dużych h. Dlatego też opadanie gradientowe najlepiej sprawdza się przy małych szybkościach uczenia się — w każdym kroku zakłada się, że aproksymacja liniowa jest dokładna.
+W pobliżu x0=0, sin(x) ~ x (pierwszy rząd Taylora). Przybliżenie jest doskonałe dla małych h, ale traci sens dla dużych h. Dlatego gradient descent działa najlepiej z małymi współczynnikami uczenia -- każdy krok zakłada, że przybliżenie liniowe jest dokładne.
 
 ### Krok 8: Dlaczego ma to znaczenie dla sieci neuronowej
 
@@ -573,11 +565,11 @@ print(f"\nLearned: y = {w:.2f}x + {b:.2f}")
 print(f"Actual:  y = 2x + 1")
 ```
 
-Każda pętla treningowa oparta na gradientach jest zgodna z tym wzorcem: przewidywanie, obliczanie strat, obliczanie gradientów, aktualizowanie wag.
+Każda pętla treningowa oparta na gradiencie podąża według tego wzorca: predykcja, obliczenie straty, obliczenie gradientów, aktualizacja wag.
 
-## Użyj tego
+## Zastosuj to
 
-Dzięki NumPy te same operacje są szybsze i bardziej zwięzłe:
+Z NumPy te same operacje są szybsze i bardziej zwięzłe:
 
 ```python
 import numpy as np
@@ -600,32 +592,32 @@ for epoch in range(200):
 print(f"Learned: y = {w:.2f}x + {b:.2f}")
 ```
 
-Właśnie zbudowałeś gradientowe zejście od podstaw. PyTorch automatyzuje obliczenia gradientu, ale pętla aktualizacji jest identyczna.
+Właśnie zbudowałeś gradient descent od podstaw. PyTorch automatyzuje obliczanie gradientów, ale pętla aktualizacji jest identyczna.
 
 ## Ćwiczenia
 
-1. Zaimplementuj `numerical_second_derivative(f, x)`, używając dwukrotnie wywołanego `numerical_derivative`. Sprawdź, że druga pochodna x^3 przy x=2 wynosi 12.
-2. Użyj gradientu, aby znaleźć minimum f(x, y) = (x - 3)^2 + (y + 1)^2. Zacznij od (0, 0). Odpowiedź powinna zbiegać się do (3, -1).
-3. Dodaj pęd do pętli opadania gradientu: utrzymuj wektor prędkości, który gromadzi przeszłe gradienty. Porównaj prędkość zbieżności z pędem i bez pędu na f(x) = x^4 - 3x^2.
+1. Zaimplementuj `numerical_second_derivative(f, x)`, wywołując `numerical_derivative` dwukrotnie. Sprawdź, że druga pochodna x^3 w x=2 wynosi 12.
+2. Użyj gradient descent, aby znaleźć minimum f(x, y) = (x - 3)^2 + (y + 1)^2. Zacznij od (0, 0). Wynik powinien zbiec do (3, -1).
+3. Dodaj momentum do pętli gradient descent: utrzymuj wektor prędkości (velocity), który akumuluje przeszłe gradienty. Porównaj szybkość zbieżności z momentum i bez niego dla f(x) = x^4 - 3x^2.
 
-## Kluczowe terminy
+## Kluczowe pojęcia
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Pojęcie | Co się potocznie mówi | Co to faktycznie oznacza |
 |------|----------------|----------------------|
-| Pochodna | „Na zboczu” | Szybkość zmian funkcji w punkcie. Informuje, o ile zmienia się moc wyjściowa na jednostkę zmiany sygnału wejściowego. |
-| Częściowa pochodna | „Pochodna jednej zmiennej” | Pochodna względem jednej zmiennej, podczas gdy wszystkie pozostałe pozostają stałe. |
-| Gradient | „Kierunek najbardziej stromego wzniesienia” | Wektor wszystkich pochodnych cząstkowych. Wskazuje kierunek, który najszybciej zwiększa funkcję. |
-| Zejście gradientowe | „Idź w dół” | Odejmij gradient (razy szybkość uczenia się) od parametrów, aby zmniejszyć straty. Istota treningu sieci neuronowych. |
-| Szybkość uczenia się | „Rozmiar kroku” | Skalar kontrolujący wielkość każdego kroku opadania gradientu. Za duże: rozbieżne. Za mały: zbiegają się powoli. |
-| Reguła łańcucha | „Pomnóż pochodne” | Zasada różniczkowania funkcji złożonych: df/dx = df/dg * dg/dx. Matematyczne podstawy propagacji wstecznej. |
-| Jakobian | „Macierz instrumentów pochodnych” | Kiedy funkcja odwzorowuje wektory na wektory, jakobian jest macierzą wszystkich pochodnych cząstkowych wyników względem danych wejściowych. |
-| Pochodna numeryczna | „Różnice skończone” | Przybliżanie pochodnej poprzez obliczenie funkcji w dwóch sąsiadujących punktach i obliczenie nachylenia między nimi. |
-| Propagacja wsteczna | „Autodiff w trybie cofania” | Obliczanie gradientów warstwa po warstwie od wyjścia do wejścia przy użyciu reguły łańcucha. Jak uczą się sieci neuronowe. |
-| Heski | „Macierz drugich pochodnych” | Macierz wszystkich pochodnych cząstkowych drugiego rzędu. Opisuje krzywiznę funkcji. Dodatni określony Hesjan w punkcie krytycznym oznacza minimum lokalne. |
-| Seria Taylora | „Przybliżenie wielomianowe” | Aproksymacja funkcji w pobliżu punktu za pomocą jej pochodnych: f(x+h) ~ f(x) + f'(x)h + (1/2)f''(x)h^2 + ... Podstawa do zrozumienia, dlaczego działa zejście gradientowe i metoda Newtona. |
-| Całka | „Pole pod krzywą” | Akumulacja ilości w pewnym zakresie. W ML całki definiują prawdopodobieństwa, wartości oczekiwane i rozbieżność KL. |
+| Pochodna | "Nachylenie" | Szybkość zmiany funkcji w punkcie. Mówi, o ile zmienia się wyjście na jednostkę zmiany wejścia. |
+| Pochodna cząstkowa | "Pochodna jednej zmiennej" | Pochodna względem jednej zmiennej, przy pozostałych traktowanych jako stałe. |
+| Gradient | "Kierunek najszybszego wzrostu" | Wektor wszystkich pochodnych cząstkowych. Wskazuje kierunek, w którym funkcja rośnie najszybciej. |
+| Gradient descent | "Idź w dół" | Odejmij gradient (pomnożony przez współczynnik uczenia) od parametrów, aby zmniejszyć stratę. Podstawa trenowania sieci neuronowych. |
+| Współczynnik uczenia (learning rate) | "Rozmiar kroku" | Skalar kontrolujący wielkość każdego kroku gradient descent. Zbyt duży: rozbieżność. Zbyt mały: wolna zbieżność. |
+| Reguła łańcuchowa | "Mnożenie pochodnych" | Reguła różniczkowania funkcji złożonych: df/dx = df/dg * dg/dx. Matematyczna podstawa backpropagation. |
+| Jacobian | "Macierz pochodnych" | Gdy funkcja odwzorowuje wektory na wektory, Jacobian to macierz wszystkich pochodnych cząstkowych wyjść względem wejść. |
+| Pochodna numeryczna | "Różnice skończone" | Przybliżanie pochodnej poprzez obliczenie wartości funkcji w dwóch bliskich punktach i policzenie nachylenia między nimi. |
+| Backpropagation | "Reverse-mode autodiff" | Obliczanie gradientów warstwa po warstwie od wyjścia do wejścia za pomocą reguły łańcuchowej. Sposób, w jaki uczą się sieci neuronowe. |
+| Hessian | "Macierz drugich pochodnych" | Macierz wszystkich pochodnych cząstkowych drugiego rzędu. Opisuje krzywiznę funkcji. Dodatnio określony Hessian w punkcie krytycznym oznacza minimum lokalne. |
+| Szereg Taylora | "Przybliżenie wielomianowe" | Przybliżanie funkcji w pobliżu punktu za pomocą jej pochodnych: f(x+h) ~ f(x) + f'(x)h + (1/2)f''(x)h^2 + ... Podstawa zrozumienia, dlaczego działają gradient descent i metoda Newtona. |
+| Całka | "Pole pod krzywą" | Akumulacja wielkości w danym zakresie. W ML całki definiują prawdopodobieństwa, wartości oczekiwane i dywergencję KL. |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-- [3Blue1Brown: Istota rachunku różniczkowego](https://www.3blue1brown.com/topics/calculus) - intuicja wizualna dla pochodnych, całek i reguły łańcuchowej
-- [Stanford CS231n: Propagacja wsteczna](https://cs231n.github.io/optimization-2/) - jak gradienty przepływają przez warstwy sieci neuronowej
+- [3Blue1Brown: Essence of Calculus](https://www.3blue1brown.com/topics/calculus) - wizualna intuicja dla pochodnych, całek i reguły łańcuchowej
+- [Stanford CS231n: Backpropagation](https://cs231n.github.io/optimization-2/) - jak gradienty przepływają przez warstwy sieci neuronowej

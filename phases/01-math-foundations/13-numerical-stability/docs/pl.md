@@ -1,34 +1,34 @@
 # Stabilność numeryczna
 
-> Liczba zmiennoprzecinkowa jest nieszczelną abstrakcją. Ugryzie Cię podczas treningu i nie zobaczysz, że to nadchodzi.
+> Liczby zmiennoprzecinkowe to nieszczelna abstrakcja. Ugryzie cię podczas trenowania i nie zauważysz, kiedy to nadejdzie.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Język:** Python
 **Wymagania wstępne:** Faza 1, lekcje 01-04
 **Czas:** ~120 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zaimplementuj numerycznie stabilny softmax i log-sum-exp za pomocą sztuczki z odjęciem maksimum
-- Identyfikacja przepełnienia, niedomiaru i katastrofalnego anulowania w obliczeniach zmiennoprzecinkowych
-- Weryfikacja gradientów analitycznych względem gradientów numerycznych przy użyciu wyśrodkowanych różnic skończonych
-- Wyjaśnij, dlaczego do treningu preferowany jest bfloat16 zamiast float16 i jak skalowanie strat zapobiega niedopełnieniu gradientu
+- Zaimplementować numerycznie stabilny softmax i log-sum-exp przy użyciu triku odejmowania maksimum
+- Zidentyfikować przepełnienie (overflow), niedopełnienie (underflow) i katastrofalne znoszenie się cyfr (catastrophic cancellation) w obliczeniach zmiennoprzecinkowych
+- Zweryfikować analityczne gradienty względem gradientów numerycznych za pomocą scentrowanych różnic skończonych
+- Wyjaśnić, czemu bfloat16 jest preferowany nad float16 do trenowania i jak loss scaling zapobiega niedopełnieniu gradientów
 
 ## Problem
 
-Twój model trenuje przez trzy godziny, po czym strata wynosi NaN. Dodajesz instrukcję drukowania. Logity są w porządku w kroku 9000. W kroku 9001 są to `inf`. Do kroku 9002 każdy gradient ma wartość `nan` i szkolenie jest martwe.
+Twój model trenuje się od trzech godzin, a potem strata staje się NaN. Dodajesz instrukcję print. Logity są w porządku w kroku 9000. W kroku 9001 są `inf`. Do kroku 9002 każdy gradient jest `nan`, a trenowanie jest martwe.
 
-Lub: Twój model ćwiczy się do końca, ale dokładność jest o 2% gorsza niż podaje dokument. Sprawdzasz wszystko. Architektura pasuje. Hiperparametry pasują. Dopasowania danych. Problem polega na tym, że papier użył float32, a ty użyłeś float16 bez odpowiedniego skalowania. Trzydzieści dwa bity skumulowanego błędu zaokrągleń po cichu pożerają twoją dokładność.
+Albo: twój model trenuje się do końca, ale dokładność jest 2% niższa niż w pracy naukowej, na której się opierasz. Sprawdzasz wszystko. Architektura się zgadza. Hiperparametry się zgadzają. Dane się zgadzają. Problem polega na tym, że w pracy użyto float32, a ty użyłeś float16 bez odpowiedniego skalowania. Trzydzieści dwa bity narastającego błędu zaokrąglenia po cichu zjadły twoją dokładność.
 
-Lub: wdrażasz od zera utratę entropii krzyżowej. Działa na małych logitach. Gdy logity przekraczają 100, zwraca `inf`. Softmax został przepełniony, ponieważ `exp(100)` jest większy niż może reprezentować float32. Każdy framework ML radzi sobie z tym za pomocą dwuwierszowej sztuczki. Nie wiedziałeś, że istnieje taka sztuczka.
+Albo: implementujesz funkcję straty cross-entropy od zera. Działa na małych logitach. Gdy logity przekraczają 100, zwraca `inf`. Softmax się przepełnił, bo `exp(100)` jest większe niż to, co może przedstawić float32. Każdy framework ML obsługuje to za pomocą dwulinijkowego triku. Ty nie wiedziałeś, że ten trik istnieje.
 
-Stabilność numeryczna nie jest problemem teoretycznym. To jest różnica pomiędzy sukcesem treningu, a tym, który po cichu się nie udał. Każdy poważny błąd ML, który będziesz debugować, ostatecznie sprowadza się do liczby zmiennoprzecinkowej.
+Stabilność numeryczna nie jest problemem teoretycznym. To różnica między biegiem trenowania, który się powiedzie, a takim, który po cichu zawiedzie. Każdy poważny błąd ML, który będziesz debugować, w końcu sprowadza się do liczb zmiennoprzecinkowych.
 
 ## Koncepcja
 
-### IEEE 754: Jak komputery przechowują liczby rzeczywiste
+### IEEE 754: jak komputery przechowują liczby rzeczywiste
 
-Komputery przechowują liczby rzeczywiste jako wartości zmiennoprzecinkowe zgodnie ze standardem IEEE 754. Pływak składa się z trzech części: bitu znaku, wykładnika i mantysy (znaczącej).
+Komputery przechowują liczby rzeczywiste jako wartości zmiennoprzecinkowe zgodne ze standardem IEEE 754. Float ma trzy części: bit znaku, wykładnik (exponent) i mantysę (significand).
 
 ```
 Float32 layout (32 bits total):
@@ -37,7 +37,7 @@ Float32 layout (32 bits total):
 Value = (-1)^sign * 2^(exponent - 127) * 1.mantissa
 ```
 
-Mantysa określa precyzję (ile cyfr znaczących). Wykładnik określa zakres (jak duża lub mała może być liczba).
+Mantysa decyduje o precyzji (ile cyfr znaczących). Wykładnik decyduje o zakresie (jak wielka lub mała może być liczba).
 
 ```
 Format     Bits   Exponent  Mantissa  Decimal digits  Range (approx)
@@ -47,21 +47,21 @@ float16    16     5         10        ~3-4            +/- 65,504
 bfloat16   16     8         7         ~2-3            +/- 3.4e38
 ```
 
-float32 daje około 7 cyfr dziesiętnych precyzji. Oznacza to, że potrafi rozróżnić 1,0000001 i 1,0000002, ale nie 1,00000001 i 1,00000002. Po 7 cyfrach wszystko kręci się wokół szumu.
+float32 daje około 7 cyfr dziesiętnych precyzji. To znaczy, że może odróżnić 1.0000001 od 1.0000002, ale nie 1.00000001 od 1.00000002. Po 7 cyfrach wszystko jest szumem zaokrąglenia.
 
-float16 daje około 3 cyfr. Największa liczba, jaką może reprezentować, to 65 504. Jest to niepokojąco małe w przypadku uczenia maszynowego, gdzie logity, gradienty i aktywacje rutynowo przekraczają tę wartość.
+float16 daje około 3 cyfr. Największa liczba, jaką może przedstawić, to 65 504. To niepokojąco mało dla ML, gdzie logity, gradienty i aktywacje regularnie przekraczają tę wartość.
 
-bfloat16 to odpowiedź Google na problem z zasięgiem float16. Ma ten sam 8-bitowy wykładnik co float32 (ten sam zakres, aż do 3,4e38), ale tylko 7 bitów mantysy (mniejsza precyzja niż float16). W przypadku uczenia sieci neuronowych zasięg ma większe znaczenie niż precyzja, dlatego bfloat16 zwykle wygrywa.
+bfloat16 to odpowiedź Google na problem zakresu float16. Ma ten sam 8-bitowy wykładnik co float32 (taki sam zakres, do 3.4e38), ale tylko 7 bitów mantysy (mniejsza precyzja niż float16). Przy trenowaniu sieci neuronowych zakres ma większe znaczenie niż precyzja, więc bfloat16 zwykle wygrywa.
 
-### Dlaczego 0,1 + 0,2 != 0,3
+### Czemu 0.1 + 0.2 != 0.3
 
-Liczby 0,1 nie można dokładnie przedstawić w binarnym formacie zmiennoprzecinkowym. W podstawie 2 jest to ułamek powtarzalny:
+Liczba 0.1 nie może być przedstawiona w sposób ścisły w binarnej liczbie zmiennoprzecinkowej. W systemie binarnym jest to ułamek okresowy:
 
 ```
 0.1 in binary = 0.0001100110011001100110011... (repeating forever)
 ```
 
-Float32 obcina to do 23 bitów mantysy. Zapisana wartość wynosi około 0,100000001490116. Podobnie 0,2 jest przechowywane jako około 0,200000002980232. Ich suma wynosi 0,300000004470348, a nie 0,3.
+Float32 przycina to do 23 bitów mantysy. Przechowywana wartość to w przybliżeniu 0.100000001490116. Podobnie 0.2 jest przechowywane jako około 0.200000002980232. Ich suma to 0.300000004470348, a nie 0.3.
 
 ```
 In Python:
@@ -74,15 +74,15 @@ False
 
 Ma to znaczenie dla ML, ponieważ:
 
-1. Porównania strat, takie jak `if loss < threshold`, mogą dawać błędne odpowiedzi
-2. Gromadzenie wielu małych wartości (aktualizacje gradientów na przestrzeni tysięcy kroków) odbiega od sumy prawdziwej
-3. Sumy kontrolne i testy odtwarzalności nie powiodą się, jeśli porównasz liczby zmiennoprzecinkowe z `==`
+1. Porównania straty takie jak `if loss < threshold` mogą dawać błędne wyniki
+2. Akumulacja wielu małych wartości (aktualizacje gradientów na przestrzeni tysięcy kroków) odchyla się od prawdziwej sumy
+3. Sumy kontrolne i testy reprodukowalności zawodzą, jeśli porównujesz floaty za pomocą `==`
 
-Poprawka: nigdy nie porównuj zmiennoprzecinkowych z `==`. Użyj `abs(a - b) < epsilon` lub `math.isclose()`.
+Naprawa: nigdy nie porównuj floatów za pomocą `==`. Używaj `abs(a - b) < epsilon` lub `math.isclose()`.
 
-### Katastrofalne anulowanie
+### Katastrofalne znoszenie się cyfr (catastrophic cancellation)
 
-Kiedy odejmiesz dwie prawie równe liczby zmiennoprzecinkowe, cyfry znaczące znoszą się i pozostaje szum zaokrąglania promowany do cyfr wiodących.
+Gdy odejmujesz dwie prawie równe liczby zmiennoprzecinkowe, cyfry znaczące się znoszą, a w efekcie pozostaje szum zaokrąglenia przesunięty do cyfr najwyższego rzędu.
 
 ```
 a = 1.0000001    (stored as 1.00000011920929 in float32)
@@ -94,17 +94,17 @@ Computed:         0.00000011920929
 Relative error: 19.2%
 ```
 
-Jest to błąd względny wynoszący 19% przy pojedynczym odjęciu. W ML dzieje się tak za każdym razem, gdy:
+To jest 19% błąd względny z pojedynczego odejmowania. W ML zdarza się to, kiedy:
 
-- Oblicz wariancję danych z dużą średnią: `E[x^2] - E[x]^2` gdy E[x] jest duże
-- Odejmij prawie równe logarytmiczne prawdopodobieństwa
-- Obliczanie gradientów o skończonej różnicy przy zbyt małym epsilonie
+- Obliczasz wariancję danych o dużej średniej: `E[x^2] - E[x]^2`, gdy E[x] jest duże
+- Odejmujesz prawie równe logarytmy prawdopodobieństw (log-probabilities)
+- Obliczasz gradienty za pomocą różnic skończonych z za małym epsilonem
 
-Poprawka: zmień układ formuł, aby uniknąć odejmowania dużych, prawie równych liczb. Aby uzyskać wariancję, użyj algorytmu Welforda lub najpierw wyśrodkuj dane. Aby uzyskać prawdopodobieństwo dziennika, pracuj w przestrzeni dziennika.
+Naprawa: przekształć wzory, aby uniknąć odejmowania dużych, prawie równych liczb. Dla wariancji użyj algorytmu Welforda lub najpierw wycentruj dane. Dla log-prawdopodobieństw pracuj cały czas w przestrzeni logarytmicznej.
 
-### Przepełnienie i niedopełnienie
+### Przepełnienie i niedopełnienie (overflow i underflow)
 
-Przepełnienie ma miejsce, gdy wynik jest zbyt duży, aby go przedstawić. Niedomiar ma miejsce, gdy jest zbyt mały (bliższy zera niż najmniejsza możliwa do przedstawienia liczba dodatnia).
+Przepełnienie (overflow) zdarza się, gdy wynik jest zbyt duży, aby go przedstawić. Niedopełnienie (underflow) zdarza się, gdy jest zbyt mały (bliżej zera niż najmniejsza przedstawialna liczba dodatnia).
 
 ```
 Float32 boundaries:
@@ -124,7 +124,7 @@ exp(-87.3) = 1.18e-38   (barely above underflow)
 exp(-104)  = 0.0         (underflow to zero)
 ```
 
-Funkcja `log()` działa w innym kierunku:
+Funkcja `log()` uderza w drugą stronę:
 
 ```
 log(0.0)   = -inf
@@ -133,19 +133,19 @@ log(1e-45) = -103.3      (fine)
 log(1e-46) = -inf        (input underflowed to 0, then log(0) = -inf)
 ```
 
-W ML `exp()` pojawia się w obliczeniach softmax, sigmoid i prawdopodobieństwa. `log()` pojawia się w przypadku entropii krzyżowej, logarytmu wiarygodności i rozbieżności KL. Kombinacja `log(exp(x))` to pole minowe bez odpowiednich sztuczek.
+W ML `exp()` pojawia się w softmax, sigmoidzie i obliczeniach prawdopodobieństw. `log()` pojawia się w cross-entropy, log-likelihoods i dywergencji KL. Kombinacja `log(exp(x))` jest polem minowym bez odpowiednich trików.
 
-### Sztuczka log-sumy-exp
+### Trik log-sum-exp
 
-Bezpośrednie obliczanie `log(sum(exp(x_i)))` jest numerycznie niebezpieczne. Jeśli którykolwiek `x_i` jest duży, `exp(x_i)` powoduje przepełnienie. Jeśli wszystkie `x_i` są bardzo ujemne, każde `exp(x_i)` spada do zera i `log(0)` wynosi `-inf`.
+Obliczanie `log(sum(exp(x_i)))` bezpośrednio jest numerycznie niebezpieczne. Jeśli jakiekolwiek `x_i` jest duże, `exp(x_i)` przepełnia się. Jeśli wszystkie `x_i` są bardzo ujemne, każde `exp(x_i)` niedopełnia się do zera, a `log(0)` to `-inf`.
 
-Sztuczka: odejmij maksymalną wartość przed potęgowaniem.
+Trik: odejmij maksymalną wartość przed eksponencjacją.
 
 ```
 log(sum(exp(x_i))) = max(x) + log(sum(exp(x_i - max(x))))
 ```
 
-Dlaczego to działa: po odjęciu `max(x)` największym wykładnikiem jest `exp(0) = 1`. Nie ma możliwości przepełnienia. Co najmniej jeden wyraz w sumie wynosi 1, zatem suma wynosi co najmniej 1 oraz `log(1) = 0`. Nie jest możliwe niedopełnienie `-inf`.
+Czemu to działa: po odjęciu `max(x)` najwyższy wykładnik to `exp(0) = 1`. Przepełnienie staje się niemożliwe. Przynajmniej jeden składnik sumy wynosi 1, więc suma jest co najmniej 1, a `log(1) = 0`. Niedopełnienie do `-inf` jest niemożliwe.
 
 Dowód:
 
@@ -157,16 +157,16 @@ log(sum(exp(x_i)))
 = c + log(sum(exp(x_i - c)))                    (log(a*b) = log(a) + log(b))
 ```
 
-Ustaw `c = max(x)`, a przepełnienie zostanie wyeliminowane.
+Ustawiamy `c = max(x)` i przepełnienie zostaje wyeliminowane.
 
-Ta sztuczka pojawia się wszędzie w ML:
-- Normalizacja Softmax
-- Obliczanie strat między entropią
-- Sumowanie logarytmiczne w modelach sekwencyjnych
-- Mieszanka Gaussa
+Ten trik pojawia się wszędzie w ML:
+- Normalizacja softmax
+- Obliczanie funkcji straty cross-entropy
+- Sumowanie log-prawdopodobieństw w modelach sekwencyjnych
+- Mieszanina rozkładów Gaussa (Mixture of Gaussians)
 - Wnioskowanie wariacyjne
 
-### Dlaczego Softmax potrzebuje sztuczki z maksymalnym odejmowaniem
+### Czemu softmax potrzebuje triku odejmowania maksimum
 
 Softmax konwertuje logity na prawdopodobieństwa:
 
@@ -174,7 +174,7 @@ Softmax konwertuje logity na prawdopodobieństwa:
 softmax(x_i) = exp(x_i) / sum(exp(x_j))
 ```
 
-Bez tej sztuczki logity [100, 101, 102] powodują przepełnienie:
+Bez triku, logity [100, 101, 102] powodują przepełnienie:
 
 ```
 exp(100) = 2.69e43
@@ -187,7 +187,7 @@ exp(88.7) is already at the float32 limit.
 exp(100) = inf in float32.
 ```
 
-Za pomocą tej sztuczki odejmij max(x) = 102:
+Z trikiem, odejmujemy max(x) = 102:
 
 ```
 exp(100 - 102) = exp(-2) = 0.135
@@ -198,24 +198,24 @@ sum = 1.503
 softmax = [0.090, 0.245, 0.665]
 ```
 
-Prawdopodobieństwa są identyczne. Obliczenia są bezpieczne. To nie jest optymalizacja. Jest to wymóg poprawności.
+Prawdopodobieństwa są identyczne. Obliczenie jest bezpieczne. To nie jest optymalizacja. To wymóg poprawności.
 
 ### NaN i Inf: wykrywanie i zapobieganie
 
-`nan` (nie liczba) i `inf` (nieskończoność) rozprzestrzeniają się wirusowo poprzez obliczenia. Jeden `nan` w aktualizacji gradientu daje wagę `nan`, co daje każdemu kolejnemu wynikowi `nan`. Trening kończy się w ciągu jednego kroku.
+`nan` (Not a Number) i `inf` (infinity) rozprzestrzeniają się wirusowo przez obliczenia. Jeden `nan` w aktualizacji gradientu powoduje, że waga staje się `nan`, co powoduje, że każde kolejne wyjście jest `nan`. Trenowanie jest martwe w ciągu jednego kroku.
 
-Jak wygląda `inf`:
+Jak powstaje `inf`:
 - `exp()` dużej liczby dodatniej
 - Dzielenie przez zero: `1.0 / 0.0`
-- `float32` przepełnienie w nagromadzeniach
+- Przepełnienie `float32` w akumulacjach
 
-Jak wygląda `nan`:
+Jak powstaje `nan`:
 - `0.0 / 0.0`
 - `inf - inf`
 - `inf * 0`
 - `sqrt()` liczby ujemnej
 - `log()` liczby ujemnej
-- Dowolna arytmetyka obejmująca istniejącą `nan`
+- Jakakolwiek operacja arytmetyczna z udziałem istniejącego `nan`
 
 Wykrywanie:
 
@@ -227,46 +227,46 @@ math.isinf(x)       # True if x is +inf or -inf
 math.isfinite(x)    # True if x is neither nan nor inf
 ```
 
-Strategie zapobiegawcze:
+Strategie zapobiegania:
 
-1. Zamocuj wejścia do `exp()`: `exp(clamp(x, -80, 80))`
-2. Dodaj epsilon do mianowników: `x / (y + 1e-8)`
-3. Dodaj epsilon do `log()`: `log(x + 1e-8)`
-4. Używaj stabilnych implementacji (log-sum-exp, stabilny softmax)
-5. Obcinanie gradientu, aby zapobiec eksplozji ciężaru
-6. Sprawdź `nan`/`inf` po każdym przejściu do przodu podczas debugowania
+1. Ograniczanie wejść do `exp()`: `exp(clamp(x, -80, 80))`
+2. Dodawanie epsilonu do mianowników: `x / (y + 1e-8)`
+3. Dodawanie epsilonu wewnątrz `log()`: `log(x + 1e-8)`
+4. Używanie stabilnych implementacji (log-sum-exp, stabilny softmax)
+5. Przycinanie gradientów (gradient clipping), aby zapobiec eksplozji wag
+6. Sprawdzanie `nan`/`inf` po każdym forward pass podczas debugowania
 
-### Numeryczne sprawdzanie gradientu
+### Numeryczne sprawdzanie gradientów
 
-Gradienty analityczne (z propagacji wstecznej) mogą zawierać błędy. Numeryczne sprawdzanie gradientów weryfikuje je poprzez obliczenie gradientów o skończonych różnicach.
+Analityczne gradienty (z backpropagation) mogą zawierać błędy. Numeryczne sprawdzanie gradientów weryfikuje je, obliczając gradienty za pomocą różnic skończonych.
 
-Wzór na różnicę wyśrodkowaną:
+Wzór scentrowanej różnicy (centered difference):
 
 ```
 df/dx ~= (f(x + h) - f(x - h)) / (2h)
 ```
 
-To jest dokładność O(h^2), znacznie lepsza niż różnica w przód `(f(x+h) - f(x)) / h`, która wynosi tylko O(h).
+Jest to dokładność O(h^2), znacznie lepsza niż różnica progresywna (forward difference) `(f(x+h) - f(x)) / h`, która jest tylko O(h).
 
-Wybór h: za duży i przybliżenie jest błędne. Zbyt małe i katastrofalne anulowanie niszczy odpowiedź. `h = 1e-5` do `1e-7` jest typowe.
+Wybór h: za duże i przybliżenie jest niedokładne. Za małe i katastrofalne znoszenie się cyfr niszczy wynik. Typowe wartości to `h = 1e-5` do `1e-7`.
 
-Kontrola: obliczenie względnej różnicy pomiędzy gradientami analitycznymi i numerycznymi.
+Sprawdzenie: oblicz błąd względny między gradientami analitycznymi i numerycznymi.
 
 ```
 relative_error = |grad_analytical - grad_numerical| / max(|grad_analytical|, |grad_numerical|, 1e-8)
 ```
 
 Praktyczne zasady:
-- valid_error < 1e-7: idealnie, gradient jest prawidłowy
-- error_relation < 1e-5: akceptowalny, prawdopodobnie poprawny
-- valid_error > 1e-3: coś jest nie tak
-- error_error > 1: gradient jest całkowicie błędny
+- relative_error < 1e-7: idealnie, gradient jest poprawny
+- relative_error < 1e-5: akceptowalnie, prawdopodobnie poprawny
+- relative_error > 1e-3: coś jest nie tak
+- relative_error > 1: gradient jest całkowicie błędny
 
-Zawsze sprawdzaj gradienty podczas wdrażania nowej warstwy lub funkcji utraty. PyTorch zapewnia do tego `torch.autograd.gradcheck()`.
+Zawsze sprawdzaj gradienty podczas implementacji nowej warstwy lub funkcji straty. PyTorch udostępnia do tego `torch.autograd.gradcheck()`.
 
-### Mieszany trening precyzyjny
+### Trenowanie w mieszanej precyzji (mixed precision)
 
-Nowoczesne procesory graficzne mają wyspecjalizowany sprzęt (rdzenie Tensor), które obliczają mnożenia macierzy float16 2–8 razy szybciej niż float32. Trening o mieszanej precyzji wykorzystuje to:
+Współczesne GPU mają wyspecjalizowany sprzęt (Tensor Cores), który wykonuje mnożenia macierzy float16 2-8x szybciej niż float32. Trenowanie w mieszanej precyzji wykorzystuje to:
 
 ```
 1. Maintain float32 master copy of weights
@@ -277,9 +277,9 @@ Nowoczesne procesory graficzne mają wyspecjalizowany sprzęt (rdzenie Tensor), 
 6. Update float32 master weights
 ```
 
-Problem z czystym treningiem float16: gradienty są często bardzo małe (1e-8 lub mniejsze). Float16 przekracza wszystko poniżej ~ 6e-8 do zera. Twój model przestaje się uczyć, ponieważ wszystkie aktualizacje gradientów mają wartość zerową.
+Problem z czystym trenowaniem float16: gradienty są często bardzo małe (1e-8 lub mniejsze). Float16 niedopełnia wszystko poniżej ~6e-8 do zera. Twój model przestaje się uczyć, bo wszystkie aktualizacje gradientów są zerowe.
 
-Poprawka polega na skalowaniu strat:
+Naprawą jest loss scaling:
 
 ```
 1. Multiply loss by a large scale factor (e.g., 1024)
@@ -289,32 +289,32 @@ Poprawka polega na skalowaniu strat:
 5. Net effect: same update, but no underflow
 ```
 
-Dynamiczne skalowanie strat automatycznie dostosowuje współczynnik skali. Zacznij od dużej wartości (65536). Jeśli gradienty przechodzą do `inf`, zmniejsz je o połowę. Jeśli N kroków przejdzie bez przepełnienia, podwoj go.
+Dynamiczny loss scaling automatycznie dostosowuje współczynnik skalowania. Zaczyna od dużej wartości (65536). Jeśli gradienty przepełniają się do `inf`, zmniejsza ją o połowę. Jeśli N kroków przejdzie bez przepełnienia, podwaja ją.
 
-### bfloat16 vs float16: Dlaczego bfloat16 wygrywa na treningu
+### bfloat16 vs float16: czemu bfloat16 wygrywa przy trenowaniu
 
 ```
 float16:   [1 sign] [5 exponent]  [10 mantissa]
 bfloat16:  [1 sign] [8 exponent]  [7 mantissa]
 ```
 
-float16 ma większą precyzję (10 bitów mantysy w porównaniu z 7), ale ograniczony zasięg (maks. ~ 65 504). bfloat16 ma mniejszą precyzję, ale ten sam zakres co float32 (maks. ~3,4e38).
+float16 ma większą precyzję (10 bitów mantysy vs 7), ale ograniczony zakres (maks. ~65 504). bfloat16 ma mniejszą precyzję, ale taki sam zakres jak float32 (maks. ~3.4e38).
 
-Do uczenia sieci neuronowych:
+Przy trenowaniu sieci neuronowych:
 
-- Aktywacje i logity regularnie przekraczają 65 504 podczas skoków treningowych. przepełnienia float16; bfloat16 sobie z tym radzi.
-- Skalowanie strat jest wymagane w przypadku float16, ale zwykle jest niepotrzebne w przypadku bfloat16, ponieważ jego zakres obejmuje widmo wielkości gradientu.
-- bfloat16 jest prostym skróceniem float32: upuść 16 dolnych bitów mantysy. Konwersja jest trywialna i bezstratna w wykładniku.
+- Aktywacje i logity regularnie przekraczają 65 504 podczas skoków w trenowaniu. float16 się przepełnia; bfloat16 sobie z tym radzi.
+- Loss scaling jest wymagany przy float16, ale zwykle niepotrzebny przy bfloat16, ponieważ jego zakres pokrywa spektrum wielkości gradientów.
+- bfloat16 to po prostu obcięcie float32: usuń dolne 16 bitów mantysy. Konwersja jest trywialna i bezstratna w zakresie wykładnika.
 
-float16 jest preferowany do wnioskowania, gdy wartości są ograniczone, a precyzja ma większe znaczenie. bfloat16 jest preferowany do treningów, gdzie zasięg ma większe znaczenie. Właśnie dlatego TPU i nowoczesne procesory graficzne NVIDIA (A100, H100) mają natywną obsługę bfloat16.
+float16 jest preferowany do inferencji, gdzie wartości są ograniczone i precyzja ma większe znaczenie. bfloat16 jest preferowany do trenowania, gdzie zakres ma większe znaczenie. To dlatego TPU i nowoczesne GPU NVIDIA (A100, H100) mają natywne wsparcie dla bfloat16.
 
-### Przycinanie gradientu
+### Przycinanie gradientów (gradient clipping)
 
-Eksplodujące gradienty mają miejsce, gdy gradienty rosną wykładniczo w wielu warstwach (powszechne w RNN, głębokich sieciach i transformatorach). Pojedynczy duży gradient może zepsuć wszystkie wagi w jednym kroku.
+Eksplodujące gradienty zdarzają się, gdy gradienty rosną wykładniczo przez wiele warstw (powszechne w RNN, głębokich sieciach i transformerach). Pojedynczy duży gradient może uszkodzić wszystkie wagi w jednym kroku.
 
-Dwa rodzaje przycinania:
+Dwa typy przycinania:
 
-**Przytnij według wartości:** zaciskaj niezależnie każdy element gradientu.
+**Przycinanie po wartości (clip by value):** ogranicz każdy element gradientu niezależnie.
 
 ```
 grad = clamp(grad, -max_val, max_val)
@@ -322,24 +322,24 @@ grad = clamp(grad, -max_val, max_val)
 
 Proste, ale może zmienić kierunek wektora gradientu.
 
-**Przytnij według normy:** skaluj cały wektor gradientu tak, aby jego norma nie przekraczała progu.
+**Przycinanie po normie (clip by norm):** przeskaluj cały wektor gradientu tak, aby jego norma nie przekroczyła progu.
 
 ```
 if ||grad|| > max_norm:
     grad = grad * (max_norm / ||grad||)
 ```
 
-Zachowuje kierunek gradientu. To właśnie robi `torch.nn.utils.clip_grad_norm_()`. Jest to standardowy wybór.
+Zachowuje kierunek gradientu. To robi `torch.nn.utils.clip_grad_norm_()`. To standardowy wybór.
 
-Typowe wartości: `max_norm=1.0` dla transformatorów, `max_norm=0.5` dla RL, `max_norm=5.0` dla prostszych sieci.
+Typowe wartości: `max_norm=1.0` dla transformerów, `max_norm=0.5` dla RL, `max_norm=5.0` dla prostszych sieci.
 
-Przycinanie gradientu nie jest hackiem. Jest to mechanizm zabezpieczający. Bez tego pojedyncza partia odstająca może wytworzyć gradient wystarczająco duży, aby zrujnować tygodnie treningu.
+Przycinanie gradientów to nie jest hack. To mechanizm bezpieczeństwa. Bez niego pojedyncza nietypowa partia danych (batch) może wygenerować gradient wystarczająco duży, aby zniszczyć tygodnie trenowania.
 
 ### Warstwy normalizacyjne jako stabilizatory numeryczne
 
-Normalizacja wsadowa, normalizacja warstw i normalizacja RMS są zwykle przedstawiane jako regularyzatory, które pomagają w zbieżności uczenia się. Są także stabilizatorami numerycznymi.
+Batch normalization, layer normalization i RMS normalization są zwykle przedstawiane jako regularyzatory pomagające w zbieżności trenowania. Są one również stabilizatorami numerycznymi.
 
-Bez normalizacji aktywacje mogą rosnąć lub kurczyć się wykładniczo w warstwach:
+Bez normalizacji aktywacje mogą rosnąć lub zmniejszać się wykładniczo przez warstwy:
 
 ```
 Layer 1: values in [0, 1]
@@ -348,49 +348,49 @@ Layer 10: values in [0, 10,000]
 Layer 50: values in [0, inf]
 ```
 
-Normalizacja wyśrodkowuje i przeskalowuje aktywacje w każdej warstwie:
+Normalizacja przesuwa i przeskalowuje aktywacje w każdej warstwie:
 
 ```
 LayerNorm(x) = (x - mean(x)) / (std(x) + epsilon) * gamma + beta
 ```
 
-`epsilon` (zwykle 1e-5) zapobiega dzieleniu przez zero, gdy wszystkie aktywacje są identyczne. Wyuczone parametry `gamma` i `beta` pozwalają sieci przywrócić potrzebną skalę.
+`epsilon` (typowo 1e-5) zapobiega dzieleniu przez zero, gdy wszystkie aktywacje są identyczne. Wyuczone parametry `gamma` i `beta` pozwalają sieci przywrócić dowolną potrzebną skalę.
 
-Dzięki temu wartości w całej sieci mieszczą się w bezpiecznym numerycznie zakresie, zapobiegając zarówno przepełnieniu przy przepływie do przodu, jak i eksplozji gradientu przy przepływie wstecz.
+Trzyma to wartości w numerycznie bezpiecznym zakresie w całej sieci, zapobiegając zarówno przepełnieniu w forward pass, jak i eksplozji gradientów w backward pass.
 
-### Typowe błędy numeryczne ML
+### Częste błędy numeryczne w ML
 
-**Błąd: Strata wynosi NaN po kilku epokach.**
-Przyczyna: logity stały się zbyt duże, softmax się przepełnił. Lub tempo uczenia się jest zbyt wysokie i wagi są rozbieżne.
-Poprawka: użyj stabilnego softmax (maksymalne odejmowanie), zmniejsz szybkość uczenia się, dodaj obcinanie gradientu.
+**Błąd: strata to NaN po kilku epokach.**
+Przyczyna: logity wzrosły zbyt mocno, softmax się przepełnił. Albo learning rate jest zbyt wysoki i wagi rozbiegły się.
+Naprawa: użyj stabilnego softmax (odejmowanie maksimum), zmniejsz learning rate, dodaj przycinanie gradientów.
 
-**Błąd: Strata utknęła w log(num_classes).**
-Przyczyna: wyniki modelu mają prawie jednolite prawdopodobieństwo. Często oznacza to, że gradienty zanikają lub model w ogóle się nie uczy.
-Poprawka: sprawdź, czy etykiety danych są poprawne, sprawdź funkcję utraty, sprawdź, czy nie ma martwych ReLU.
+**Błąd: strata jest zablokowana na log(num_classes).**
+Przyczyna: wyjścia modelu są bliskie jednorodnym prawdopodobieństwom. Często oznacza to, że gradienty zanikają (vanishing) albo model wcale się nie uczy.
+Naprawa: sprawdź, czy etykiety danych są poprawne, zweryfikuj funkcję straty, sprawdź, czy nie ma martwych ReLU.
 
-**Błąd: Dokładność walidacji jest niższa od oczekiwanej o 1-3%.**
-Przyczyna: mieszana precyzja bez odpowiedniego skalowania strat. Niedomiar gradientu po cichu zeruje małe aktualizacje.
-Poprawka: włącz dynamiczne skalowanie strat lub przejdź na bfloat16.
+**Błąd: dokładność walidacyjna jest niższa od oczekiwanej o 1-3%.**
+Przyczyna: mieszana precyzja bez odpowiedniego loss scaling. Niedopełnienie gradientów po cichu zeruje małe aktualizacje.
+Naprawa: włącz dynamiczny loss scaling albo przejdź na bfloat16.
 
-**Błąd: dla niektórych warstw normy gradientu wynoszą 0,0.**
-Przyczyna: martwe neurony ReLU (wszystkie wejścia ujemne) lub niedomiar float16.
-Poprawka: użyj LeakyReLU lub GELU, użyj skalowania gradientu, sprawdź inicjalizację wagi.
+**Błąd: normy gradientów wynoszą 0.0 dla niektórych warstw.**
+Przyczyna: martwe neurony ReLU (wszystkie wejścia ujemne) albo niedopełnienie float16.
+Naprawa: użyj LeakyReLU lub GELU, użyj skalowania gradientów, sprawdź inicjalizację wag.
 
-**Błąd: Model działa na jednym GPU, ale daje inne wyniki na innym.**
-Przyczyna: niedeterministyczny porządek akumulacji zmiennoprzecinkowej. Redukcje równoległe GPU sumują się w różnej kolejności na różnych urządzeniach, a dodawanie zmiennoprzecinkowe nie jest asocjacyjne.
-Poprawka: zaakceptuj małe różnice (1e-6) lub ustaw `torch.use_deterministic_algorithms(True)` i zaakceptuj karę za prędkość.
+**Błąd: model działa na jednym GPU, ale daje inne wyniki na drugim.**
+Przyczyna: niedeterministyczny porządek akumulacji zmiennoprzecinkowej. Równoległe redukcje na GPU sumują w różnym porządku na różnym sprzęcie, a dodawanie zmiennoprzecinkowe nie jest łączne (associative).
+Naprawa: zaakceptuj małe różnice (1e-6) albo ustaw `torch.use_deterministic_algorithms(True)` i zaakceptuj spadek wydajności.
 
-**Błąd: `exp()` zwraca `inf` przy obliczaniu strat.**
-Przyczyna: surowe logity przekazane do `exp()` bez sztuczki z odjęciem maksymalnego.
-Poprawka: użyj `torch.nn.functional.log_softmax()`, który wewnętrznie implementuje log-sum-exp.
+**Błąd: `exp()` zwraca `inf` przy obliczaniu straty.**
+Przyczyna: surowe logity przekazane do `exp()` bez triku odejmowania maksimum.
+Naprawa: użyj `torch.nn.functional.log_softmax()`, który implementuje log-sum-exp wewnętrznie.
 
-**Błąd: Trening różni się po zmianie z float32 na float16.**
-Przyczyna: float16 nie może reprezentować wielkości gradientu poniżej 6e-8 ani aktywacji powyżej 65 504.
-Poprawka: użyj mieszanej precyzji ze skalowaniem strat (AMP) lub zamiast tego użyj bfloat16.
+**Błąd: trenowanie rozbiega się po przejściu z float32 na float16.**
+Przyczyna: float16 nie może przedstawić wielkości gradientów poniżej 6e-8 ani aktywacji powyżej 65 504.
+Naprawa: użyj mieszanej precyzji z loss scaling (AMP) albo użyj bfloat16.
 
 ## Zbuduj to
 
-### Krok 1: Zademonstruj granice precyzji zmiennoprzecinkowej
+### Krok 1: Demonstracja ograniczeń precyzji liczb zmiennoprzecinkowych
 
 ```python
 print("=== Floating Point Precision ===")
@@ -399,7 +399,7 @@ print(f"0.1 + 0.2 == 0.3? {0.1 + 0.2 == 0.3}")
 print(f"Difference: {(0.1 + 0.2) - 0.3:.2e}")
 ```
 
-### Krok 2: Zaimplementuj naiwny lub stabilny softmax
+### Krok 2: Implementacja naiwnego i stabilnego softmax
 
 ```python
 import math
@@ -424,7 +424,7 @@ print(f"Stable: {softmax_stable(dangerous_logits)}")
 # softmax_naive(dangerous_logits) would return [nan, nan, nan]
 ```
 
-### Krok 3: Zaimplementuj stabilną wartość log-sum-exp
+### Krok 3: Implementacja stabilnego log-sum-exp
 
 ```python
 def logsumexp_naive(values):
@@ -443,7 +443,7 @@ print(f"Stable: {logsumexp_stable(large):.6f}")
 # logsumexp_naive(large) returns inf
 ```
 
-### Krok 4: Zaimplementuj stabilną entropię krzyżową
+### Krok 4: Implementacja stabilnej cross-entropy
 
 ```python
 def cross_entropy_naive(true_class, logits):
@@ -463,7 +463,7 @@ print(f"Naive:  {cross_entropy_naive(true_class, logits):.6f}")
 print(f"Stable: {cross_entropy_stable(true_class, logits):.6f}")
 ```
 
-### Krok 5: Sprawdzanie gradientu
+### Krok 5: Sprawdzanie gradientów
 
 ```python
 def numerical_gradient(f, x, h=1e-5):
@@ -519,7 +519,7 @@ def simulate_bfloat16(x):
     return struct.unpack('f', repacked)[0]
 ```
 
-### Przycinanie gradientu
+### Przycinanie gradientów
 
 ```python
 def clip_by_norm(gradients, max_norm):
@@ -552,52 +552,52 @@ check_tensor("bad",  [1.0, float('nan'), 3.0])
 check_tensor("ugly", [1.0, float('inf'), 3.0])
 ```
 
-Zobacz `code/numerical.py`, aby zapoznać się z kompletnymi implementacjami z zademonstrowanymi wszystkimi przypadkami brzegowymi.
+Zobacz `code/numerical.py` po kompletne implementacje z demonstracją wszystkich przypadków granicznych.
 
-## Wyślij to
+## Wypuszczenie (Ship It)
 
-Ta lekcja daje:
-- `code/numerical.py` ze stabilnym softmax, log-sum-exp, entropią krzyżową, sprawdzaniem gradientu i symulacją mieszanej precyzji
-- `outputs/prompt-numerical-debugger.md` do diagnozowania NaN/Inf i problemów numerycznych podczas szkolenia
+Ta lekcja tworzy:
+- `code/numerical.py` ze stabilnym softmax, log-sum-exp, cross-entropy, sprawdzaniem gradientów i symulacją mieszanej precyzji
+- `outputs/prompt-numerical-debugger.md` do diagnozowania problemów NaN/Inf i numerycznych w trenowaniu
 
-Te stabilne wdrożenia pojawiają się ponownie w fazie 3, kiedy budujemy pętlę treningową, oraz w fazie 4, kiedy wdrażamy mechanizmy uwagi.
+Te stabilne implementacje powrócą w Fazie 3 podczas budowania pętli trenowania oraz w Fazie 4 podczas implementacji mechanizmów uwagi (attention).
 
-## Ćwiczenia
+## Zadania
 
-1. **Katastrofalne anulowanie.** Oblicz wariancję [1000000.0, 1000001.0, 1000002.0] przy użyciu naiwnego wzoru `E[x^2] - E[x]^2` w float32. Następnie oblicz to za pomocą algorytmu online Welforda. Porównaj błędy z prawdziwą wariancją (0,6667).
+1. **Katastrofalne znoszenie się cyfr.** Oblicz wariancję [1000000.0, 1000001.0, 1000002.0] używając naiwnego wzoru `E[x^2] - E[x]^2` w float32. Następnie oblicz ją używając algorytmu online Welforda. Porównaj błędy względem prawdziwej wariancji (0.6667).
 
-2. **Wyszukiwanie precyzyjne.** Znajdź najmniejszą dodatnią wartość float32 `x` taką, że `1.0 + x == 1.0` w Pythonie. To jest maszyna epsilon. Sprawdź, czy pasuje do `numpy.finfo(numpy.float32).eps`.
+2. **Polowanie na precyzję.** Znajdź najmniejszą dodatnią wartość float32 `x` taką, że `1.0 + x == 1.0` w Pythonie. To jest epsilon maszynowy (machine epsilon). Zweryfikuj, że odpowiada `numpy.finfo(numpy.float32).eps`.
 
-3. **Przypadki graniczne log-sum-exp.** Przetestuj swoją funkcję `logsumexp_stable` za pomocą: (a) wszystkich wartości równych, (b) jednej wartości znacznie większej od pozostałych, (c) wszystkich wartości bardzo ujemnych (-1000). Sprawdź, czy daje poprawne wyniki, gdy wersja naiwna zawodzi.
+3. **Przypadki graniczne log-sum-exp.** Przetestuj swoją funkcję `logsumexp_stable` z: (a) wszystkimi wartościami równymi, (b) jedną wartością dużo większą od pozostałych, (c) wszystkimi wartościami bardzo ujemnymi (-1000). Zweryfikuj, że daje poprawne wyniki tam, gdzie wersja naiwna zawodzi.
 
-4. **Sprawdzanie gradientu warstwy sieci neuronowej.** Zaimplementuj pojedynczą warstwę liniową `y = Wx + b` i jej analityczne przejście wstecz. Użyj `numerical_gradient`, aby sprawdzić poprawność macierzy wag 3x2.
+4. **Sprawdzanie gradientów warstwy sieci neuronowej.** Zaimplementuj jedną warstwę liniową `y = Wx + b` oraz jej analityczny backward pass. Użyj `numerical_gradient`, aby zweryfikować poprawność dla macierzy wag 3x2.
 
-5. **Eksperyment ze skalowaniem strat.** Symuluj trening za pomocą float16: utwórz losowe gradienty w zakresie [1e-9, 1e-3], przekonwertuj na float16 i zmierz, jaki ułamek stał się zerem. Następnie zastosuj skalowanie strat (pomnóż przez 1024), przekonwertuj na float16, zmniejsz skalę i ponownie zmierz ułamek zerowy.
+5. **Eksperyment z loss scaling.** Zasymuluj trenowanie z float16: stwórz losowe gradienty w zakresie [1e-9, 1e-3], skonwertuj do float16 i zmierz, jaka część staje się zerem. Następnie zastosuj loss scaling (pomnóż przez 1024), skonwertuj do float16, przeskaluj wstecz i zmierz frakcję zer ponownie.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| IEEE 754 | „Standard pływakowy” | Międzynarodowy standard definiujący binarne formaty zmiennoprzecinkowe, zasady zaokrąglania i wartości specjalne (inf, nan). Implementuje go każdy nowoczesny procesor i procesor graficzny. |
-| Maszyna epsilon | „Granica precyzji” | Najmniejsza wartość e taka, że ​​1,0 + e != 1,0 w danym formacie zmiennoprzecinkowym. Dla float32 jest to około 1,19e-7. |
-| Katastrofalne anulowanie | „Utrata precyzji przy odejmowaniu” | Podczas odejmowania prawie równych liczb zmiennoprzecinkowych, cyfry znaczące znoszą się, a w wyniku dominuje szum zaokrągleń. |
-| Przepełnienie | „Liczba za duża” | Wynik przekracza maksymalną możliwą do przedstawienia wartość i staje się inf. exp(89) przepełnia float32. |
-| Niedomiar | „Liczba za mała” | Wynik jest bliższy zeru niż najmniejsza możliwa do przedstawienia liczba dodatnia i przyjmuje wartość 0,0. exp(-104) przekracza wartość float32. |
-| Sztuczka z sumą logarytmiczną | „Najpierw odejmij maksimum” | Obliczanie log(sum(exp(x))) poprzez rozłożenie na czynniki exp(max(x)), aby zapobiec przepełnieniu i niedopełnieniu. Używany w matematyce softmax, entropii krzyżowej i logarytmicznym prawdopodobieństwie. |
-| Stabilny softmax | „Softmax, który nie eksploduje” | Odejmowanie max(logitów) przed potęgowaniem. Numerycznie identyczny wynik, brak możliwości przepełnienia. |
-| Sprawdzanie gradientu | „Zweryfikuj swoje wsparcie” | Porównywanie gradientów analitycznych z propagacji wstecznej z gradientami numerycznymi z różnic skończonych w celu wykrycia błędów implementacyjnych. |
-| Mieszana precyzja | „Float16 do przodu, float32 do tyłu” | Używanie pływaków o niższej precyzji do operacji, w których prędkość jest krytyczna, i pływaków o wyższej precyzji do operacji wrażliwych numerycznie. Typowe przyspieszenie wynosi 2-3x. |
-| Skalowanie strat | „Zapobiegaj niedopełnieniu gradientu” | Mnożenie straty przez dużą stałą przed podparciem, tak aby gradienty pozostały w możliwym do przedstawienia zakresie float16, a następnie dzielenie przez tę samą stałą przed aktualizacją wagi. |
-| bfloat16 | „zmiennoprzecinkowy mózg” | 16-bitowy format Google z 8 bitami wykładnika (ten sam zakres co float32) i 7 bitami mantysy (mniejsza precyzja niż float16). Preferowany na treningi. |
-| Przycinanie gradientu | „Ogranicz normę gradientu” | Skalowanie wektora gradientu tak, aby jego norma nie przekraczała progu. Zapobiega eksplodującym gradientom i niszczeniu ciężarów. |
-| NaN | „To nie jest liczba” | Specjalna wartość zmiennoprzecinkowa z niezdefiniowanych operacji (0/0, inf-inf, sqrt(-1)). Propaguje przez całą następną arytmetykę. |
-| Informacje | „Nieskończoność” | Specjalna wartość zmiennoprzecinkowa wynikająca z przepełnienia lub dzielenia przez zero. Można łączyć, aby wytworzyć NaN (inf - inf, inf * 0). |
-| Gradient numeryczny | „Pochodna brutalnej siły” | Przybliżanie pochodnej poprzez obliczenie f(x+h) i f(x-h) i podzielenie przez 2h. Powolny, ale niezawodny do weryfikacji. |
+| IEEE 754 | "Standard dla floatów" | Międzynarodowy standard definiujący binarne formaty zmiennoprzecinkowe, zasady zaokrąglania i wartości specjalne (inf, nan). Każdy współczesny CPU i GPU go implementuje. |
+| Epsilon maszynowy (machine epsilon) | "Granica precyzji" | Najmniejsza wartość e taka, że 1.0 + e != 1.0 w danym formacie zmiennoprzecinkowym. Dla float32 to około 1.19e-7. |
+| Katastrofalne znoszenie się cyfr (catastrophic cancellation) | "Utrata precyzji przy odejmowaniu" | Gdy odejmujemy prawie równe liczby zmiennoprzecinkowe, cyfry znaczące się znoszą i szum zaokrąglenia dominuje wynik. |
+| Przepełnienie (overflow) | "Liczba za duża" | Wynik przekracza maksymalną przedstawialną wartość i staje się inf. exp(89) przepełnia float32. |
+| Niedopełnienie (underflow) | "Liczba za mała" | Wynik jest bliżej zera niż najmniejsza przedstawialna liczba dodatnia i staje się 0.0. exp(-104) niedopełnia float32. |
+| Trik log-sum-exp | "Najpierw odejmij maksimum" | Obliczanie log(sum(exp(x))) przez wyłączenie exp(max(x)) przed nawias, aby zapobiec przepełnieniu i niedopełnieniu. Używane w softmax, cross-entropy i obliczeniach log-prawdopodobieństw. |
+| Stabilny softmax | "Softmax, który się nie wysadza" | Odejmowanie max(logits) przed eksponencjacją. Numerycznie identyczny wynik, przepełnienie niemożliwe. |
+| Sprawdzanie gradientów (gradient checking) | "Weryfikacja backpropu" | Porównywanie analitycznych gradientów z backpropagation z gradientami numerycznymi z różnic skończonych, aby wychwycić błędy implementacji. |
+| Mieszana precyzja (mixed precision) | "Float16 forward, float32 backward" | Używanie floatów niższej precyzji dla operacji krytycznych pod względem szybkości i floatów wyższej precyzji dla operacji wrażliwych numerycznie. Typowe przyspieszenie to 2-3x. |
+| Loss scaling | "Zapobieganie niedopełnieniu gradientów" | Mnożenie straty przez dużą stałą przed backpropagation, aby gradienty pozostały w zakresie przedstawialnym przez float16, a następnie dzielenie przez tę samą stałą przed aktualizacją wag. |
+| bfloat16 | "Brain floating point" | 16-bitowy format Google z 8 bitami wykładnika (taki sam zakres jak float32) i 7 bitami mantysy (mniejsza precyzja niż float16). Preferowany do trenowania. |
+| Przycinanie gradientów (gradient clipping) | "Ogranicz normę gradientu" | Przeskalowanie wektora gradientu tak, aby jego norma nie przekroczyła progu. Zapobiega eksplozji gradientów niszczącej wagi. |
+| NaN | "Not a Number" | Specjalna wartość zmiennoprzecinkowa pochodząca z niezdefiniowanych operacji (0/0, inf-inf, sqrt(-1)). Rozprzestrzenia się przez wszystkie kolejne operacje arytmetyczne. |
+| Inf | "Infinity" (nieskończoność) | Specjalna wartość zmiennoprzecinkowa pochodząca z przepełnienia lub dzielenia przez zero. Może się połączyć i utworzyć NaN (inf - inf, inf * 0). |
+| Gradient numeryczny | "Brutalna siła zamiast derywaty" | Przybliżanie derywaty poprzez obliczenie f(x+h) i f(x-h) i podzielenie przez 2h. Wolne, ale wiarygodne do weryfikacji. |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-– [Co każdy informatyk powinien wiedzieć o arytmetyce zmiennoprzecinkowej (Goldberg 1991)](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html) – ostateczne źródło informacji, gęste, ale kompletne
-– [Mixed Precision Training (Micikevicius et al., 2018)](https://arxiv.org/abs/1710.03740) – artykuł firmy NVIDIA przedstawiający skalowanie strat w treningu float16
-- [AMP: Automatyczna precyzja mieszana (dokumentacja PyTorch)](https://pytorch.org/docs/stable/amp.html) -- praktyczny przewodnik po precyzji mieszanej w PyTorch
-– [format bfloat16 (dokumentacja Google Cloud TPU)](https://cloud.google.com/tpu/docs/bfloat16) – dlaczego Google wybrało ten format dla TPU
-- [Sumowanie Kahana (Wikipedia)](https://en.wikipedia.org/wiki/Kahan_summation_algorithm) -- algorytm zmniejszający błąd zaokrąglania sum zmiennoprzecinkowych
+- [What Every Computer Scientist Should Know About Floating-Point Arithmetic (Goldberg 1991)](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html) -- klasyczny, definitywny materiał źródłowy, gęsty, ale kompletny
+- [Mixed Precision Training (Micikevicius et al., 2018)](https://arxiv.org/abs/1710.03740) -- artykuł NVIDIA, który wprowadził loss scaling dla trenowania w float16
+- [AMP: Automatic Mixed Precision (PyTorch docs)](https://pytorch.org/docs/stable/amp.html) -- praktyczny przewodnik po mieszanej precyzji w PyTorch
+- [bfloat16 format (Google Cloud TPU docs)](https://cloud.google.com/tpu/docs/bfloat16) -- czemu Google wybrał ten format dla TPU
+- [Kahan Summation (Wikipedia)](https://en.wikipedia.org/wiki/Kahan_summation_algorithm) -- algorytm redukcji błędu zaokrąglenia w sumach zmiennoprzecinkowych
