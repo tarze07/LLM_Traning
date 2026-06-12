@@ -1,84 +1,84 @@
 # Funkcje straty
 
-> Twoja sieć dokonuje prognozy. Podstawowa prawda mówi inaczej. Jak bardzo jest to błędne? Ta liczba to strata. Wybierz niewłaściwą funkcję straty, a Twój model zoptymalizuje się pod kątem całkowicie niewłaściwej rzeczy.
+> Twoja sieć dokonuje predykcji. Rzeczywistość mówi co innego. Jak bardzo się myli? Tę liczbę nazywamy stratą (loss). Wybierz złą funkcję straty i twój model zoptymalizuje się pod kompletnie inny cel, niż zamierzałeś.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
-**Wymagania:** Lekcja 03.04 (Funkcje aktywacji)
+**Wymagania wstępne:** Lekcja 03.04 (Funkcje aktywacji)
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Implementuj od podstaw MSE, binarną entropię krzyżową, kategoryczną entropię krzyżową i stratę kontrastową (InfoNCE) od podstaw z ich gradientami
-- Wyjaśnij, dlaczego MSE nie spełnia wymagań klasyfikacji, demonstrując tryb awarii „przewiduj 0,5 dla wszystkiego”.
-- Zastosuj wygładzanie etykiet do entropii krzyżowej i opisz, w jaki sposób zapobiega to zbyt pewnym przewidywaniom
-- Wybierz właściwą funkcję straty dla regresji, klasyfikacji binarnej, klasyfikacji wieloklasowej i osadzania zadań edukacyjnych
+- Zaimplementować od zera MSE, binarną entropię skrośną (binary cross-entropy), kategorialną entropię skrośną (categorical cross-entropy) oraz stratę kontrastową (contrastive loss, InfoNCE) wraz z ich gradientami
+- Wyjaśnić, czemu MSE zawodzi w klasyfikacji, demonstrując scenariusz porażki "przewiduj 0,5 dla wszystkiego"
+- Zastosować label smoothing do cross-entropy i opisać, jak zapobiega ona nadmiernie pewnym predykcjom
+- Wybrać właściwą funkcję straty dla regresji, klasyfikacji binarnej, klasyfikacji wieloklasowej i zadań uczenia reprezentacji (embedding learning)
 
 ## Problem
 
-Model minimalizujący MSE w przypadku problemu klasyfikacji z pewnością przewidzi 0,5 dla wszystkiego. To minimalizowanie strat. To też jest bezużyteczne.
+Model minimalizujący MSE w zadaniu klasyfikacji będzie z pełnym przekonaniem przewidywał 0,5 dla wszystkiego. Minimalizuje stratę. Jest też bezużyteczny.
 
-Funkcja straty jest jedyną rzeczą, którą faktycznie optymalizuje Twój model. Nie dokładność. Nie wynik F1. Nie jakikolwiek wskaźnik, który raportujesz swojemu menadżerowi. Optymalizator przyjmuje gradient funkcji straty i dostosowuje wagi, aby zmniejszyć tę liczbę. Jeśli funkcja straty nie odzwierciedla tego, na czym Ci zależy, model znajdzie matematycznie najtańszy sposób jej spełnienia, a ten sposób prawie nigdy nie jest tym, czego chciałeś.
+Funkcja straty jest jedyną rzeczą, którą twój model faktycznie optymalizuje. Nie dokładność (accuracy). Nie F1 score. Nie jakąkolwiek metrykę, którą raportujesz swojemu menedżerowi. Optymalizator bierze gradient funkcji straty i dostosowuje wagi, aby ta liczba była mniejsza. Jeśli funkcja straty nie odzwierciedla tego, na czym ci zależy, model znajdzie matematycznie najtańszy sposób, by ją zaspokoić, a ten sposób prawie nigdy nie jest tym, czego chciałeś.
 
-Oto konkretny przykład. Masz zadanie klasyfikacji binarnej. Dwie klasy, podział 50/50. Traktujesz MSE jako swoją stratę. Model przewiduje 0,5 dla każdego pojedynczego wejścia. Średnie MSE wynosi 0,25 i jest to minimum możliwe bez uczenia się czegokolwiek. Model ma zerową zdolność dyskryminacyjną, ale technicznie zminimalizował funkcję straty. Przełącz na entropię krzyżową i ten sam model jest zmuszony popchnąć przewidywania w kierunku 0 lub 1, ponieważ -log(0,5) = 0,693 to straszliwa strata, podczas gdy -log(0,99) = 0,01 nagradza pewne, prawidłowe przewidywania. Wybór funkcji straty stanowi różnicę między modelem, który się uczy, a modelem, który wykorzystuje metrykę.
+Oto konkretny przykład. Masz zadanie klasyfikacji binarnej. Dwie klasy, podział 50/50. Używasz MSE jako funkcji straty. Model przewiduje 0,5 dla każdego pojedynczego wejścia. Średnie MSE wynosi 0,25, co jest minimalną możliwą wartością bez faktycznego uczenia się czegokolwiek. Model ma zerową zdolność dyskryminacyjną, ale technicznie zminimalizował twoją funkcję straty. Przełącz się na cross-entropy i ten sam model jest zmuszony przesuwać predykcje w stronę 0 lub 1, ponieważ -log(0,5) = 0,693 to fatalna strata, podczas gdy -log(0,99) = 0,01 nagradza pewne, poprawne predykcje. Wybór funkcji straty jest różnicą pomiędzy modelem, który się uczy, a modelem, który oszukuje metrykę.
 
-Jest coraz gorzej. W uczeniu się samonadzorowanym nie masz nawet etykiet. Strata kontrastowa całkowicie definiuje sygnał uczenia się: co liczy się jako podobne, co liczy się jako różne i jak mocno model powinien je od siebie odsunąć. Jeśli źle zastosujesz stratę kontrastową, Twoje osadzenia zwiną się do jednego punktu — każde wejście jest odwzorowywane na ten sam wektor. Technicznie zero strat. Całkowicie bezwartościowe.
+Robi się jeszcze gorzej. W uczeniu samonadzorowanym (self-supervised learning) nie masz nawet etykiet. Strata kontrastowa definiuje sygnał uczenia w całości: co liczy się jako podobne, co liczy się jako różne i jak silnie model powinien je rozdzielać. Jeśli źle dobierzesz stratę kontrastową, twoje embeddingi zapadną się do jednego punktu -- każde wejście będzie mapowane na ten sam wektor. Technicznie zerowa strata. Kompletnie bezwartościowe.
 
 ## Koncepcja
 
-### Średni błąd kwadratowy (MSE)
+### Błąd średniokwadratowy (MSE)
 
-Wartość domyślna dla regresji. Oblicz kwadratową różnicę między prognozą a wartością docelową, średnią ze wszystkich próbek.
+Domyślna funkcja dla regresji. Oblicz kwadrat różnicy między predykcją i wartością docelową, uśrednij po wszystkich próbkach.
 
 ```
 MSE = (1/n) * sum((y_pred - y_true)^2)
 ```
 
-Dlaczego kwadratura ma znaczenie: karze kwadratowo duże błędy. Błąd 2 kosztuje 4 razy więcej niż błąd 1. Błąd 10 kosztuje 100 razy. To sprawia, że ​​MSE jest wrażliwe na wartości odstające – pojedyncza, całkowicie błędna prognoza dominuje nad stratą.
+Czemu podnoszenie do kwadratu ma znaczenie: penalizuje duże błędy w sposób kwadratowy. Błąd o wartości 2 kosztuje 4 razy więcej niż błąd o wartości 1. Błąd o wartości 10 kosztuje 100 razy więcej. To sprawia, że MSE jest czułe na wartości odstające (outliers) -- jedna mocno błędna predykcja może dominować w wartości straty.
 
-Liczby rzeczywiste: jeśli Twój model przewiduje ceny mieszkań i w przypadku jednej rezydencji różni się o $10,000 on most houses but off by $200 000, firma MSE będzie agresywnie próbowała naprawić tę jedną rezydencję, potencjalnie pogarszając wydajność pozostałych 99 domów.
+Konkretne liczby: jeśli twój model przewiduje ceny domów i myli się o 10 000 $ dla większości domów, ale o 200 000 $ w przypadku jednej rezydencji, MSE będzie agresywnie próbować naprawić tę jedną rezydencję, potencjalnie szkodząc wynikom dla pozostałych 99 domów.
 
-Gradient MSE względem przewidywania wynosi:
+Gradient MSE względem predykcji wynosi:
 
 ```
 dMSE/dy_pred = (2/n) * (y_pred - y_true)
 ```
 
-Liniowy w błędzie. Większe błędy powodują większe gradienty. Jest to funkcja regresji (duże błędy wymagają dużych poprawek) i błąd klasyfikacji (chcesz karać pewne błędne odpowiedzi wykładniczo, a nie liniowo).
+Liniowy względem błędu. Większe błędy dają większe gradienty. To jest zaleta w regresji (duże błędy wymagają dużych korekt) i wada w klasyfikacji (chcesz penalizować pewne, błędne odpowiedzi wykładniczo, nie liniowo).
 
-### Strata między entropią
+### Strata typu cross-entropy
 
-Funkcja straty dla klasyfikacji. Zakorzeniony w teorii informacji - mierzy rozbieżność między przewidywanym rozkładem prawdopodobieństwa a rozkładem rzeczywistym.
+Funkcja straty dla klasyfikacji. Zakorzeniona w teorii informacji -- mierzy rozbieżność (divergence) między przewidywanym rozkładem prawdopodobieństwa a rozkładem rzeczywistym.
 
-**Binarna entropia krzyżowa (BCE):**
+**Binarna entropia skrośna (BCE):**
 
 ```
 BCE = -(y * log(p) + (1 - y) * log(1 - p))
 ```
 
-Gdzie y to prawdziwa etykieta (0 lub 1), a p to przewidywane prawdopodobieństwo.
+Gdzie y jest rzeczywistą etykietą (0 lub 1), a p jest przewidywanym prawdopodobieństwem.
 
-Dlaczego -log(p) działa: gdy prawdziwa etykieta wynosi 1 i przewidujesz p = 0,99, strata wynosi -log(0,99) = 0,01. Kiedy przewidujesz p = 0,01, strata wynosi -log(0,01) = 4,6. Ta 460-krotna różnica jest powodem, dla którego działa entropia krzyżowa. Brutalnie karze pewne błędne przewidywania, ledwo karząc te, które są pewne i prawidłowe.
+Czemu -log(p) działa: gdy rzeczywista etykieta to 1, a przewidujesz p = 0,99, strata wynosi -log(0,99) = 0,01. Gdy przewidujesz p = 0,01, strata wynosi -log(0,01) = 4,6. Ta różnica 460-krotna jest powodem, dla którego cross-entropy działa. Brutalnie karze pewne, błędne predykcje, podczas gdy niewiele penalizuje pewne, poprawne predykcje.
 
-Gradient opowiada tę samą historię:
+Gradient mówi tę samą historię:
 
 ```
 dBCE/dp = -(y/p) + (1-y)/(1-p)
 ```
 
-Gdy y = 1 i p jest bliskie zeru, gradient wynosi -1/p, co zbliża się do ujemnej nieskończoności. Modelka dostaje ogromny sygnał, żeby naprawić swój błąd. Gdy p jest bliskie 1, gradient jest niewielki. Już poprawne, nie ma co poprawiać.
+Gdy y = 1, a p jest bliskie zeru, gradient wynosi -1/p, co zbliża się do minus nieskończoności. Model otrzymuje ogromny sygnał, żeby naprawić swój błąd. Gdy p jest bliskie 1, gradient jest niewielki. Już jest poprawnie, nie ma czego naprawiać.
 
-**Kategoryczna entropia krzyżowa:**
+**Kategorialna entropia skrośna:**
 
-Do klasyfikacji wieloklasowej z jednokrotnie zakodowanymi celami.
+Dla klasyfikacji wieloklasowej z etykietami zakodowanymi metodą one-hot.
 
 ```
 CCE = -sum(y_i * log(p_i))
 ```
 
-Tylko prawdziwa klasa przyczynia się do straty (ponieważ wszystkie inne y_i wynoszą zero). Jeśli jest 10 klas i prawdopodobieństwo prawidłowej klasy wynosi 0,1 (losowe zgadywanie), strata wynosi -log(0,1) = 2,3. Jeśli prawdopodobieństwo prawidłowej klasy wynosi 0,9, strata wynosi -log(0,9) = 0,105. Model uczy się koncentrować masę prawdopodobieństwa na właściwej odpowiedzi.
+Tylko prawdziwa klasa wnosi wkład do straty (ponieważ wszystkie inne y_i wynoszą zero). Jeśli istnieje 10 klas, a poprawna klasa otrzymuje prawdopodobieństwo 0,1 (czyste zgadywanie), strata wynosi -log(0,1) = 2,3. Jeśli poprawna klasa otrzymuje prawdopodobieństwo 0,9, strata wynosi -log(0,9) = 0,105. Model uczy się koncentrować masę prawdopodobieństwa na właściwej odpowiedzi.
 
-### Dlaczego MSE nie przechodzi klasyfikacji
+### Czemu MSE zawodzi w klasyfikacji
 
 ```mermaid
 graph TD
@@ -96,60 +96,60 @@ graph TD
     C3 -->|"CE gradient<br/>explodes near<br/>wrong answer"| Fast["Fast correction"]
 ```
 
-Gradienty MSE spłaszczają się, gdy przewidywania są bliskie 0 lub 1 (z powodu nasycenia esicy). Kompensują to gradienty entropii krzyżowej — opcja -log anuluje płaskie obszary sigmoidy, dając silne gradienty dokładnie tam, gdzie są najbardziej potrzebne.
+Gradienty MSE wypłaszczają się, gdy predykcje są bliskie 0 lub 1 (z powodu saturacji sigmoidy). Gradienty cross-entropy to kompensują -- funkcja -log znosi efekt płaskich obszarów sigmoidy, dając silne gradienty właśnie tam, gdzie są najbardziej potrzebne.
 
-### Wygładzanie etykiet
+### Label smoothing
 
-Standardowe etykiety typu one-hot mówią „to jest w 100% klasa 3 i 0% wszystko inne”. To mocne twierdzenie. Wygładzanie etykiet zmiękcza je:
+Standardowe etykiety one-hot mówią "to jest w 100% klasa 3 i w 0% wszystko inne". To jest silne stwierdzenie. Label smoothing je łagodzi:
 
 ```
 smooth_label = (1 - alpha) * one_hot + alpha / num_classes
 ```
 
-Przy alfa = 0,1 i 10 klasach: zamiast [0, 0, 1, 0, ...] celem staje się [0,01, 0,01, 0,91, 0,01, ...]. Model docelowy wynosi 0,91 zamiast 1,0.
+Przy alpha = 0,1 i 10 klasach: zamiast [0, 0, 1, 0, ...], wartość docelowa staje się [0,01, 0,01, 0,91, 0,01, ...]. Model celuje w 0,91 zamiast w 1,0.
 
-Dlaczego to działa: model próbujący wyprowadzić dokładnie 1,0 przez softmax, musi przesuwać logity do nieskończoności. Powoduje to nadmierną pewność, szkodzi uogólnieniom i sprawia, że ​​model jest podatny na zmiany rozkładu. Wygładzanie etykiet ogranicza cel do 0,9 (przy alfa = 0,1), utrzymując logity w rozsądnym zakresie. GPT i większość nowoczesnych modeli wykorzystuje wygładzanie etykiet lub jego odpowiednik.
+Czemu to działa: model próbujący wygenerować dokładnie 1,0 przez softmax musi przesuwać logity w stronę nieskończoności. To powoduje nadmierną pewność (overconfidence), szkodzi generalizacji i sprawia, że model jest podatny na zmiany rozkładu danych (distribution shift). Label smoothing ogranicza wartość docelową do 0,9 (przy alpha=0,1), utrzymując logity w rozsądnym zakresie. GPT i większość współczesnych modeli wykorzystuje label smoothing lub jego odpowiednik.
 
 ### Strata kontrastowa
 
-Brak etykiet. Żadnych zajęć. Tylko pary wejść i pytanie: czy są podobne czy różne?
+Brak etykiet. Brak klas. Tylko pary wejść i pytanie: czy są podobne, czy różne?
 
-**Utrata kontrastu w stylu SimCLR (NT-Xent / InfoNCE):**
+**Strata kontrastowa w stylu SimCLR (NT-Xent / InfoNCE):**
 
-Zrób jedno zdjęcie. Utwórz dwa rozszerzone widoki (przytnij, obróć, drgania kolorów). Są to „para dodatnia” – powinny mieć podobne osadzenie. Każdy inny obraz w partii tworzy „parę ujemną” — powinny mieć różne osadzenia.
+Weź jeden obraz. Stwórz dwie augmentowane wersje (przycięcie, obrót, zmiana koloru). To jest "pozytywna para" -- powinny mieć podobne embeddingi. Każdy inny obraz w batchu tworzy "negatywną parę" -- powinny mieć różne embeddingi.
 
 ```
 L = -log(exp(sim(z_i, z_j) / tau) / sum(exp(sim(z_i, z_k) / tau)))
 ```
 
-Gdzie sim() jest cosinusem podobieństwa, z_i i z_j są parą dodatnią, suma obejmuje wszystkie ujemne, a tau (temperatura) kontroluje ostrość rozkładu. Niższa temperatura = twardsze negatywy = bardziej agresywna separacja.
+Gdzie sim() to podobieństwo kosinusowe (cosine similarity), z_i i z_j to pozytywna para, suma jest po wszystkich negatywach, a tau (temperatura) kontroluje, jak ostry jest rozkład. Niższa temperatura = trudniejsze negatywy = bardziej agresywne rozdzielanie.
 
-Liczby rzeczywiste: wielkość partii 256 oznacza 255 negatywów na parę dodatnią. Temperatura tau = 0,07 (domyślnie SimCLR). Strata wygląda jak softmax względem podobieństw – chce, aby podobieństwo pary dodatniej było najwyższe spośród wszystkich 256 opcji.
+Konkretne liczby: rozmiar batcha 256 oznacza 255 negatywów na każdą pozytywną parę. Temperatura tau = 0,07 (domyślna wartość w SimCLR). Strata wygląda jak softmax po podobieństwach -- chce, by podobieństwo pozytywnej pary było najwyższe spośród wszystkich 256 opcji.
 
-**Strata potrójna:**
+**Triplet loss:**
 
-Pobiera trzy dane wejściowe: kotwicę, dodatnią (ta sama klasa), ujemną (inna klasa).
+Przyjmuje trzy wejścia: anchor (kotwica), positive (taka sama klasa), negative (inna klasa).
 
 ```
 L = max(0, d(anchor, positive) - d(anchor, negative) + margin)
 ```
 
-Margines (zwykle 0,2-1,0) wymusza minimalną przerwę między odległościami dodatnimi i ujemnymi. Jeśli negatyw jest już wystarczająco daleko, strata wynosi zero – brak gradientu, brak aktualizacji. Dzięki temu trening jest skuteczny, ale wymaga ostrożnego wydobywania trójek (wybieranie twardych negatywów znajdujących się blisko kotwicy).
+Margin (zwykle 0,2-1,0) wymusza minimalną różnicę między odległością do pozytywu i odległością do negatywu. Jeśli negatyw jest już wystarczająco daleko, strata wynosi zero -- brak gradientu, brak aktualizacji. To czyni trening efektywnym, ale wymaga starannego doboru tripletów (triplet mining) -- wybierania trudnych negatywów, które są blisko anchora.
 
-### Utrata ogniskowa
+### Focal loss
 
-W przypadku niezrównoważonych zbiorów danych. Standardowa entropia krzyżowa traktuje jednakowo wszystkie poprawnie sklasyfikowane przykłady. Utrata ogniskowa zmniejsza wagę prostych przykładów:
+Dla niezbalansowanych zbiorów danych. Standardowa cross-entropy traktuje wszystkie poprawnie sklasyfikowane przykłady tak samo. Focal loss zmniejsza wagę łatwych przykładów:
 
 ```
 FL = -alpha * (1 - p_t)^gamma * log(p_t)
 ```
 
-Gdzie p_t jest przewidywanym prawdopodobieństwem prawdziwej klasy, a gamma kontroluje ogniskowanie. Przy gamma = 0 jest to standardowa entropia krzyżowa. Przy gamma = 2 (domyślnie):
+Gdzie p_t jest przewidywanym prawdopodobieństwem prawdziwej klasy, a gamma kontroluje skupienie (focusing). Przy gamma = 0 jest to standardowa cross-entropy. Przy gamma = 2 (wartość domyślna):
 
-- Łatwy przykład (p_t = 0,9): waga = (0,1)^2 = 0,01. Skutecznie ignorowane.
-- Trudny przykład (p_t = 0,1): waga = (0,9)^2 = 0,81. Pełny sygnał gradientowy.
+- Łatwy przykład (p_t = 0,9): waga = (0,1)^2 = 0,01. Praktycznie ignorowany.
+- Trudny przykład (p_t = 0,1): waga = (0,9)^2 = 0,81. Pełny sygnał gradientu.
 
-Utratę ogniskową wprowadzili Lin i in. do wykrywania obiektów, gdzie 99% obszarów kandydujących to tło (łatwe negatywy). Bez utraty ogniskowej model tonie w łatwych przykładach tła i nigdy nie uczy się wykrywać obiektów. Dzięki niemu model koncentruje swoje możliwości na trudnych, niejednoznacznych przypadkach, które mają znaczenie.
+Focal loss zostało wprowadzone przez Lin i in. do detekcji obiektów, gdzie 99% kandydujących regionów to tło (łatwe negatywy). Bez focal loss model tonie w łatwych przykładach tła i nigdy nie uczy się wykrywać obiektów. Z nim model koncentruje swoją zdolność na trudnych, niejednoznacznych przypadkach, które mają znaczenie.
 
 ### Drzewo decyzyjne funkcji straty
 
@@ -173,7 +173,7 @@ flowchart TD
     Emb -->|"Large batch self-supervised"| NCE["Use InfoNCE"]
 ```
 
-### Krajobraz strat
+### Krajobraz straty
 
 ```mermaid
 graph LR
@@ -207,9 +207,9 @@ def mse_gradient(predictions, targets):
     return grads
 ```
 
-### Krok 2: Binarna entropia krzyżowa
+### Krok 2: Binarna entropia skrośna
 
-Problem log(0) jest prawdziwy. Jeśli model przewiduje dokładnie 0 dla przykładu dodatniego, log(0) = ujemna nieskończoność. Obcinanie zapobiega temu.
+Problem log(0) jest realny. Jeśli model przewiduje dokładnie 0 dla przykładu pozytywnego, log(0) = minus nieskończoność. Przycinanie (clipping) temu zapobiega.
 
 ```python
 import math
@@ -230,9 +230,9 @@ def bce_gradient(predictions, targets, eps=1e-15):
     return grads
 ```
 
-### Krok 3: Kategoryczna entropia krzyżowa za pomocą Softmax
+### Krok 3: Kategorialna entropia skrośna z softmax
 
-Softmax konwertuje surowe logity na prawdopodobieństwa. Następnie obliczamy entropię krzyżową względem jednego gorącego celu.
+Softmax przekształca surowe logity w prawdopodobieństwa. Następnie obliczamy cross-entropy względem etykiet one-hot.
 
 ```python
 def softmax(logits):
@@ -253,9 +253,9 @@ def cce_gradient(logits, target_index):
     return grads
 ```
 
-Gradient softmax + entropia krzyżowa pięknie się upraszcza: jest to po prostu (przewidywane prawdopodobieństwo - 1) dla prawdziwej klasy i (przewidywane prawdopodobieństwo) dla wszystkich innych klas. To eleganckie uproszczenie nie jest dziełem przypadku — właśnie dlatego połączono softmax i cross-entropię.
+Gradient połączenia softmax + cross-entropy upraszcza się w piękny sposób: jest to po prostu (przewidywane prawdopodobieństwo - 1) dla prawdziwej klasy oraz (przewidywane prawdopodobieństwo) dla wszystkich innych klas. To elegantne uproszczenie nie jest przypadkiem -- to jest powód, dla którego softmax i cross-entropy są stosowane w parze.
 
-### Krok 4: Wygładzanie etykiet
+### Krok 4: Label smoothing
 
 ```python
 def label_smoothed_cce(logits, target_index, num_classes, alpha=0.1, eps=1e-15):
@@ -271,7 +271,7 @@ def label_smoothed_cce(logits, target_index, num_classes, alpha=0.1, eps=1e-15):
     return loss
 ```
 
-### Krok 5: Utrata kontrastu (uproszczone InfoNCE)
+### Krok 5: Strata kontrastowa (uproszczone InfoNCE)
 
 ```python
 def cosine_similarity(a, b):
@@ -294,9 +294,9 @@ def contrastive_loss(anchor, positive, negatives, temperature=0.07):
     return -math.log(max(1e-15, exp_pos / total_exp))
 ```
 
-### Krok 6: MSE kontra entropia krzyżowa w klasyfikacji
+### Krok 6: MSE vs cross-entropy w klasyfikacji
 
-Trenuj tę samą sieć z lekcji 04 (zbiór danych okręgu) z obiema funkcjami straty. Obserwuj, jak entropia krzyżowa zbiega się szybciej.
+Wytrenuj tę samą sieć z lekcji 04 (zbiór danych "circle") z obiema funkcjami straty. Zaobserwuj, że cross-entropy zbiega szybciej.
 
 ```python
 import random
@@ -314,6 +314,7 @@ def make_circle_data(n=200, seed=42):
         label = 1.0 if x * x + y * y < 1.5 else 0.0
         data.append(([x, y], label))
     return data
+
 
 class LossComparisonNetwork:
     def __init__(self, loss_type="bce", hidden_size=8, lr=0.1):
@@ -389,7 +390,7 @@ class LossComparisonNetwork:
 
 ## Użyj tego
 
-PyTorch zapewnia wszystkie standardowe funkcje utraty z wbudowaną stabilnością numeryczną:
+PyTorch udostępnia wszystkie standardowe funkcje straty z wbudowaną stabilnością numeryczną:
 
 ```python
 import torch
@@ -408,46 +409,46 @@ ce_loss = F.cross_entropy(logits, labels)
 ce_smooth = F.cross_entropy(logits, labels, label_smoothing=0.1)
 ```
 
-Użyj `F.cross_entropy` (nie `F.nll_loss` i ręcznego softmax). Łączy log-softmax i ujemną logarytm wiarygodności w jednej numerycznie stabilnej operacji. Stosowanie softmax oddzielnie, a następnie wzięcie logu jest mniej stabilne - tracisz precyzję w odejmowaniu dużych wykładników.
+Używaj `F.cross_entropy` (a nie `F.nll_loss` w połączeniu z ręcznym softmax). Łączy ona log-softmax i ujemną log-wiarygodność (negative log-likelihood) w jednej, numerycznie stabilnej operacji. Zastosowanie softmax oddzielnie, a następnie wzięcie logarytmu, jest mniej stabilne -- tracisz precyzję przy odejmowaniu dużych wartości wykładniczych.
 
-W przypadku uczenia się kontrastowego większość zespołów korzysta z niestandardowych implementacji lub bibliotek, takich jak `lightly` lub `pytorch-metric-learning`. Główna pętla jest zawsze taka sama: oblicza podobieństwa parami, tworzy softmax na plusach i minusach, propaguje wstecznie.
+W przypadku uczenia kontrastowego większość zespołów korzysta z własnych implementacji lub bibliotek takich jak `lightly` czy `pytorch-metric-learning`. Główna pętla jest zawsze taka sama: oblicz podobieństwa parami, stwórz softmax po pozytywach i negatywach, propaguj wstecznie.
 
-## Wyślij to
+## Wynik (Ship It)
 
-Ta lekcja daje:
-- `outputs/prompt-loss-function-selector.md` – monit wielokrotnego użytku umożliwiający wybranie właściwej funkcji straty
-- `outputs/prompt-loss-debugger.md` – monit diagnostyczny, gdy krzywa strat wygląda nieprawidłowo
+Ta lekcja tworzy:
+- `outputs/prompt-loss-function-selector.md` -- wielorazowy prompt do wyboru właściwej funkcji straty
+- `outputs/prompt-loss-debugger.md` -- prompt diagnostyczny na wypadek, gdy krzywa straty wygląda nieprawidłowo
 
-## Ćwiczenia
+## Zadania
 
-1. Zaimplementuj stratę Hubera (płynną stratę L1), która wynosi MSE dla małych błędów i MAE dla dużych błędów. Trenuj sieć regresyjną przewidującą y = sin(x) za pomocą MSE vs Huber, gdy 5% celów szkoleniowych ma dodany losowy szum (wartości odstające). Porównaj końcowy błąd testu.
+1. Zaimplementuj Huber loss (smooth L1 loss), która jest MSE dla małych błędów i MAE dla dużych błędów. Wytrenuj sieć regresyjną przewidującą y = sin(x), porównując MSE z Huber loss, gdy 5% celów treningowych zawiera dodany losowy szum (wartości odstające). Porównaj końcowy błąd testowy.
 
-2. Dodaj utratę ogniskową do pętli treningowej klasyfikacji binarnej. Utwórz niezrównoważony zbiór danych (90% klasa 0, 10% klasa 1). Porównaj standard BCE ze stratą ogniskową (gamma = 2) w przypadku przypominania sobie klas mniejszościowych po 200 epokach.
+2. Dodaj focal loss do pętli treningowej klasyfikacji binarnej. Stwórz niezbalansowany zbiór danych (90% klasa 0, 10% klasa 1). Porównaj standardowy BCE z focal loss (gamma=2) pod względem recall dla klasy mniejszościowej po 200 epokach.
 
-3. Zaimplementuj stratę tripletową przy użyciu półtwardego wydobycia ujemnego. Wygeneruj dane osadzania 2D dla 5 klas. Dla każdej kotwicy znajdź najtwardszy negatyw, który jest jeszcze dalej od pozytywu (półtwardy). Porównaj zbieżność z losowym wyborem trójek.
+3. Zaimplementuj triplet loss z semi-hard negative mining. Wygeneruj dwuwymiarowe dane embeddingów dla 5 klas. Dla każdego anchora znajdź najtrudniejszy negatyw, który jest wciąż dalej niż pozytyw (semi-hard). Porównaj zbieżność z losowym wyborem tripletów.
 
-4. Przeprowadź porównanie MSE i entropii krzyżowej, ale podczas treningu śledź wielkość gradientu w każdej warstwie. Wykreśl średnią normę gradientu na epokę. Sprawdź, czy entropia krzyżowa wytwarza większe gradienty we wczesnych epokach, gdy model jest najbardziej niepewny.
+4. Przeprowadź porównanie MSE vs cross-entropy, ale śledź wielkości gradientów w każdej warstwie podczas treningu. Wykreśl średnią normę gradientu na epokę. Zweryfikuj, że cross-entropy generuje większe gradienty we wczesnych epokach, gdy model jest najbardziej niepewny.
 
-5. Zaimplementuj utratę dywergencji KL i sprawdź, czy minimalizacja KL(true || przewidywana) daje takie same gradienty jak entropia krzyżowa, gdy prawdziwy rozkład jest jeden gorący. Następnie wypróbuj miękkie cele (takie jak destylacja wiedzy), gdzie „prawdziwa” dystrybucja pochodzi z wyjścia softmax modelu nauczyciela.
+5. Zaimplementuj stratę KL divergence i zweryfikuj, że minimalizacja KL(true || predicted) daje te same gradienty co cross-entropy, gdy rzeczywisty rozkład jest one-hot. Następnie wypróbuj soft targets (jak w destylacji wiedzy/knowledge distillation), gdzie "rzeczywisty" rozkład pochodzi z wyjścia softmax modelu nauczyciela (teacher model).
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co ludzie mówią | Co to faktycznie oznacza |
 |------|----------------|----------------------|
-| Funkcja straty | „Jak błędny jest model” | Funkcja różniczkowalna odwzorowująca przewidywania i wartości docelowe na skalar, który optymalizator minimalizuje |
-| MSE | „Średni kwadrat błędu” | Średnia kwadratów różnic między przewidywaniami i wartościami docelowymi; karze kwadratowo duże błędy |
-| Entropia krzyżowa | „Utrata klasyfikacji” | Mierzy rozbieżność między przewidywanym rozkładem prawdopodobieństwa a rozkładem rzeczywistym za pomocą opcji -log(p) |
-| Binarna entropia krzyżowa | „p.n.e.” | Entropia krzyżowa dla dwóch klas: -(y*log(p) + (1-y)*log(1-p)) |
-| Wygładzanie etykiet | „Zmiękczanie celów” | Zastąpienie twardych celów 0/1 miękkimi wartościami (np. 0,1/0,9), aby zapobiec nadmiernej pewności i poprawić uogólnianie |
-| Kontrastowa strata | „Ściągnij razem, rozsuń” | Strata, która uczy się reprezentacji, tworząc pary podobne blisko i pary odmienne daleko w przestrzeni osadzania |
-| InformacjeNCE | „Strata CLIP/SimCLR” | Znormalizowana entropia krzyżowa skalowana temperaturowo w oparciu o wyniki podobieństwa; traktuje uczenie się kontrastowe jako klasyfikację |
-| Utrata ogniskowej | „Poprawka niezrównoważonych danych” | Entropia krzyżowa ważona przez (1-p_t)^gamma w celu zmniejszenia wagi łatwych przykładów i skupienia się na trudnych |
-| Strata potrójna | „Kotwica-pozytywna-negatywna” | Przesuwa kotwicę bliżej wartości dodatniej niż ujemnej przynajmniej o pewien margines przestrzeni osadzania |
-| Temperatura | „Pokrętło ostrości” | Dzielnik skalarny logitów/podobieństw, który kontroluje szczyt wynikowego rozkładu; niższy = ostrzejszy |
+| Funkcja straty (Loss function) | "Jak bardzo model się myli" | Różniczkowalna funkcja mapująca predykcje i wartości docelowe na skalar, który optymalizator minimalizuje |
+| MSE | "Średni błąd kwadratowy" | Średnia z kwadratów różnic między predykcjami i wartościami docelowymi; penalizuje duże błędy w sposób kwadratowy |
+| Cross-entropy | "Strata klasyfikacyjna" | Mierzy rozbieżność (divergence) między przewidywanym rozkładem prawdopodobieństwa a rzeczywistym rozkładem za pomocą -log(p) |
+| Binary cross-entropy | "BCE" | Cross-entropy dla dwóch klas: -(y*log(p) + (1-y)*log(1-p)) |
+| Label smoothing | "Łagodzenie wartości docelowych" | Zastąpienie sztywnych etykiet 0/1 wartościami miękkimi (np. 0,1/0,9), aby zapobiec nadmiernej pewności i poprawić generalizację |
+| Strata kontrastowa (Contrastive loss) | "Przyciągaj razem, odpychaj od siebie" | Strata, która uczy reprezentacji, sprawiając, że podobne pary są blisko, a niepodobne pary daleko w przestrzeni embeddingów |
+| InfoNCE | "Strata CLIP/SimCLR" | Znormalizowana, skalowana temperaturą cross-entropy po wynikach podobieństwa; traktuje uczenie kontrastowe jako klasyfikację |
+| Focal loss | "Naprawa danych niezbalansowanych" | Cross-entropy ważona przez (1-p_t)^gamma, aby zmniejszyć wagę łatwych przykładów i skupić się na trudnych |
+| Triplet loss | "Anchor-positive-negative" | Przesuwa anchor bliżej pozytywu niż negatywu o co najmniej wartość margin w przestrzeni embeddingów |
+| Temperatura (Temperature) | "Pokrętło ostrości" | Skalarny dzielnik logitów/podobieństw, który kontroluje, jak spiczasty jest wynikowy rozkład; niższa = ostrzejszy |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-– Lin i in., „Focal Loss for Dense Object Detection” (2017) – wprowadzili utratę ogniskowej do obsługi ekstremalnej nierównowagi klas w wykrywaniu obiektów (RetinaNet)
-– Chen i in., „A Simple Framework for Contrastive Learning of Visual Representations” (SimCLR, 2020) – zdefiniowali nowoczesny proces uczenia się kontrastowego z utratą NT-Xent
-- Szegedy i in., „Rethinking the Inception Architecture” (2016) – wprowadzili wygładzanie etykiet jako technikę regularyzacji, obecnie standardową w większości dużych modeli
-- Hinton i in., „Distilling the Knowledge in a Neural Network” (2015) – destylacja wiedzy przy użyciu celów miękkich i dywergencji KL, podstawa kompresji modelu
+- Lin i in., "Focal Loss for Dense Object Detection" (2017) -- wprowadzili focal loss do radzenia sobie z ekstremalnym niezbalansowaniem klas w detekcji obiektów (RetinaNet)
+- Chen i in., "A Simple Framework for Contrastive Learning of Visual Representations" (SimCLR, 2020) -- zdefiniowali współczesny pipeline uczenia kontrastowego z funkcją straty NT-Xent
+- Szegedy i in., "Rethinking the Inception Architecture" (2016) -- wprowadzili label smoothing jako technikę regularyzacji, obecnie standardową w większości dużych modeli
+- Hinton i in., "Distilling the Knowledge in a Neural Network" (2015) -- destylacja wiedzy (knowledge distillation) wykorzystująca soft targets i KL divergence, fundamentalna dla kompresji modeli

@@ -1,32 +1,32 @@
 # Regularyzacja
 
-> Twój model uzyskuje 99% danych treningowych i 60% danych testowych. Zapamiętywał zamiast się uczyć. Regularyzacja to podatek nakładany na złożoność, aby wymusić uogólnienie.
+> Twój model osiąga 99% na danych treningowych i 60% na danych testowych. Zamiast się nauczyć, zapamiętał. Regularyzacja to podatek, który nakładasz na złożoność, aby wymusić generalizację.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
 **Wymagania wstępne:** Lekcja 03.06 (Optymalizatory)
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zaimplementuj porzucenie z odwróconym skalowaniem, zanikiem masy L2, normalizacją wsadową, normalizacją warstw i RMSNorm od zera
-- Zmierzyć lukę w dokładności testu pociągu i zdiagnozować nadmierne dopasowanie za pomocą eksperymentów regularyzacyjnych
-- Wyjaśnij, dlaczego transformatory używają LayerNorm zamiast BatchNorm i dlaczego nowoczesne LLM wolą RMSNorm
-- Zastosuj właściwą kombinację technik regularyzacji w oparciu o stopień nadmiernego dopasowania
+- Zaimplementuj od podstaw dropout z odwróconym skalowaniem, regularyzację wag L2 (weight decay), batch normalization, layer normalization oraz RMSNorm
+- Zmierz różnicę dokładności między danymi treningowymi i testowymi oraz zdiagnozuj przeuczenie za pomocą eksperymentów z regularyzacją
+- Wyjaśnij, czemu transformery używają LayerNorm zamiast BatchNorm i czemu współczesne LLM-y preferują RMSNorm
+- Zastosuj właściwą kombinację technik regularyzacji w zależności od stopnia przeuczenia
 
 ## Problem
 
-Sieć neuronowa o wystarczających parametrach może zapamiętać dowolny zbiór danych. To nie jest hipoteza – Zhang i in. (2017) udowodnili to, ucząc standardowe sieci w ImageNet za pomocą losowych etykiet. Sieci osiągnęły niemal zerowe straty szkoleniowe przy całkowicie losowych przypisaniach etykiet. Zapamiętali milion losowych par wejście-wyjście bez żadnego wzorca do nauczenia się. Strata treningowa była doskonała. Dokładność testu była zerowa.
+Sieć neuronowa z wystarczającą liczbą parametrów może zapamiętać każdy zbiór danych. To nie jest hipoteza -- Zhang i in. (2017) udowodnili to, trenując standardowe sieci na ImageNet z losowymi etykietami. Sieci osiągnęły bliską zeru stratę treningową na całkowicie losowych przypisaniach etykiet. Zapamiętały milion losowych par wejście-wyjście, w których nie było żadnego wzorca do nauczenia. Strata treningowa była idealna. Dokładność na danych testowych wynosiła zero.
 
-Jest to problem nadmiernego dopasowania, który nasila się w miarę powiększania się modeli. GPT-3 ma 175 miliardów parametrów. Zestaw szkoleniowy zawiera około 500 miliardów tokenów. Przy tak wielu parametrach model ma wystarczającą pojemność, aby dosłownie zapamiętać znaczące fragmenty danych szkoleniowych. Bez regularyzacji zamiast uczyć się wzorców, które można uogólnić, po prostu powtarzalibyśmy przykłady szkoleniowe.
+To jest problem przeuczenia (overfitting) i pogłębia się on, gdy modele stają się większe. GPT-3 ma 175 miliardów parametrów. Zbiór treningowy zawiera około 500 miliardów tokenów. Z taką liczbą parametrów model ma wystarczającą pojemność, by zapamiętać znaczne fragmenty danych treningowych słowo w słowo. Bez regularyzacji model po prostu odtwarzałby przykłady treningowe, zamiast uczyć się generalizowalnych wzorców.
 
-Luka pomiędzy wynikami treningu a wynikami testów to luka w zakresie nadmiernego dopasowania. Każda technika opisana w tej lekcji atakuje tę lukę pod innym kątem. Rezygnacja powoduje, że sieć nie opiera się na żadnym pojedynczym neuronie. Zanik masy ciała zapobiega nadmiernemu wzrostowi pojedynczego ciężaru. Normalizacja wsadowa wygładza krajobraz strat, dzięki czemu optymalizator znajduje bardziej płaskie minima, które można uogólnić. Normalizacja warstw robi to samo, ale działa tam, gdzie zawodzi normalizacja wsadowa (małe partie, sekwencje o zmiennej długości). RMSNorm robi to 10% szybciej, pomijając obliczenia średniej. Każda technika jest prosta. Razem stanowią różnicę między modelem, który zapamiętuje, a modelem, który uogólnia.
+Różnica między wydajnością na danych treningowych a wydajnością na danych testowych to tzw. generalization gap (różnica generalizacji). Każda technika w tej lekcji atakuje tę różnicę z innej strony. Dropout zmusza sieć, by nie polegała na jednym konkretnym neuronie. Weight decay zapobiega temu, by jakakolwiek waga rosła zbyt duża. Batch normalization wygładza krajobraz funkcji straty, dzięki czemu optymalizator znajduje płaskie, bardziej generalizowalne minima. Layer normalization robi to samo, ale działa tam, gdzie batch normalization zawodzi (małe batche, sekwencje o zmiennej długości). RMSNorm robi to 10% szybciej, pomijając obliczanie średniej. Każda z tych technik jest prosta. Razem stanowią różnicę między modelem, który zapamiętuje, a modelem, który generalizuje.
 
 ## Koncepcja
 
-### Spektrum nadmiernego dopasowania
+### Spektrum przeuczenia
 
-Każdy model mieści się gdzieś w spektrum od niedopasowania (zbyt prostego, aby uchwycić wzór) do nadmiernego dopasowania (tak złożonego, że wychwytuje szum). Najlepszy punkt znajduje się pośrodku, a regularyzacja popycha modele w jego stronę ze strony nadmiernego dopasowania.
+Każdy model znajduje się gdzieś na spektrum od niedouczenia (underfitting -- model jest zbyt prosty, by uchwycić wzorzec) do przeuczenia (overfitting -- model jest tak złożony, że uchwytuje szum). Optymalny punkt leży pomiędzy nimi, a regularyzacja przesuwa modele w jego stronę od strony przeuczenia.
 
 ```mermaid
 graph LR
@@ -39,54 +39,54 @@ graph LR
     Aug["Data Augmentation"] -->|"Pushes left"| Over
 ```
 
-### Rezygnacja
+### Dropout
 
-Najprostsza technika regularyzacji z najbardziej elegancką interpretacją. Podczas uczenia losowo ustaw wyjście każdego neuronu na zero z prawdopodobieństwem p.
+Najprostsza technika regularyzacji o najbardziej elegantnej interpretacji. W trakcie treningu losowo zerujemy wyjście każdego neuronu z prawdopodobieństwem p.
 
 ```
 output = activation(z) * mask    where mask[i] ~ Bernoulli(1 - p)
 ```
 
-Przy p = 0,5 połowa neuronów jest zerowana przy każdym przejściu do przodu. Sieć musi uczyć się reprezentacji nadmiarowych, ponieważ nie jest w stanie przewidzieć, które neurony będą dostępne. Zapobiega to koadaptacji – neurony uczą się polegać na obecności określonych innych neuronów.
+Przy p = 0.5 połowa neuronów jest zerowana w każdym przebiegu w przód. Sieć musi nauczyć się nadmiarowych reprezentacji, ponieważ nie może przewidzieć, które neurony będą dostępne. Zapobiega to koadaptacji -- sytuacji, w której neurony uczą się polegać na obecności konkretnych innych neuronów.
 
-Interpretacja zespołowa: sieć z N neuronami i przerwami tworzy 2^N możliwych podsieci (każda kombinacja neuronów włączonych lub wyłączonych). Trening z porzuceniem pociąga w przybliżeniu wszystkie podsieci 2^N jednocześnie, każdą w różnych minipartiach. W czasie testu używasz wszystkich neuronów (bez utraty) i skalujesz wyniki o (1 - p), aby dopasować oczekiwaną wartość podczas treningu. Jest to równoznaczne z uśrednieniem przewidywań dla podsieci 2^N – ogromnego zestawu z jednego modelu.
+Interpretacja zespołowa (ensemble): sieć z N neuronami i dropoutem tworzy 2^N możliwych podsieci (każda kombinacja włączonych/wyłączonych neuronów). Trenowanie z dropoutem w przybliżeniu trenuje wszystkie 2^N podsieci jednocześnie, każdą na innych mini-batchach. W czasie testu używasz wszystkich neuronów (bez dropoutu) i skalujesz wyjścia przez (1 - p), aby odpowiadały wartości oczekiwanej podczas treningu. Jest to równoważne uśrednianiu predykcji 2^N podsieci -- gigantyczny zespół (ensemble) z jednego modelu.
 
-W praktyce skalowanie stosuje się podczas szkolenia, a nie podczas testów (odwrócony dropout):
+W praktyce skalowanie jest stosowane podczas treningu, a nie podczas testu (odwrócony dropout, inverted dropout):
 
 ```
 During training:  output = activation(z) * mask / (1 - p)
 During testing:   output = activation(z)   (no change needed)
 ```
 
-Jest to czystsze, ponieważ kod testowy w ogóle nie musi wiedzieć o porzuceniu.
+Jest to czystsze rozwiązanie, ponieważ kod testowy nie musi w ogóle wiedzieć o istnieniu dropoutu.
 
-Stawki domyślne: p = 0,1 dla transformatorów, p = 0,5 dla MLP, p = 0,2-0,3 dla CNN. Większy odsetek rezygnacji = silniejsza regularyzacja = większe ryzyko niedopasowania.
+Domyślne wartości: p = 0.1 dla transformerów, p = 0.5 dla MLP, p = 0.2-0.3 dla CNN. Wyższy dropout = silniejsza regularyzacja = większe ryzyko niedouczenia.
 
-### Spadek masy ciała (regularyzacja L2)
+### Weight Decay (regularyzacja L2)
 
-Dodaj kwadrat wielkości wszystkich ciężarów do straty:
+Dodajemy kwadrat wielkości wszystkich wag do funkcji straty:
 
 ```
 total_loss = task_loss + (lambda / 2) * sum(w_i^2)
 ```
 
-Gradient składnika regularyzacyjnego wynosi lambda * w. Oznacza to, że na każdym kroku każda waga jest zmniejszana do zera o ułamek proporcjonalny do jej wielkości. Duże ciężary są karane bardziej. Model jest spychany w stronę rozwiązań, w których nie dominuje żaden pojedynczy ciężar.
+Gradient członu regularyzacyjnego to lambda * w. Oznacza to, że w każdym kroku każda waga jest zmniejszana w kierunku zera o część proporcjonalną do jej wielkości. Duże wagi są karane bardziej. Model jest popychany w stronę rozwiązań, w których żadna pojedyncza waga nie dominuje.
 
-Dlaczego pomaga to w uogólnianiu: modele z nadmiernym dopasowaniem mają zwykle duże wagi, które wzmacniają szum w danych uczących. Spadek masy powoduje, że ciężary są małe, co ogranicza efektywną wydajność modelu i zmusza go do polegania na solidnych, możliwych do uogólnienia cechach, a nie na zapamiętanych dziwactwach.
+Czemu to pomaga w generalizacji: przeuczone modele mają tendencję do posiadania dużych wag, które wzmacniają szum w danych treningowych. Weight decay utrzymuje wagi małe, co ogranicza efektywną pojemność modelu i zmusza go do polegania na solidnych, generalizowalnych cechach, a nie na zapamiętanych dziwactwach (quirks).
 
-Hiperparametr lambda kontroluje siłę. Typowe wartości:
+Hiperparametr lambda kontroluje siłę regularyzacji. Typowe wartości:
 
-- 0,01 dla AdamaW na transformatorach
-- 1e-4 dla SGD w CNN
-- 0,1 dla modeli mocno przetrenowanych
+- 0.01 dla AdamW na transformerach
+- 1e-4 dla SGD na CNN
+- 0.1 dla silnie przeuczonych modeli
 
-Jak omówiono w lekcji 06: zanik masy i regularyzacja L2 są równoważne w SGD, ale nie w Adamie. Podczas treningu z Adamem zawsze używaj AdamW (oddzielny rozkład masy).
+Jak omówiono w lekcji 06: weight decay i regularyzacja L2 są równoważne w SGD, ale nie w Adamie. Zawsze używaj AdamW (decoupled weight decay) podczas treningu z Adamem.
 
-### Normalizacja wsadowa
+### Batch Normalization
 
-Normalizuj dane wyjściowe każdej warstwy w minipartii przed przekazaniem jej do następnej warstwy.
+Normalizuje wyjście każdej warstwy w ramach mini-batcha, przed przekazaniem go do następnej warstwy.
 
-W przypadku mini-partii aktywacji na jakiejś warstwie:
+Dla mini-batcha aktywacji w pewnej warstwie:
 
 ```
 mu = (1/B) * sum(x_i)           (batch mean)
@@ -95,17 +95,17 @@ x_hat = (x_i - mu) / sqrt(sigma^2 + eps)   (normalize)
 y = gamma * x_hat + beta        (scale and shift)
 ```
 
-Gamma i beta to parametry, których można się nauczyć i które pozwalają sieci cofnąć normalizację, jeśli jest to optymalne. Bez nich zmuszono by do uzyskania na wyjściu każdej warstwy średniej zerowej wariancji jednostkowej, co mogłoby nie być zgodne z oczekiwaniami sieci.
+Gamma i beta to parametry uczone, które pozwalają sieci odwrócić normalizację, jeśli jest to dla niej optymalne. Bez nich wymuszałbyś, by wyjście każdej warstwy miało zerową średnią i wariancję jednostkową, co nie musi być tym, czego sieć potrzebuje.
 
-**Podział treningu a wnioskowanie:** Podczas uczenia mu i sigma pochodzą z bieżącej mini-partii. Podczas wnioskowania korzystasz ze średnich bieżących zgromadzonych podczas treningu (wykładnicza średnia krocząca z momentem = 0,1, co oznacza 90% starych + 10% nowych).
+**Podział na trening i wnioskowanie:** Podczas treningu mu i sigma pochodzą z aktualnego mini-batcha. Podczas wnioskowania używasz uśrednionych wartości akumulowanych w trakcie treningu (wykładnicza średnia ruchoma z momentum = 0.1, czyli 90% wartości starych + 10% nowych).
 
-Dlaczego BatchNorm działa, jest wciąż przedmiotem dyskusji. W oryginalnym artykule stwierdzono, że zmniejsza to „wewnętrzne przesunięcie współzmiennej” (rozkład danych wejściowych warstw zmienia się wraz z aktualizacją wcześniejszych warstw). Santurkar i in. (2018) wykazali, że to wyjaśnienie jest błędne. Prawdziwy powód: BatchNorm sprawia, że ​​krajobraz strat staje się płynniejszy. Gradienty są bardziej przewidywalne, stałe Lipschitza są mniejsze, a optymalizator może bezpiecznie wykonywać większe kroki. Właśnie dlatego BatchNorm umożliwia szybsze uczenie się i konwergencję.
+Wciąż dyskutuje się, czemu BatchNorm działa. Oryginalna praca twierdziła, że redukuje on "internal covariate shift" (zmianę rozkładu wejść warstwy w wyniku aktualizacji wcześniejszych warstw). Santurkar i in. (2018) wykazali, że to wyjaśnienie jest błędne. Prawdziwy powód: BatchNorm wygładza krajobraz funkcji straty. Gradienty są bardziej przewidywalne, stałe Lipschitza są mniejsze, a optymalizator może bezpiecznie wykonywać większe kroki. Dlatego BatchNorm pozwala na używanie wyższych learning rate i szybszą zbieżność.
 
-BatchNorm ma podstawowe ograniczenie: zależy od statystyk partii. W przypadku partii o wielkości 1 średnia i wariancja nie mają znaczenia. W przypadku małych partii (< 32) statystyki są zaszumione i pogarszają wydajność. Ma to znaczenie w przypadku zadań takich jak wykrywanie obiektów (gdzie pamięć ogranicza rozmiar partii) i modelowanie języka (gdzie różne długości sekwencji).
+BatchNorm ma fundamentalne ograniczenie: zależy od statystyk batcha. Przy rozmiarze batcha 1 średnia i wariancja są bez znaczenia. Przy małych batchach (< 32) statystyki są zaszumione i pogarszają wydajność. Ma to znaczenie dla zadań takich jak detekcja obiektów (gdzie pamięć ogranicza rozmiar batcha) i modelowanie języka (gdzie długości sekwencji są różne).
 
-### Normalizacja warstw
+### Layer Normalization
 
-Normalizuj między funkcjami, a nie w całej partii. Dla pojedynczej próbki:
+Normalizuje cechy (features) zamiast wymiaru batcha. Dla pojedynczej próbki:
 
 ```
 mu = (1/D) * sum(x_j)           (feature mean)
@@ -114,24 +114,24 @@ x_hat = (x_j - mu) / sqrt(sigma^2 + eps)
 y = gamma * x_hat + beta
 ```
 
-D jest wymiarem cechy. Każda próbka jest normalizowana niezależnie – bez zależności od wielkości partii. Właśnie dlatego transformatory używają LayerNorm zamiast BatchNorm. Sekwencje mają zmienną długość, rozmiary partii są często małe (lub 1 podczas generowania), a obliczenia są identyczne w przypadku uczenia i wnioskowania.
+D to wymiar cech (feature dimension). Każda próbka jest normalizowana niezależnie -- brak zależności od rozmiaru batcha. To właśnie dlatego transformery używają LayerNorm zamiast BatchNorm. Sekwencje mają zmienne długości, rozmiary batchy są często małe (lub równe 1 podczas generacji), a obliczenia są identyczne podczas treningu i wnioskowania.
 
-LayerNorm w transformatorach jest stosowany po każdym bloku samouważności i każdym bloku sprzężenia zwrotnego (Post-LN) lub przed nimi (Pre-LN, który jest bardziej stabilny w przypadku treningu).
+LayerNorm w transformerach jest stosowany po każdym bloku self-attention i każdym bloku feed-forward (Post-LN) albo przed nimi (Pre-LN, które jest bardziej stabilne podczas treningu).
 
-###RMSNorm
+### RMSNorm
 
-LayerNorm bez odejmowania średniej. Zaproponowane przez Zhanga i Sennricha (2019).
+LayerNorm bez odejmowania średniej. Zaproponowany przez Zhang & Sennrich (2019).
 
 ```
 rms = sqrt((1/D) * sum(x_j^2))
 y = gamma * x / rms
 ```
 
-To wszystko. Żadnych średnich obliczeń, żadnego parametru beta. Obserwacja: ponowne centrowanie (odejmowanie średniej) w LayerNorm ma bardzo niewielki wpływ na wydajność modelu, ale kosztuje obliczenia. Usunięcie go zapewnia tę samą dokładność przy około 10% mniejszym narzucie.
+I to wszystko. Brak obliczania średniej, brak parametru beta. Obserwacja: ponowne centrowanie (odejmowanie średniej) w LayerNorm wnosi bardzo mało do wydajności modelu, ale kosztuje obliczeniowo. Usunięcie go daje tę samą dokładność przy około 10% mniejszym narzucie (overhead).
 
-LLaMA, LLaMA 2, LLaMA 3, Mistral i większość nowoczesnych LLM używają RMSNorm zamiast LayerNorm. W skali miliardów parametrów i bilionów tokenów te 10% oszczędności jest znaczące.
+LLaMA, LLaMA 2, LLaMA 3, Mistral i większość współczesnych LLM-ów używa RMSNorm zamiast LayerNorm. Przy skali miliardów parametrów i bilionów tokenów te 10% oszczędności mają duże znaczenie.
 
-### Porównanie normalizacji
+### Porównanie metod normalizacji
 
 ```mermaid
 graph TD
@@ -152,19 +152,19 @@ graph TD
     end
 ```
 
-### Powiększanie danych jako regularyzacja
+### Augmentacja danych jako regularyzacja
 
-Nie modyfikacja modelu, ale modyfikacja danych. Przekształcaj dane wejściowe do szkolenia, zachowując etykiety:
+Nie jest to modyfikacja modelu, lecz modyfikacja danych. Transformujemy wejścia treningowe, zachowując etykiety:
 
-- Obrazy: losowe przycinanie, odwracanie, obracanie, drgania kolorów, wycinanie
-- Tekst: zamiana synonimów, tłumaczenie wsteczne, losowe usunięcie
-- Dźwięk: rozciąganie w czasie, zmiana wysokości tonu, dodawanie szumu
+- Obrazy: losowe przycinanie (crop), odbicie (flip), rotacja, zmiana kolorów (color jitter), cutout
+- Tekst: zamiana synonimów, tłumaczenie zwrotne (back-translation), losowe usuwanie
+- Audio: rozciąganie czasu, zmiana wysokości tonu, dodawanie szumu
 
-Efekt jest identyczny z regularyzacją: zwiększa efektywny rozmiar zbioru uczącego, utrudniając modelowi zapamiętanie konkretnych przykładów. Model, który widzi każdy obraz w oryginalnej formie tylko raz, może go zapamiętać. Model, który widzi 50 rozszerzonych wersji każdego obrazu, jest zmuszony nauczyć się niezmiennej struktury.
+Efekt jest identyczny jak przy regularyzacji: zwiększa efektywny rozmiar zbioru treningowego, co utrudnia modelowi zapamiętanie konkretnych przykładów. Model, który widzi każdy obraz tylko raz w jego oryginalnej formie, może go zapamiętać. Model, który widzi 50 zaugmentowanych wersji każdego obrazu, jest zmuszony do nauczenia się niezmiennej struktury.
 
-### Wcześniejsze zatrzymanie
+### Early Stopping (wczesne zatrzymanie)
 
-Najprostszy regularyzator: przestań trenować, gdy utrata walidacji zacznie rosnąć. Model nie jest jeszcze w tym momencie przetrenowany. W praktyce śledzisz utratę walidacji w każdej epoce, zapisujesz najlepszy model i kontynuujesz szkolenie przez okno „cierpliwości” (zwykle 5–20 epok). Jeśli utrata walidacji nie ulegnie poprawie w oknie cierpliwości, zatrzymasz i wczytasz najlepiej zapisany model.
+Najprostszy regularizator: zatrzymaj trening, gdy strata walidacyjna zaczyna wzrastać. W tym momencie model jeszcze się nie przeuczył. W praktyce śledzisz stratę walidacyjną co epokę, zapisujesz najlepszy model i kontynuujesz trening w ramach okna "patience" (typowo 5-20 epok). Jeśli strata walidacyjna nie poprawi się w oknie patience, zatrzymujesz trening i wczytujesz najlepszy zapisany model.
 
 ### Kiedy co zastosować
 
@@ -189,11 +189,12 @@ flowchart TD
 
 ## Zbuduj to
 
-### Krok 1: Rezygnacja (tryb szkolenia i oceny)
+### Krok 1: Dropout (tryb treningowy i ewaluacyjny)
 
 ```python
 import random
 import math
+
 
 class Dropout:
     def __init__(self, p=0.5):
@@ -225,7 +226,7 @@ class Dropout:
         return grads
 ```
 
-### Krok 2: Spadek masy L2
+### Krok 2: Weight decay L2
 
 ```python
 def l2_regularization(weights, lambda_reg):
@@ -238,7 +239,7 @@ def l2_gradient(weights, lambda_reg):
     return [lambda_reg * w for w in weights]
 ```
 
-### Krok 3: Normalizacja wsadowa
+### Krok 3: Batch Normalization
 
 ```python
 class BatchNorm:
@@ -288,7 +289,7 @@ class BatchNorm:
         return output
 ```
 
-### Krok 4: Normalizacja warstw
+### Krok 4: Layer Normalization
 
 ```python
 class LayerNorm:
@@ -311,7 +312,7 @@ class LayerNorm:
         return output
 ```
 
-### Krok 5: Norma RMS
+### Krok 5: RMSNorm
 
 ```python
 class RMSNorm:
@@ -328,12 +329,13 @@ class RMSNorm:
         return output
 ```
 
-### Krok 6: Trening z regularyzacją i bez
+### Krok 6: Trening z regularyzacją i bez niej
 
 ```python
 def sigmoid(x):
     x = max(-500, min(500, x))
     return 1.0 / (1.0 + math.exp(-x))
+
 
 def make_circle_data(n=200, seed=42):
     random.seed(seed)
@@ -344,6 +346,7 @@ def make_circle_data(n=200, seed=42):
         label = 1.0 if x * x + y * y < 1.5 else 0.0
         data.append(([x, y], label))
     return data
+
 
 class RegularizedNetwork:
     def __init__(self, hidden_size=16, lr=0.05, dropout_p=0.0, weight_decay=0.0):
@@ -430,9 +433,9 @@ class RegularizedNetwork:
         return history
 ```
 
-## Użyj tego
+## Zastosuj to
 
-PyTorch zapewnia całą normalizację i regularyzację jako moduły:
+PyTorch udostępnia wszystkie metody normalizacji i regularyzacji jako moduły:
 
 ```python
 import torch
@@ -457,9 +460,9 @@ model.eval()
 out_test = model(torch.randn(1, 784))
 ```
 
-Przełącznik `model.train()` / `model.eval()` ma kluczowe znaczenie. Włącza/wyłącza porzucanie i informuje BatchNorm, aby używał statystyk wsadowych w porównaniu ze statystykami bieżącymi. Zapominanie `model.eval()` przed wnioskowaniem jest jednym z najczęstszych błędów głębokiego uczenia się. Dokładność Twojego testu będzie się zmieniać losowo, ponieważ rezygnacja z testu jest nadal aktywna, a BatchNorm korzysta ze statystyk mini-partii.
+Przełącznik `model.train()` / `model.eval()` jest kluczowy. Włącza/wyłącza dropout i informuje BatchNorm, czy ma używać statystyk batcha, czy statystyk uśrednionych (running statistics). Zapomnienie o `model.eval()` przed wnioskowaniem to jeden z najczęstszych błędów w deep learningu. Dokładność na danych testowych będzie się losowo wahać, ponieważ dropout wciąż jest aktywny, a BatchNorm korzysta ze statystyk mini-batcha.
 
-W przypadku transformatorów wzór jest inny:
+Dla transformerów wzorzec jest inny:
 
 ```python
 class TransformerBlock(nn.Module):
@@ -483,43 +486,43 @@ class TransformerBlock(nn.Module):
         return x
 ```
 
-LayerNorm, a nie BatchNorm. Rezygnacja p=0,1, a nie p=0,5. Są to ustawienia domyślne transformatora.
+LayerNorm, nie BatchNorm. Dropout p=0.1, nie p=0.5. To są domyślne ustawienia dla transformerów.
 
-## Wyślij to
+## Ship It
 
-Ta lekcja daje:
-- `outputs/prompt-regularization-advisor.md` – podpowiedź diagnozująca nadmierne dopasowanie i zalecająca właściwą strategię regularyzacji
+Ta lekcja tworzy:
+- `outputs/prompt-regularization-advisor.md` -- prompt, który diagnozuje przeuczenie i rekomenduje właściwą strategię regularyzacji
 
 ## Ćwiczenia
 
-1. Zaimplementuj usuwanie przestrzenne dla danych 2D: zamiast usuwać pojedyncze neurony, usuwaj całe kanały cech. Zasymuluj to, traktując grupy kolejnych obiektów jako kanały i usuwając całe grupy. Porównaj lukę w teście pociągu ze standardowym porzuceniem w zbiorze danych okręgu z ukrytym_rozmiarem=32.
+1. Zaimplementuj spatial dropout dla danych 2D: zamiast usuwać pojedyncze neurony, usuwaj całe kanały cech. Symuluj to, traktując grupy kolejnych cech jako kanały i usuwając całe grupy. Porównaj różnicę train-test ze standardowym dropoutem na zbiorze danych "circle" z hidden_size=32.
 
-2. Zaimplementuj wygładzanie etykiet z lekcji 05 w połączeniu z rezygnacją z tej lekcji. Trenuj z czterema konfiguracjami: żadna, tylko porzucenie, tylko wygładzanie etykiet, obie. Zmierz dla każdego z nich ostateczną lukę w dokładności testu pociągu. Która kombinacja daje najmniejszą lukę?
+2. Zaimplementuj label smoothing z lekcji 05 w połączeniu z dropoutem z tej lekcji. Wytrenuj cztery konfiguracje: bez żadnego z nich, tylko dropout, tylko label smoothing, oba razem. Zmierz końcową różnicę dokładności train-test dla każdej z nich. Która kombinacja daje najmniejszą różnicę?
 
-3. Dodaj warstwę BatchNorm pomiędzy warstwą ukrytą a aktywacją w sieci zbioru danych okręgu. Trenuj z BatchNorm i bez niego przy szybkościach uczenia się 0,01, 0,05 i 0,1. BatchNorm powinien umożliwiać stabilne szkolenie przy wyższych szybkościach uczenia się tam, gdzie sieć podstawowa jest rozbieżna.
+3. Dodaj warstwę BatchNorm między warstwą skrytą a funkcją aktywacji w swojej sieci dla zbioru danych "circle". Wytrenuj z BatchNorm i bez niego przy learning rate 0.01, 0.05 i 0.1. BatchNorm powinien umożliwić stabilny trening przy wyższych learning rate, przy których sieć bazowa się rozbiega.
 
-4. Wprowadź wczesne zatrzymanie: śledź utratę testów w każdej epoce, zapisz najlepsze wagi i zatrzymaj, jeśli utrata testów nie poprawiła się przez 20 epok. Uruchom uregulowaną sieć na 1000 epok. Zgłoś, która epoka miała najlepszą dokładność testu i ile epok obliczeń zaoszczędziłeś.
+4. Zaimplementuj early stopping: śledź stratę testową co epokę, zapisuj najlepsze wagi i zatrzymaj trening, jeśli strata testowa nie poprawiła się przez 20 epok. Wytrenuj zregularyzowaną sieć przez 1000 epok. Podaj, w której epoce była najlepsza dokładność testowa i ile epok obliczeń zaoszczędziłeś.
 
-5. Porównaj LayerNorm i RMSNorm w sieci 4-warstwowej (a nie tylko 2). Zainicjuj oba z tymi samymi wagami. Trenuj przez 200 epok i porównuj końcową dokładność, szybkość uczenia (czas na epokę) i wielkości gradientu w pierwszej warstwie. Sprawdź, czy RMSNorm jest szybszy i ma tę samą dokładność.
+5. Porównaj LayerNorm z RMSNorm na sieci 4-warstwowej (nie tylko 2-warstwowej). Zainicjalizuj obie tymi samymi wagami. Wytrenuj przez 200 epok i porównaj końcową dokładność, szybkość treningu (czas na epokę) oraz wielkości gradientów w pierwszej warstwie. Zweryfikuj, że RMSNorm jest szybszy przy tej samej dokładności.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie oznacza |
 |------|----------------|----------------------|
-| Nadmierne dopasowanie | „Model zapamiętał dane” | Kiedy wydajność uczenia modelu znacznie przekracza wydajność testu, oznacza to, że nauczył się hałasu, a nie sygnału |
-| Regularyzacja | „Zapobieganie nadmiernemu dopasowaniu” | Dowolna technika ograniczająca złożoność modelu w celu poprawy uogólnienia: porzucenie, spadek wagi, normalizacja, wzmocnienie |
-| Rezygnacja | „Losowe usunięcie neuronu” | Zerowanie losowych neuronów podczas uczenia z prawdopodobieństwem p, wymuszanie redundantnych reprezentacji; odpowiednik szkolenia zespołu |
-| Spadek wagi | „Kara L2” | Zmniejszanie wszystkich wag do zera poprzez odejmowanie lambda * w w każdym kroku; penalizuje złożoność poprzez wielkość wagi |
-| Normalizacja wsadowa | „Normalizuj na partię” | Normalizowanie wyników warstwy w wymiarze wsadowym przy użyciu statystyk wsadowych podczas uczenia i średnich bieżących podczas wnioskowania |
-| Normalizacja warstw | „Normalizuj na próbkę” | Normalizowanie cech w każdej próbce; niezależny od partii, stosowany w transformatorach, gdzie wielkość partii jest zmienna |
-| Norma RMS | „LayerNorm bez średniej” | Normalizacja średniokwadratowa; zmniejsza średnie odejmowanie od LayerNorm dla 10% przyspieszenia z równą dokładnością |
-| Wczesne zatrzymanie | „Zatrzymaj przed przeuczeniem” | Zatrzymanie szkolenia, gdy utrata walidacji przestaje się poprawiać; najprostszy regularizer, często używany razem z innymi |
-| Zwiększanie danych | „Więcej danych za mniej” | Przekształcanie danych wejściowych do szkolenia (odwracanie, kadrowanie, szum) w celu zwiększenia efektywnego rozmiaru zbioru danych i uczenia się niezmienności siły |
-| Luka w uogólnieniu | „Podział pociąg-test” | Różnica między wynikami szkolenia i testów; regularyzacja ma na celu zminimalizowanie tej luki |
+| Overfitting (przeuczenie) | "Model zapamiętał dane" | Sytuacja, gdy wydajność modelu na danych treningowych znacznie przewyższa wydajność na danych testowych, co wskazuje, że model nauczył się szumu, a nie sygnału |
+| Regularization (regularyzacja) | "Zapobieganie przeuczeniu" | Każda technika, która ogranicza złożoność modelu w celu poprawy generalizacji: dropout, weight decay, normalizacja, augmentacja |
+| Dropout | "Losowe usuwanie neuronów" | Zerowanie losowych neuronów podczas treningu z prawdopodobieństwem p, co wymusza nadmiarowe reprezentacje; równoważne treningowi zespołu (ensemble) |
+| Weight decay | "Kara L2" | Zmniejszanie wszystkich wag w stronę zera poprzez odjęcie lambda * w w każdym kroku; karze złożoność poprzez wielkość wag |
+| Batch normalization | "Normalizacja na poziomie batcha" | Normalizacja wyjść warstwy w wymiarze batcha za pomocą statystyk batcha podczas treningu i uśrednionych statystyk podczas wnioskowania |
+| Layer normalization | "Normalizacja na poziomie próbki" | Normalizacja w wymiarze cech dla każdej próbki; niezależna od batcha, używana w transformerach, gdzie rozmiar batcha jest zmienny |
+| RMSNorm | "LayerNorm bez średniej" | Normalizacja przez pierwiastek ze średniej kwadratów (root mean square); pomija odejmowanie średniej z LayerNorm, co daje 10% przyspieszenie przy tej samej dokładności |
+| Early stopping | "Zatrzymanie przed przeuczeniem" | Przerwanie treningu, gdy strata walidacyjna przestaje się poprawiać; najprostszy regularizator, często stosowany razem z innymi |
+| Data augmentation (augmentacja danych) | "Więcej danych z mniejszej liczby danych" | Transformowanie danych wejściowych treningu (odbicie, przycinanie, szum) w celu zwiększenia efektywnego rozmiaru zbioru danych i wymuszenia uczenia się niezmienników |
+| Generalization gap (różnica generalizacji) | "Podział train-test" | Różnica między wydajnością na danych treningowych i testowych; regularyzacja ma na celu zminimalizowanie tej różnicy |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-- Srivastava i in., „Dropout: A Simple Way to Prevent Neural Networks from Overfitting” (2014) – oryginalny artykuł dotyczący osób porzucających naukę z interpretacją zespołową i obszernymi eksperymentami
-— Ioffe i Szegedy, „Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift” (2015) — przedstawili BatchNorm i jego procedurę szkoleniową, jedną z najczęściej cytowanych publikacji dotyczących głębokiego uczenia się
-— Zhang i Sennrich, „Root Mean Square Layer Normalization” (2019) — wykazali, że RMSNorm odpowiada dokładności LayerNorm przy zmniejszonych obliczeniach; przyjęte przez LLaMA i Mistral
-– Zhang i in., „Understanding Deep Learning Requires Rethinking Generalization” (2017) – przełomowy artykuł pokazujący, że sieci neuronowe potrafią zapamiętywać losowe etykiety, kwestionując tradycyjne poglądy na temat generalizacji
+- Srivastava i in., "Dropout: A Simple Way to Prevent Neural Networks from Overfitting" (2014) -- oryginalna praca o dropoucie z interpretacją zespołową (ensemble) i obszernymi eksperymentami
+- Ioffe & Szegedy, "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift" (2015) -- wprowadziła BatchNorm i procedurę jego treningu, jedna z najczęściej cytowanych prac z zakresu deep learningu
+- Zhang & Sennrich, "Root Mean Square Layer Normalization" (2019) -- wykazała, że RMSNorm osiąga dokładność LayerNorm przy mniejszym koszcie obliczeniowym; przyjęta przez LLaMA i Mistral
+- Zhang i in., "Understanding Deep Learning Requires Rethinking Generalization" (2017) -- przełomowa praca pokazująca, że sieci neuronowe mogą zapamiętywać losowe etykiety, co podważa tradycyjne poglądy na generalizację
