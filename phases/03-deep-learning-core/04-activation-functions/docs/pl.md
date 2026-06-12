@@ -1,41 +1,41 @@
 # Funkcje aktywacji
 
-> Bez nieliniowości Twoja 100-warstwowa sieć jest fantazyjną mnożnikiem macierzy. Aktywacje to bramy, które pozwalają sieciom neuronowym myśleć po krzywych.
+> Bez nieliniowości twoja 100-warstwowa sieć jest tylko wymyślnym mnożeniem macierzy. Aktywacje to wrota, które pozwalają sieciom neuronowym myśleć w krzywych.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
-**Wymagania:** Lekcja 03.03 (Propagacja wsteczna)
+**Wymagania wstępne:** Lekcja 03.03 (Propagacja wsteczna)
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Implementuj od podstaw sigmoid, tanh, ReLU, Leaky ReLU, GELU, Swish i softmax z ich pochodnymi
-- Zdiagnozuj problem zanikającego gradientu, mierząc wielkości aktywacji w ponad 10 warstwach z różnymi aktywacjami
-- Wykryj martwe neurony w sieci ReLU i wyjaśnij, dlaczego GELU unika tego trybu awarii
-- Wybierz odpowiednią funkcję aktywacji dla danej architektury (transformator, CNN, RNN, warstwa wyjściowa)
+- Zaimplementuj od podstaw sigmoid, tanh, ReLU, Leaky ReLU, GELU, Swish oraz softmax wraz z ich derywatami
+- Zdiagnozuj problem zanikającego gradientu, mierząc wielkości aktywacji w 10+ warstwach z różnymi aktywacjami
+- Wykryj martwe neurony w sieci ReLU i wyjaśnij, dlaczego GELU unika tego rodzaju awarii
+- Wybierz odpowiednią funkcję aktywacji dla danej architektury (transformer, CNN, RNN, warstwa wyjściowa)
 
 ## Problem
 
-Zestaw dwie transformacje liniowe: y = W2(W1x + b1) + b2. Rozwiń: y = W2W1x + W2b1 + b2. To po prostu y = Ax + c – pojedyncza transformacja liniowa. Bez względu na to, ile warstw liniowych ułożysz, wynik sprowadza się do jednej macierzy. Twoja 100-warstwowa sieć ma taką samą moc reprezentacyjną jak pojedyncza warstwa.
+Złóż dwie transformacje liniowe: y = W2(W1x + b1) + b2. Rozwiń to: y = W2W1x + W2b1 + b2. To po prostu y = Ax + c -- pojedyncza transformacja liniowa. Niezależnie od liczby ułożonych warstw liniowych, wynik redukuje się do jednego mnożenia macierzowego. Twoja 100-warstwowa sieć ma taką samą siłę reprezentacji jak pojedyncza warstwa.
 
-To nie jest ciekawostka teoretyczna. Oznacza to, że głęboka sieć liniowa dosłownie nie może nauczyć się XOR, nie może sklasyfikować spiralnego zbioru danych, nie może rozpoznać twarzy. Bez funkcji aktywacji głębia jest iluzją.
+To nie jest teoretyczna ciekawostka. Oznacza to, że głęboka sieć liniowa dosłownie nie może nauczyć się XOR, nie może sklasyfikować zbioru danych w formie spirali, nie może rozpoznać twarzy. Bez funkcji aktywacji głębokość jest iluzją.
 
-Funkcje aktywacji przełamują liniowość. Zniekształcają dane wyjściowe każdej warstwy poprzez funkcję nieliniową, dając sieci możliwość naginania granic decyzyjnych, przybliżania dowolnych funkcji i faktycznego uczenia się. Ale wybierz niewłaściwą aktywację, a twoje gradienty znikną do zera (esigmoida w głębokich sieciach), eksplodują do nieskończoności (nieograniczone aktywacje bez starannej inicjalizacji) lub twoje neurony umrą trwale (ReLU z dużymi ujemnymi odchyleniami). Wybór funkcji aktywacji bezpośrednio decyduje o tym, czy Twoja sieć w ogóle się uczy.
+Funkcje aktywacji przełamują liniowość. Deformują wyjście każdej warstwy za pomocą funkcji nieliniowej, dając sieci możliwość gięcia granic decyzyjnych, aproksymowania dowolnych funkcji i faktycznego uczenia się. Ale wybierz niewłaściwą aktywację i twoje gradienty zanikną do zera (sigmoid w głębokich sieciach), wybuchną do nieskończoności (nieograniczone aktywacje bez ostrożnej inicjalizacji) albo twoje neurony umrą na zawsze (ReLU z dużymi ujemnymi obciążeniami). Wybór funkcji aktywacji bezpośrednio determinuje, czy twoja sieć w ogóle się uczy.
 
 ## Koncepcja
 
-### Dlaczego nieliniowość jest konieczna
+### Czym jest nieliniowość i dlaczego jest konieczna
 
-Mnożenie macierzy można składać. Mnożenie wektora przez macierz A, a następnie macierz B, jest identyczne z mnożeniem przez AB. Oznacza to, że ułożenie dziesięciu warstw liniowych jest matematycznie równoważne jednej warstwie liniowej z jedną dużą matrycą. Wszystkie te parametry, cała głębokość – zmarnowane. Potrzebujesz czegoś, żeby przerwać łańcuch. To właśnie robią funkcje aktywacyjne.
+Mnożenie macierzowe jest składalne (kompozycyjne). Pomnożenie wektora przez macierz A, a następnie przez macierz B, jest identyczne z pomnożeniem przez AB. Oznacza to, że ułożenie dziesięciu warstw liniowych jest matematycznie równoważne jednej warstwie liniowej z jedną dużą macierzą. Cały ten zestaw parametrów, cała ta głębokość -- zmarnowane. Potrzebujesz czegoś, co przełamie ten łańcuch. To właśnie robią funkcje aktywacji.
 
-Oto dowód. Warstwa liniowa oblicza f(x) = Wx + b. Stos drugi:
+Oto dowód. Warstwa liniowa wyznacza f(x) = Wx + b. Ułóż dwie:
 
 ```
 Layer 1: h = W1 * x + b1
 Layer 2: y = W2 * h + b2
 ```
 
-Zastępca:
+Podstaw:
 
 ```
 y = W2 * (W1 * x + b1) + b2
@@ -43,126 +43,126 @@ y = (W2 * W1) * x + (W2 * b1 + b2)
 y = A * x + c
 ```
 
-Jedna warstwa. Wstaw nieliniową aktywację g() pomiędzy warstwami:
+Jedna warstwa. Wstaw nieliniową aktywację g() między warstwy:
 
 ```
 h = g(W1 * x + b1)
 y = W2 * h + b2
 ```
 
-Teraz substytucja zostaje przerwana. W2 * g(W1 * x + b1) + b2 nie można sprowadzić do pojedynczej transformacji liniowej. Sieć może reprezentować funkcje nieliniowe. Każda dodatkowa warstwa z aktywacją zwiększa możliwości reprezentacyjne.
+Teraz podstawienie się zawodzi. W2 * g(W1 * x + b1) + b2 nie da się zredukować do jednej transformacji liniowej. Sieć może reprezentować funkcje nieliniowe. Każda dodatkowa warstwa z aktywacją dodaje zdolność reprezentacyjną.
 
-### Sigmoida
+### Sigmoid
 
-Autorska funkcja aktywacji sieci neuronowych.
+Pierwotna funkcja aktywacji dla sieci neuronowych.
 
 ```
 sigmoid(x) = 1 / (1 + e^(-x))
 ```
 
-Zakres wyjściowy: (0, 1). Gładka, różniczkowalna, odwzorowuje dowolną liczbę rzeczywistą na wartość przypominającą prawdopodobieństwo.
+Zakres wyjścia: (0, 1). Gładka, różniczkowalna, mapuje każdą liczbę rzeczywistą na wartość przypominającą prawdopodobieństwo.
 
-Pochodna:
+Derywata:
 
 ```
 sigmoid'(x) = sigmoid(x) * (1 - sigmoid(x))
 ```
 
-Maksymalna wartość tej pochodnej wynosi 0,25 i występuje przy x = 0. W przypadku propagacji wstecznej gradienty mnożą się przez warstwy. Dziesięć warstw sigmoidy oznacza, że gradient zostaje pomnożony co najwyżej 0,25 dziesięć razy:
+Maksymalna wartość tej derywaty to 0.25, występująca dla x = 0. W propagacji wstecznej gradienty są mnożone przez warstwy. Dziesięć warstw sigmoid oznacza, że gradient jest mnożony przez co najwyżej 0.25 dziesięć razy:
 
 ```
 0.25^10 = 0.000000953674
 ```
 
-Mniej niż jedna milionowa oryginalnego sygnału. Jest to problem zanikającego gradientu. Gradienty we wczesnych warstwach stają się tak małe, że wagi ledwo się aktualizują. Wygląda na to, że sieć się uczy – straty zmniejszają się w późniejszych warstwach – ale pierwsze warstwy są zamrożone. Głębokie sieci sigmoidalne po prostu nie trenują.
+Mniej niż jedna milionowa pierwotnego sygnału. To jest problem zanikającego gradientu (vanishing gradient). Gradienty w pierwszych warstwach stają się tak małe, że wagi praktycznie się nie aktualizują. Sieć wydaje się uczyć -- strata zmniejsza się w późniejszych warstwach -- ale pierwsze warstwy są zamrożone. Głębokie sieci sigmoid po prostu się nie trenują.
 
-Dodatkowy problem: wyjścia sigmoidalne są zawsze dodatnie (0 do 1), co oznacza, że ​​gradienty ciężarków mają zawsze ten sam znak. Powoduje to zygzakowanie podczas opadania gradientowego.
+Dodatkowy problem: wyjścia sigmoid są zawsze pozytywne (0 do 1), co oznacza, że gradienty wag mają zawsze ten samy znak. To powoduje "zygzakowanie" podczas spadku gradientu (gradient descent).
 
 ### Tanh
 
-Wyśrodkowana wersja esicy.
+Wycentrowana wersja sigmoid.
 
 ```
 tanh(x) = (e^x - e^(-x)) / (e^x + e^(-x))
 ```
 
-Zakres wyjściowy: (-1, 1). Wyśrodkowany zerowo, co eliminuje problem zygzaka.
+Zakres wyjścia: (-1, 1). Wycentrowana wokół zera, co eliminuje problem zygzakowania.
 
-Pochodna:
+Derywata:
 
 ```
 tanh'(x) = 1 - tanh(x)^2
 ```
 
-Maksymalna pochodna wynosi 1,0 przy x = 0 — cztery razy lepiej niż sigmoida. Jednak problem znikającego gradientu nadal istnieje. W przypadku dużych dodatnich lub ujemnych danych wejściowych pochodna zbliża się do zera. Dziesięć warstw nadal niszczy gradient, tylko mniej agresywnie.
+Maksymalna derywata to 1.0 dla x = 0 -- cztery razy lepiej niż sigmoid. Ale problem zanikającego gradientu wciąż istnieje. Dla dużych wartości pozytywnych lub negatywnych derywata zbliża się do zera. Dziesięć warstw wciąż gniecie gradient, tylko mniej agresywnie.
 
 ### ReLU: Przełom
 
-Prostowana jednostka liniowa. Spopularyzowana do celów głębokiego uczenia się przez Naira i Hintona w 2010 r. (sama funkcja pochodzi z prac w Fukushimie z 1969 r.), zmieniła wszystko.
+Rectified Linear Unit. Spopularyzowana dla głębokiego uczenia przez Naira i Hintona w 2010 roku (sama funkcja pochodzi z pracy Fukushimy z 1969 roku), zmieniła wszystko.
 
 ```
 relu(x) = max(0, x)
 ```
 
-Zakres wyjściowy: [0, nieskończoność). Pochodna jest banalnie prosta:
+Zakres wyjścia: [0, infinity). Derywata jest banalnie prosta:
 
 ```
 relu'(x) = 1  if x > 0
             0  if x <= 0
 ```
 
-Brak gradientu zanikającego dla wejść dodatnich. Gradient wynosi dokładnie 1, przechodzi prosto. Właśnie dlatego głębokie sieci stały się możliwe do trenowania — ReLU zachowuje wielkość gradientu między warstwami.
+Brak zanikającego gradientu dla pozytywnych wejść. Gradient jest dokładnie 1, przekazywany bez zmian. To właśnie dzięki temu głębokie sieci stały się trenowalne -- ReLU zachowuje wielkość gradientu między warstwami.
 
-Istnieje jednak tryb awaryjny: problem martwego neuronu. Jeśli ważony sygnał wejściowy neuronu jest zawsze ujemny (z powodu dużego ujemnego obciążenia lub niefortunnej inicjalizacji wagi), jego sygnał wyjściowy jest zawsze zerowy, jego gradient jest zawsze zerowy i nigdy się nie aktualizuje. Jest trwale martwy. W praktyce 10-40% neuronów w sieci ReLU może umrzeć podczas treningu.
+Ale istnieje awaria: problem martwego neuronu (dead neuron problem). Jeśli ważone wejście neuronu jest zawsze ujemne (z powodu dużego ujemnego obciążenia lub nieszczęśliwej inicjalizacji wag), jego wyjście jest zawsze zero, jego gradient jest zawsze zero i nigdy się nie aktualizuje. Jest permanentnie martwy. W praktyce 10-40% neuronów w sieci ReLU może umrzeć podczas treningu.
 
-### Nieszczelny ReLU
+### Leaky ReLU
 
-Najprostszy sposób na martwe neurony.
+Najprostsza poprawka na martwe neurony.
 
 ```
 leaky_relu(x) = x        if x > 0
                 alpha * x if x <= 0
 ```
 
-Gdzie alfa jest małą stałą, zwykle 0,01. Strona ujemna ma małe nachylenie zamiast zera, więc martwe neurony nadal otrzymują sygnał gradientowy i mogą się zregenerować.
+Gdzie alpha jest małą stałą, typowo 0.01. Strona ujemna ma małe nachylenie zamiast zera, więc martwe neurony wciąż otrzymują sygnał gradientu i mogą się odrodzić.
 
-### GELU: Nowoczesne ustawienie domyślne
+### GELU: Współczesny domyślny wybór
 
-Jednostka liniowa błędu Gaussa. Wprowadzony przez Hendrycksa i Gimpela w 2016 roku. Domyślna aktywacja w BERT, GPT i większości nowoczesnych transformatorów.
+Gaussian Error Linear Unit. Wprowadzona przez Hendrycksa i Gimpela w 2016 roku. Domyślna aktywacja w BERT, GPT i większości współczesnych transformerów.
 
 ```
 gelu(x) = x * Phi(x)
 ```
 
-Gdzie Phi(x) jest dystrybuantą standardowego rozkładu normalnego. Przybliżenie stosowane w praktyce:
+Gdzie Phi(x) jest skumulowaną funkcją rozkładu (cumulative distribution function) standardowego rozkładu normalnego. Aproksymacja stosowana w praktyce:
 
 ```
 gelu(x) ~= 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))
 ```
 
-GELU jest wszędzie gładki, dopuszcza małe wartości ujemne (w przeciwieństwie do ReLU, który przycina na stałe do zera) i ma interpretację probabilistyczną: waży każde wejście według prawdopodobieństwa, że ​​będzie dodatni w rozkładzie Gaussa. To gładkie bramkowanie przewyższa ReLU w architekturach transformatorów, ponieważ zapewnia lepszy przepływ gradientowy i całkowicie pozwala uniknąć problemu martwych neuronów.
+GELU jest gładka wszędzie, dopuszcza małe wartości ujemne (w przeciwieństwie do ReLU, które ostro obcina do zera) i ma interpretację probabilistyczną: waży każde wejście według tego, jak prawdopodobne jest, że jest dodatnie zgodnie z rozkładem Gaussa. To gładkie bramkowanie (gating) przewyższa ReLU w architekturach transformerów, ponieważ zapewnia lepszy przepływ gradientu i całkowicie unika problemu martwych neuronów.
 
-### Świst / SiLU
+### Swish / SiLU
 
-Aktywacja samobramkowa odkryta przez Ramachandran i in. w 2017 r. poprzez automatyczne wyszukiwanie.
+Samobramkująca aktywacja (self-gated activation) odkryta przez Ramachandrana i in. w 2017 roku za pomocą automatycznego przeszukiwania.
 
 ```
 swish(x) = x * sigmoid(x)
 ```
 
-Swish jest formalnie x * sigmoid(x). Google odkrył to poprzez automatyczne przeszukiwanie przestrzeni funkcji aktywacji – sieci neuronowej projektującej części sieci neuronowych.
+Swish formalnie to x * sigmoid(x). Google odkrył ją poprzez automatyczne przeszukiwanie przestrzeni funkcji aktywacji -- sieć neuronowa projektująca części sieci neuronowych.
 
-Podobnie jak GELU, jest gładki, niemonotoniczny i dopuszcza małe wartości ujemne. Różnica jest subtelna: Swish używa sigmoidy do bramkowania, podczas gdy GELU używa Gaussa CDF. W praktyce wydajność jest prawie identyczna. Swish jest używany w EfficientNet i niektórych modelach wizyjnych. W modelach językowych dominuje GELU.
+Podobnie jak GELU, jest gładka, niemonotoniczna i dopuszcza małe wartości ujemne. Różnica jest subtelna: Swish używa sigmoid do bramkowania, podczas gdy GELU używa skumulowanej funkcji rozkładu Gaussa (CDF). W praktyce wydajność jest praktycznie identyczna. Swish jest używana w EfficientNet i niektórych modelach wizyjnych. GELU dominuje w modelach językowych.
 
-### Softmax: Aktywacja wyjścia
+### Softmax: Aktywacja wyjściowa
 
-Nieużywane w ukrytych warstwach. Softmax konwertuje wektor surowych wyników (logitów) na rozkład prawdopodobieństwa.
+Niewykorzystywana w warstwach skrytych. Softmax przekształca wektor surowych wyników (logitów) w rozkład prawdopodobieństwa.
 
 ```
 softmax(x_i) = e^(x_i) / sum(e^(x_j) for all j)
 ```
 
-Każde wyjście ma wartość od 0 do 1. Wszystkie wyjścia sumują się do 1. To sprawia, że jest to standardowa aktywacja końcowa dla klasyfikacji wieloklasowej. Największy logit uzyskuje najwyższe prawdopodobieństwo, ale w przeciwieństwie do argmax, softmax jest różniczkowalny i zachowuje informacje o względnej pewności.
+Każde wyjście jest między 0 i 1. Wszystkie wyjścia sumują się do 1. To czyni ją standardową finalną aktywacją dla klasyfikacji wieloklasowej. Największy logit dostaje najwyższe prawdopodobieństwo, ale w przeciwieństwie do argmax, softmax jest różniczkowalna i zachowuje informację o względnej pewności.
 
 ### Porównanie kształtów
 
@@ -180,7 +180,7 @@ graph LR
     G -->|"Smooth gradient<br/>everywhere"| Solution
 ```
 
-### Porównanie przepływu gradientowego
+### Porównanie przepływu gradientu
 
 ```mermaid
 graph TD
@@ -197,7 +197,7 @@ graph TD
     end
 ```
 
-### Która aktywacja, kiedy
+### Którą aktywację wybrać i kiedy
 
 ```mermaid
 flowchart TD
@@ -218,9 +218,9 @@ flowchart TD
 
 ## Zbuduj to
 
-### Krok 1: Zaimplementuj wszystkie funkcje aktywacji za pomocą instrumentów pochodnych
+### Krok 1: Zaimplementuj wszystkie funkcje aktywacji wraz z derywatami
 
-Każda funkcja pobiera pojedynczy element zmiennoprzecinkowy i zwraca wartość zmiennoprzecinkową. Każda funkcja pochodna pobiera te same dane wejściowe i zwraca gradient.
+Każda funkcja przyjmuje pojedynczą liczbę float i zwraca float. Każda funkcja derywaty przyjmuje to samo wejście i zwraca gradient.
 
 ```python
 import math
@@ -274,7 +274,7 @@ def softmax(xs):
     return [e / total for e in exps]
 ```
 
-### Krok 2: Wyobraź sobie, gdzie umierają gradienty
+### Krok 2: Wizualizuj, gdzie umierają gradienty
 
 Oblicz gradient w 100 równomiernie rozmieszczonych punktach od -5 do 5. Wydrukuj histogram tekstowy pokazujący, gdzie gradient każdej aktywacji jest bliski zeru.
 
@@ -301,9 +301,9 @@ gradient_scan("GELU", gelu_derivative)
 gradient_scan("Swish", swish_derivative)
 ```
 
-### Krok 3: Eksperyment ze znikającym gradientem
+### Krok 3: Eksperyment z zanikającym gradientem
 
-Przekaż sygnał w przód przez N warstw, używając sigmoidy vs ReLU. Zmierzyć, jak zmienia się wielkość aktywacji.
+Przepuść sygnał w przejściu w przód (forward pass) przez N warstw, używając sigmoid vs ReLU. Zmierz, jak zmienia się wielkość aktywacji.
 
 ```python
 import random
@@ -329,7 +329,7 @@ vanishing_gradient_experiment(gelu, "GELU")
 
 ### Krok 4: Detektor martwych neuronów
 
-Utwórz sieć ReLU, przepuszczaj przez nią losowe dane wejściowe, policz, ile neuronów nigdy nie uruchamia się.
+Stwórz sieć ReLU, przepuść przez nią losowe wejścia, policz, ile neuronów nigdy się nie aktywuje.
 
 ```python
 def dead_neuron_detector(n_inputs=5, hidden_size=20, n_samples=1000):
@@ -364,9 +364,9 @@ def dead_neuron_detector(n_inputs=5, hidden_size=20, n_samples=1000):
 dead_neuron_detector()
 ```
 
-### Krok 5: Porównanie treningu – Sigmoid vs ReLU vs GELU
+### Krok 5: Porównanie treningu -- Sigmoid vs ReLU vs GELU
 
-Trenuj tę samą sieć dwuwarstwową na zbiorze danych okręgu (punkty wewnątrz okręgu = klasa 1, na zewnątrz = klasa 0) za pomocą trzech różnych aktywacji. Porównaj prędkość konwergencji.
+Wytrenuj tę samą dwuwarstwową sieć na zbiorze danych "circle" (punkty wewnątrz okręgu = klasa 1, poza nim = klasa 0) z trzema różnymi aktywacjami. Porównaj szybkość konwergencji.
 
 ```python
 def make_circle_data(n=200, seed=42):
@@ -378,6 +378,7 @@ def make_circle_data(n=200, seed=42):
         label = 1.0 if x * x + y * y < 1.5 else 0.0
         data.append(([x, y], label))
     return data
+
 
 class ActivationNetwork:
     def __init__(self, activation_fn, activation_deriv, hidden_size=8, lr=0.1):
@@ -435,6 +436,7 @@ class ActivationNetwork:
                 print(f"    Epoch {epoch:3d}: loss={avg_loss:.4f}, accuracy={accuracy:.1f}%")
         return losses
 
+
 data = make_circle_data()
 
 configs = [
@@ -455,9 +457,9 @@ for name, losses in results.items():
     print(f"  {name:10s}: start={losses[0]:.4f} -> end={losses[-1]:.4f} (improvement: {(1 - losses[-1]/losses[0])*100:.1f}%)")
 ```
 
-## Użyj tego
+## Wykorzystaj to
 
-PyTorch zapewnia to wszystko w formie funkcjonalnej i modułowej:
+PyTorch udostępnia wszystkie te funkcje w formie funkcyjnej i modułowej:
 
 ```python
 import torch
@@ -483,48 +485,48 @@ model = nn.Sequential(
 )
 ```
 
-Ukryte warstwy w transformatorze: GELU. Ukryte warstwy w CNN: ReLU. Warstwa wyjściowa do klasyfikacji: softmax. Warstwa wyjściowa dla regresji: brak (liniowa). Warstwa wyjściowa dla prawdopodobieństw: sigmoidalna. To wszystko. Zacznij od tych ustawień domyślnych. Zmieniaj je tylko wtedy, gdy masz dowody.
+Warstwy skryte w transformerze: GELU. Warstwy skryte w CNN: ReLU. Warstwa wyjściowa dla klasyfikacji: softmax. Warstwa wyjściowa dla regresji: brak (liniowa). Warstwa wyjściowa dla prawdopodobieństw: sigmoid. To wszystko. Zacznij od tych ustawień domyślnych. Zmieniaj je tylko wtedy, gdy masz na to dowody.
 
-Sieci RNN i LSTM używają tanh dla stanu ukrytego i sigmoidy dla bramek, ale jeśli dzisiaj budujesz od zera, prawdopodobnie nie używasz RNN. Jeśli neurony w Twojej sieci ReLU umierają, przełącz się na GELU. Nie sięgaj po Leaky ReLU, jeśli nie masz konkretnego powodu – GELU rozwiązuje problem martwych neuronów i zapewnia lepszy przepływ gradientowy.
+RNN-y i LSTM-y używają tanh dla stanu skrytego (hidden state) i sigmoid dla wrót (gates), ale jeśli budujesz coś od zera dzisiaj, prawdopodobnie nie używasz RNN-ów. Jeśli neurony umierają w twojej sieci ReLU, przełącz się na GELU. Nie sięgaj po Leaky ReLU, jeśli nie masz konkretnego powodu -- GELU rozwiązuje problem martwych neuronów i zapewnia lepszy przepływ gradientu.
 
-## Wyślij to
+## Dostarcz to
 
-Ta lekcja daje:
-- `outputs/prompt-activation-selector.md` — monit wielokrotnego użytku, który pomaga wybrać odpowiednią funkcję aktywacji dla dowolnej architektury
+Ta lekcja wytwarza:
+- `outputs/prompt-activation-selector.md` -- wielokrotnie używalny prompt, który pomaga wybrać odpowiednią funkcję aktywacji dla każdej architektury
 
-## Ćwiczenia
+## Zadania
 
-1. Zaimplementuj parametryczne ReLU (PReLU), gdzie ujemne nachylenie alfa jest parametrem, którego można się nauczyć. Wytrenuj go na zbiorze danych okręgu i porównaj z naprawionym Leaky ReLU.
+1. Zaimplementuj Parametric ReLU (PReLU), gdzie ujemne nachylenie alpha jest parametrem uczącym się. Wytrenuj go na zbiorze danych circle i porównaj do stałego Leaky ReLU.
 
-2. Przeprowadź eksperyment ze znikającym gradientem z 50 warstwami zamiast 10. Narysuj wielkość w każdej warstwie dla sigmoidy, tanh, ReLU i GELU. W której warstwie sygnał każdej aktywacji skutecznie osiąga zero?
+2. Przeprowadź eksperyment z zanikającym gradientem z 50 warstwami zamiast 10. Wykreśl wielkość na każdej warstwie dla sigmoid, tanh, ReLU i GELU. Na której warstwie sygnał każdej aktywacji efektywnie spada do zera?
 
-3. Zaimplementuj ELU (wykładniczą jednostkę liniową): elu(x) = x jeśli x > 0, alfa * (e^x - 1) jeśli x <= 0. Porównaj współczynnik martwych neuronów z ReLU w tej samej sieci.
+3. Zaimplementuj ELU (Exponential Linear Unit): elu(x) = x if x > 0, alpha * (e^x - 1) if x <= 0. Porównaj jego współczynnik martwych neuronów do ReLU w tej samej sieci.
 
-4. Zbuduj „gradientowy monitor stanu”, który będzie działał podczas treningu: w każdej epoce oblicz średnią wielkość gradientu w każdej warstwie. Drukuj ostrzeżenie, gdy gradient dowolnej warstwy spadnie poniżej 0,001 lub przekroczy 100.
+4. Zbuduj "monitor zdrowia gradientu" działający podczas treningu: w każdej epoce oblicz średnią wielkość gradientu dla każdej warstwy. Wydrukuj ostrzeżenie, gdy gradient jakiejkolwiek warstwy spadnie poniżej 0.001 lub przekroczy 100.
 
-5. Zmodyfikuj porównanie szkoleniowe, aby zamiast okręgów używać zestawu danych XOR z lekcji 01. Która aktywacja najszybciej zbiega się z XOR? Dlaczego różni się to od wyników koła?
+5. Zmodyfikuj porównanie treningowe, aby użyć zbioru danych XOR z Lekcji 01 zamiast okręgów. Która aktywacja zbiega najszybciej na XOR? Czym różni się to od wyników dla okręgów?
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Funkcja aktywacji | „Część nieliniowa” | Funkcja stosowana do wyjścia każdego neuronu, która łamie liniowość, umożliwiając sieci naukę mapowań nieliniowych
-| Znikający gradient | „Gradienty znikają w głębokich sieciach” | Gradienty kurczą się wykładniczo w warstwach, gdy pochodna aktywacji jest mniejsza niż 1, co sprawia, że ​​wczesnych warstw nie da się trenować |
-| Eksplodujący gradient | „Gradienty wybuchają” | Gradienty rosną wykładniczo przez warstwy, gdy efektywny mnożnik przekracza 1, powodując niestabilny trening |
-| Martwy neuron | „Neuron, który przestał się uczyć” | Neuron ReLU, którego wejście jest trwale ujemne, wytwarzające zerowy sygnał wyjściowy i zerowy gradient |
-| Sigmoida | „Zmniejsza wartości do 0-1” | Funkcja logistyczna 1/(1+e^-x), historycznie ważna, ale powodująca zanikanie gradientów w głębokich sieciach |
-| ReLU | „Przycina negatywy do zera” | max(0, x) — aktywacja, która uczyniła głębokie uczenie się praktycznym poprzez zachowanie wielkości gradientu |
-| ŻELU | „Zadziałanie transformatora” | Jednostka liniowa błędu Gaussa, płynna aktywacja, która waży dane wejściowe według prawdopodobieństwa, że ​​będą dodatnie |
-| Swish/SiLU | „Samoblokujący ReLU” | x * sigmoid(x), odnaleziona w wyniku automatycznego wyszukiwania, używana w EfficientNet |
-| Softmax | „Zamienia wyniki w prawdopodobieństwa” | Normalizuje wektor logitów do rozkładu prawdopodobieństwa, w którym wszystkie wartości mieszczą się w (0,1) i sumują się do 1 |
-| Nieszczelny ReLU | „ReLU, który nie umiera” | max(alfa*x, x) gdzie alfa jest mała (0,01), zapobiegając martwym neuronom poprzez umożliwienie małych ujemnych gradientów |
-| Nasycenie | „Płaska część esicy” | Regiony, w których pochodna aktywacji zbliża się do zera, blokując przepływ gradientu |
-| Logit | „Surowy wynik przed softmaxem” | Nieznormalizowany wynik ostatniej warstwy przed nałożeniem softmax lub sigmoid |
+| Funkcja aktywacji | "Część nieliniowa" | Funkcja zastosowana do wyjścia każdego neuronu, która przełamuje liniowość, umożliwiając sieci uczenie się nieliniowych mapowań |
+| Zanikający gradient (vanishing gradient) | "Gradienty zanikają w głębokich sieciach" | Gradienty zmniejszają się wykładniczo przez warstwy, gdy derywata aktywacji jest mniejsza niż 1, co czyni pierwsze warstwy nietrenowalnymi |
+| Wybuchający gradient (exploding gradient) | "Gradienty wybuchają" | Gradienty rosną wykładniczo przez warstwy, gdy efektywny mnożnik przekracza 1, powodując niestabilny trening |
+| Martwy neuron (dead neuron) | "Neuron, który przestał się uczyć" | Neuron ReLU, którego wejście jest permanentnie ujemne, produkujący zerowe wyjście i zerowy gradient |
+| Sigmoid | "Ściska wartości do 0-1" | Funkcja logistyczna 1/(1+e^-x), historycznie ważna, ale powoduje zanikające gradienty w głębokich sieciach |
+| ReLU | "Obcina wartości ujemne do zera" | max(0, x) -- aktywacja, która uczyniła głębokie uczenie praktycznym, zachowując wielkość gradientu |
+| GELU | "Aktywacja transformerów" | Gaussian Error Linear Unit, gładka aktywacja, która waży wejścia według prawdopodobieństwa bycia pozytywnymi |
+| Swish/SiLU | "Samobramkujący ReLU" | x * sigmoid(x), odkryty poprzez automatyczne przeszukiwanie, używany w EfficientNet |
+| Softmax | "Zamienia wyniki na prawdopodobieństwa" | Normalizuje wektor logitów do rozkładu prawdopodobieństwa, w którym wszystkie wartości są w (0,1) i sumują się do 1 |
+| Leaky ReLU | "ReLU, który nie umiera" | max(alpha*x, x) gdzie alpha jest małe (0.01), zapobiegając martwym neuronom poprzez dopuszczenie małych ujemnych gradientów |
+| Saturacja | "Płaska część sigmoid" | Obszary, w których derywata aktywacji zbliża się do zera, blokując przepływ gradientu |
+| Logit | "Surowy wynik przed softmax" | Nienormalizowane wyjście ostatniej warstwy przed zastosowaniem softmax lub sigmoid |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-- Nair i Hinton, „Rectified Linear Units Improve Restricted Boltzmann Machines” (2010) — artykuł, który wprowadził ReLU i umożliwił szkolenie głębokich sieci
-- Hendrycks & Gimpel, „Gaussian Error Linear Units (GELUs)” (2016) – wprowadzili funkcję aktywacji, która stała się domyślną funkcją dla transformatorów
-– Ramachandran i in., „Searching for Activation Functions” (2017) – wykorzystali automatyczne wyszukiwanie, aby odkryć Swish, pokazując, że projektowanie aktywacji można zautomatyzować
-- Glorot i Bengio, „Understanding the Hardstanding of Training deep Feedforward Neural Networks” (2010) – artykuł, w którym zdiagnozowano zanikające/eksplodujące gradienty i zaproponowano inicjalizację Xaviera
-- Goodfellow, Bengio, Courville, „Deep Learning”, rozdział 6.3 (https://www.deeplearningbook.org/) – rygorystyczne traktowanie ukrytych jednostek i funkcji aktywacji
+- Nair & Hinton, "Rectified Linear Units Improve Restricted Boltzmann Machines" (2010) -- praca, która wprowadziła ReLU i umożliwiła trenowanie głębokich sieci
+- Hendrycks & Gimpel, "Gaussian Error Linear Units (GELUs)" (2016) -- wprowadziła funkcję aktywacji, która stała się domyślną dla transformerów
+- Ramachandran et al., "Searching for Activation Functions" (2017) -- użyła automatycznego przeszukiwania do odkrycia Swish, pokazując, że projektowanie aktywacji może być zautomatyzowane
+- Glorot & Bengio, "Understanding the difficulty of training deep feedforward neural networks" (2010) -- praca, która zdiagnozowała zanikające/wybuchające gradienty i zaproponowała inicjalizację Xavier
+- Goodfellow, Bengio, Courville, "Deep Learning" Rozdział 6.3 (https://www.deeplearningbook.org/) -- rygorystyczne omówienie jednostek skrytych i funkcji aktywacji
