@@ -1,53 +1,53 @@
-# Sieci Wielowarstwowe i Przebieg W Przód (Multi-Layer Networks and Forward Pass)
+# Sieci wielowarstwowe i przejście w przód (Forward Pass)
 
-> Jeden neuron rysuje linię. Złóż je razem, a narysujesz wszystko.
+> Jeden neuron rysuje linię. Ułóż je w warstwy i będziesz w stanie narysować wszystko.
 
-**Typ:** Budowa
+**Typ:** Build
 **Języki:** Python
-**Wymagania wstępne:** Faza 01 (Podstawy Matematyczne), Lekcja 03.01 (Perceptron)
+**Wymagania wstępne:** Faza 01 (Podstawy matematyczne), Lekcja 03.01 (Perceptron)
 **Czas:** ~90 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zbudowanie od zera sieci wielowarstwowej z klasami Layer (Warstwa) i Network (Sieć), która wykonuje pełny przebieg w przód (forward pass)
-- Śledzenie wymiarów macierzy przez każdą warstwę sieci i identyfikowanie niezgodności kształtów
-- Wyjaśnienie, jak złożenie nieliniowych funkcji aktywacji pozwala sieci uczyć się zakrzywionych granic decyzyjnych
-- Rozwiązanie problemu XOR za pomocą architektury 2-2-1 z ręcznie dostrojonymi sigmoidalnymi wagami
+- Zbudować sieć wielowarstwową od podstaw, z klasami Layer i Network, wykonującymi pełne przejście w przód
+- Śledzić wymiary macierzy w każdej warstwie sieci i identyfikować niezgodności kształtów
+- Wyjaśnić, jak ułożenie nieliniowych funkcji aktywacji w warstwy pozwala sieci uczyć się zakrzywionych granic decyzyjnych
+- Rozwiązać problem XOR za pomocą architektury 2-2-1 z ręcznie dostrojonymi wagami sigmoidalnymi
 
 ## Problem
 
-Pojedynczy neuron rysuje linię. To wszystko. Jedna prosta linia przechodząca przez Twoje dane. Każdy rzeczywisty problem w sztucznej inteligencji -- rozpoznawanie obrazów, rozumienie języka, granie w Go -- wymaga krzywych. Składanie neuronów w warstwy to sposób, w jaki zyskujesz krzywe.
+Pojedynczy neuron rysuje linie. I tylko to. Jedna linia prosta przez Twoje dane. Każdy realny problem w AI -- rozpoznawanie obrazów, rozumienie języka, granie w Go -- wymaga krzywych. Ułożenie neuronów w warstwy to sposób, by zdobyć krzywe.
 
-W 1969 roku Minsky i Papert dowiedli, że to ograniczenie jest kluczowe: jednowarstwowa sieć nie jest w stanie nauczyć się funkcji XOR. Nie tyle "będzie z nią walczyć" -- tylko matematycznie jest to niemożliwe. Tabela prawdy dla XOR stawia wartości [0,1] i [1,0] z jednej strony, a [0,0] i [1,1] po drugiej. Żadna prosta linia nie jest w stanie ich przedzielić.
+W 1969 roku Minsky i Papert udowodnili, że to ograniczenie jest fatalne: sieć jednowarstwowa nie może nauczyć się XOR. Nie "ma trudności z nauczeniem się" -- matematycznie nie może. Tabela prawdy XOR umieszcza [0,1] i [1,0] po jednej stronie, a [0,0] i [1,1] po drugiej. Żadna pojedyncza linia nie rozdzieli tych punktów.
 
-To "zabiło" finansowanie dla badań nad sieciami neuronowymi na dekadę. Z perspektywy czasu rozwiązanie było oczywiste - przestań korzystać z pojedynczej warstwy. Zbuduj z nich kilka warstw. Pierwsza warstwa podzieli wejście na nowe cechy, a druga weźmie te cechy i podejmie decyzje, jakich linia nigdy nie byłaby w stanie.
+To zabiło finansowanie sieci neuronowych na ponad dekadę. Rozwiązanie było oczywiste z perspektywy czasu: przestać używać jednej warstwy. Ułożyć neurony w warstwy. Pozwolić, by pierwsza warstwa podzieliła przestrzeń wejściową na nowe cechy, a druga warstwa skombinowała te cechy w decyzje, których żadna pojedyncza linia nie mogłaby podjąć.
 
-Taki stos jest nazywany siecią wielowarstwową. Jest to fundament, dla dzisiejszego działania praktycznie każdego głębokiego systemu nauczania (deep learning) z wdrożeniami na produkcję. Przejście danych w przód (Forward pass) – to moment, od przepływu wejścia po ukryte warstwy do samego finałowego wyniku, co w zasadzie powinieneś zbudować od początku.
+Ten stos to sieć wielowarstwowa. Jest podstawą każdego modelu deep learning działającego dziś w produkcji. Przejście w przód -- przepływ danych od wejścia, przez warstwy skryte, do wyjścia -- jest pierwszą rzeczą, którą musisz zbudować, zanim cokolwiek innego zacznie działać.
 
 ## Koncepcja
 
-### Warstwy: Wejściowa, Ukryte, Wyjściowa
+### Warstwy: wejściowa, skryte, wyjściowa
 
-Wielowarstwowa sieć posiada trzy rodzaje warstw:
+Sieć wielowarstwowa ma trzy typy warstw:
 
-**Warstwa wejściowa (Input layer)** -- nie do końca jest warstwą. Trzyma czyste dane (raw data). Mając dwie cechy, to mamy dwa wejścia i żaden proces nie dzieje się z nimi na tym etapie.
+**Warstwa wejściowa** -- to nie jest naprawdę warstwa. Przechowuje surowe dane. Dwie cechy oznaczają dwa węzły wejściowe. Tutaj nie zachodzą żadne obliczenia.
 
-**Warstwy ukryte (Hidden layers)** -- tu gdzie wykonuje się praca. Neuron pobiera wszystko z wyjścia warstwy wyższej (poprzedniej) aplikuje odpowiednie wartości wag i biasu dla tego co nadeszło, a następnie przechodzi przez to funkcją aktywacyjną. "Ukryta", gdyż jej zachowanie (i wagi) nie jest widoczne na wierzchu w danych do modelowania (w treningowych danych).
+**Warstwy skryte** -- tutaj dzieje się praca. Każdy neuron pobiera każde wyjście z poprzedniej warstwy, stosuje wagi i bias, a następnie przepuszcza wynik przez funkcję aktywacji. "Skryte", bo nigdy nie widzisz tych wartości bezpośrednio w danych treningowych.
 
-**Warstwa wyjściowa (Output layer)** -- finalna odpowiedź. W celu utworzenia binarnej klasyfikacji stosowany będzie tu jeden neuron sigmoidalny. Jeśli wyjście polegać będzie na wyborze z pośród klas stosować tu należy odpowiednio po 1 węźle / neuronie dla opcji wyjścia.
+**Warstwa wyjściowa** -- ostateczna odpowiedź. Dla klasyfikacji binarnej -- jeden neuron z sigmoidem. Dla wieloklasowej -- jeden neuron na klasę.
 
 ```mermaid
 graph LR
-    subgraph Input["Warstwa Wejściowa"]
+    subgraph Input["Input Layer"]
         x1["x1"]
         x2["x2"]
     end
-    subgraph Hidden["Warstwa Ukryta (3 neurony)"]
+    subgraph Hidden["Hidden Layer (3 neurons)"]
         h1["h1"]
         h2["h2"]
         h3["h3"]
     end
-    subgraph Output["Warstwa Wyjściowa"]
+    subgraph Output["Output Layer"]
         y["y"]
     end
     x1 --> h1
@@ -61,78 +61,96 @@ graph LR
     h3 --> y
 ```
 
-Więc, tu powyżej widać model (sieć) 2-3-1, 2 pola na start, 3 warstwy (węzły) a także sam koniec mający 1 na końcu. Każde połączone łącze ma własną wartość a ponadto w systemie dla nie-wejściowych węzłów stosowany będzie parametr nazywany Bias.
+To jest sieć 2-3-1. Dwa wejścia, trzy neurony skryte, jedno wyjście. Każde połączenie ma wagę. Każdy neuron (oprócz wejściowych) ma bias.
 
-Na koniec, zbiór wygenerowanych numerów to stan z warstwy (stan ukryty - hidden state), i podczas zapisu słowa wymiary rosną, generując 768 wartości mających ująć "sensowne słowo". Ale z drugiej strony przy grafikach (bitmapach), ten wymiar ulega zmianie, po prostu maleje, aż o całe pokolenia zmniejsza on objętość tego co w ogóle przetwarza z tak sporej ilości wejść. Ten wymiar przechowuje wyuczoną treść w nim.
+Każda warstwa produkuje wektor liczb zwany stanem skrytym (hidden state). Dla tekstu stany skryte zwiększają wymiarowość -- kodując słowo jako 768 liczb, by uchwycić znaczenie semantyczne. Dla obrazów zmniejszają wymiarowość -- kompresując miliony pikseli do możliwej do obsłużenia reprezentacji. Stan skryty to miejsce, w którym żyje uczenie.
 
-### Neurony i aktywacje
+### Neurony i funkcje aktywacji
 
-Neuron ma po prostu działać:
-1. Mnożyć własne dane mając dla tego swoją zaprogramowaną dla nich daną ("weight" wage)
-2. Wszystkie wagi pomnożone przez dane mają się podsumować (Z sumować) po czym powinno być do sumy dopisane bias 
-3. W tym punkcie wszystko jest wkładane ("przepuszczane") dla finalnego uzysku z tzw funcją aktywacji ("activation function").
+Każdy neuron robi trzy rzeczy:
 
-My narazie bazujemy nad sigmoidalną aktywacją:
+1. Mnoży każde wejście przez odpowiadającą mu wagę
+2. Sumuje wszystkie produkty i dodaje bias
+3. Przepuszcza sumę przez funkcję aktywacji
+
+Na razie funkcją aktywacji jest sigmoid:
 
 ```
 sigmoid(z) = 1 / (1 + e^(-z))
 ```
 
-To funkcja ściska cyfry aby mieć zakres (0,1). Kiedy wpada spore "na +", wyjdzie mocno do jedynki. Minus, i mocno z tyłu? - Zbliżymy się do zera. Zero równe jest idealnemu stanowi: 0.5. To te płynne formy dają w ogóle radę cokolwiek zgadywać (i po co powstało uczenie), w opcji (tzn od klasycznego perceprona z brutalną barierą do sigmoidu widoczny jest gradient dla niego wszędzie tam) gdzie on działa.
+Sigmoid spłaszcza każdą liczbę do zakresu (0, 1). Duże dodatnie wejścia przesuwają wynik w stronę 1. Duże ujemne wejścia przesuwają go w stronę 0. Zero mapuje się na 0.5. Ta gładka krzywa jest tym, co umożliwia uczenie -- w przeciwieństwie do twardego skoku perceptronu, sigmoid ma gradient wszędzie.
 
-### Bieg Do Przodu (Forward Pass): W Jaki Sposób Obliczane Są Te Wyniki
+### Przejście w przód: jak przepływają dane
 
-Wtedy kiedy wprawisz "prąd w ruch" i system sam przejdzie kolejne warianty to system uruchomi właśnie w tym momencie Bieg Do Przodu. Jest to kalkulacja kroków bez nauki.
+Przejście w przód (forward pass) przepycha dane wejściowe przez sieć, warstwa po warstwie, aż dotrą do wyjścia. Podczas przejścia w przód nie zachodzi żadne uczenie. To czyste obliczenia: pomnóż, dodaj, aktywuj, powtórz.
 
 ```mermaid
 graph TD
-    X["Wejście: [x1, x2]"] --> WH["Pomnóż Wagi W1 (2x3)"]
-    WH --> BH["Dodaj bias b1 (3,)"]
-    BH --> AH["Nałóż Sigmoid - wynik z Każdego"]
-    AH --> H["Wynik: [h1, h2, h3]"]
-    H --> WO["Mnożnik W2 (3x1)"]
-    WO --> BO["Dodany Bias - b2 (1,)"]
-    BO --> AO["Użyty Sigmoid"]
-    AO --> Y["Ostateczny: y"]
+    X["Input: [x1, x2]"] --> WH["Multiply by Weight Matrix W1 (2x3)"]
+    WH --> BH["Add Bias Vector b1 (3,)"]
+    BH --> AH["Apply sigmoid to each element"]
+    AH --> H["Hidden Output: [h1, h2, h3]"]
+    H --> WO["Multiply by Weight Matrix W2 (3x1)"]
+    WO --> BO["Add Bias Vector b2 (1,)"]
+    BO --> AO["Apply sigmoid"]
+    AO --> Y["Output: y"]
 ```
 
-Trzy akcje naraz:
+W każdej warstwie zachodzą po kolei trzy operacje:
+
 ```
-z = W * input + b       (liniowa transformacja)
+z = W * input + b       (transformacja liniowa)
 a = sigmoid(z)           (aktywacja)
 ```
 
-Z jednego wejdzie na początek 2! I tak do finału!
+Wyjście jednej warstwy staje się wejściem dla następnej. To jest całe przejście w przód.
 
-### Wymiary Macierzy
+### Wymiary macierzy
 
-Jeśli potrafisz liczyć "wymairy" – w deep learning masz 90% sukcesów naprawiania, np: sieć w przykładzie: (2-3-1):
+Śledzenie wymiarów to najważniejsza umiejętność debugowania w deep learning. Oto sieć 2-3-1:
 
-| Krok | Działanie | Wymiary | Wynik Kształtu |
+| Krok | Operacja | Wymiary | Kształt wyniku |
 |------|-----------|------------|-------------|
-| Start (Input)| x | -- | (2,) |
-| Warstwa Lin| W1 * x + b1 | W1: (3, 2), b1: (3,) | (3,) |
-| W. Aktyw.| sigmoid(z1) | -- | (3,) |
-| Wyjścia Lin| W2 * h + b2 | W2: (1, 3), b2: (1,) | (1,) |
-| Wyj Aktyw | sigmoid(z2) | -- | (1,) |
+| Wejście | x | -- | (2,) |
+| Skryta liniowa | W1 * x + b1 | W1: (3, 2), b1: (3,) | (3,) |
+| Skryta aktywacja | sigmoid(z1) | -- | (3,) |
+| Wyjściowa liniowa | W2 * h + b2 | W2: (1, 3), b2: (1,) | (1,) |
+| Wyjściowa aktywacja | sigmoid(z2) | -- | (1,) |
 
-Tu W dla k, zawsze zawiera kształt (w_teraz, w_poprzednio). I nie ma tu odstępów. Jeśli te elementy są niezgodne ze sobą, w tym systemie siedzi i tkwi wielki i bolesny Bug.
+Zasada: macierz wag W w warstwie k ma kształt (neurony_w_warstwie_k, neurony_w_warstwie_k_minus_1). Wiersze odpowiadają obecnej warstwie. Kolumny odpowiadają poprzedniej warstwie. Jeśli kształty się nie zgadzają, masz błąd.
 
-### Uniwersalne Twierdzenie o Aproksymacji
+### Teoria aproksymacji uniwersalnej
 
-W roku 1989 (George Cybenko), stwierdzono z wielką dobitką jeden genialny fakt dla tych modeli - Mając zaledwie jedną ukrytą warstwę da się uzyskać wszystkie i z niebywałą sprawnością "krzywe aproksymacje" przy czym sieć odgaduje każdą potrzebną funcję po podaniu dobrej liczby ukrytej. 
+W 1989 roku George Cybenko udowodnił coś niezwykłego: sieć neuronowa z jedną warstwą skrytą i wystarczającą liczbą neuronów może przybliżyć każdą funkcję ciągłą z dowolną dokładnością.
 
-Niestety, szeroka 1 poziomowa to słabszy zamiennik z sieci "Deep" - W nich kilka jest i radzi lepiej mając małe uwarunkowania! To udowadnia jak sieci Głębokie działają. To ta funkcja (neuronów o danym rzucie na sieć) sprawi, i wygeneruje mniejsze zbiory do oceny parametru na warstwie.
+Nie znaczy to, że jedna warstwa skryta jest zawsze najlepsza. Znaczy to, że taka architektura jest teoretycznie zdolna. W praktyce głębsze sieci (więcej warstw, mniej neuronów na warstwę) uczą się tych samych funkcji przy znacznie mniejszej całkowitej liczbie parametrów niż sieci płaskie i szerokie. To właśnie dlaczego deep learning działa.
 
-### Składalność (Composability)
+Intuicja: każdy neuron w warstwie skrytej uczy się jednego "wybrzuszenia" lub cechy. Wystarczająca liczba wybrzuszeń umieszczonych w odpowiednich miejscach może przybliżyć każdą gładką krzywą. Więcej neuronów, więcej wybrzuszeń, lepsza aproksymacja.
 
-Sieci są łatwe w ułożeniu. Można nimi budować jak z klocków. Posiadają i ułożenie Enkodera np "Whisper" - robi na Tekst, po czym ma swój Dekoder! Tak można by i mieć, gdzie nowe np. "LLM" działają jako Dekoder-only, oraz BERT korzysta w tym na Enkoder-only. 
+```mermaid
+graph LR
+    subgraph FewNeurons["4 Hidden Neurons"]
+        A["Rough approximation"]
+    end
+    subgraph MoreNeurons["16 Hidden Neurons"]
+        B["Close approximation"]
+    end
+    subgraph ManyNeurons["64 Hidden Neurons"]
+        C["Near-perfect fit"]
+    end
+    FewNeurons --> MoreNeurons --> ManyNeurons
+```
 
-## Zbuduj To
+### Komponowalność
 
-Bez obcych paczek Pythona, takich jak numpy. Zbudujemy to po kolei wszystko sami.
+Sieci neuronowe są komponowalne. Możesz je układać w stosy, łączyć w łańcuchy, uruchamiać równolegle. Model Whisper używa sieci kodera do przetwarzania audio i odrębnej sieci dekodera do generowania tekstu. Współczesne LLM-y są dekoderowe (decoder-only). BERT jest koderowy (encoder-only). T5 jest koder-dekoder. Wybór architektury definiuje, co model może robić.
 
-### Krok 1: Aktywacja Sigmoidalna
+## Zbuduj to
+
+Czysty Python. Bez numpy. Każda operacja na macierzach napisana od zera.
+
+### Krok 1: Funkcja aktywacji sigmoid
 
 ```python
 import math
@@ -142,13 +160,13 @@ def sigmoid(x):
     return 1.0 / (1.0 + math.exp(-x))
 ```
 
-Ograniczenie (clamp) od [-500, 500] nie wyleje błedu ze zbyt wielkich potęg na funkcjach (`math.exp(1000)` = BŁĄD, ∞ itp).
+Ograniczenie do [-500, 500] zapobiega przepełnieniu. `math.exp(500)` to duża, ale skończona liczba. `math.exp(1000)` to nieskończoność.
 
-### Krok 2: Klasa warstwy (Layer)
+### Krok 2: Klasa Layer
 
-Najpotężniejsze z tego systemu, to jak one pomnożą sobie to: Wszędzie po sieci działa i opiera na tym mnożenie macierzy! Gdy idzie coś liniowo: ( y = Wx + b ) i tak właśnie odbywają się niemal ze w 90% praca przy tym i to jest największa ilość urobionej pracy systemu tej aplikacji. 
+Najważniejszą operacją w całym deep learning jest mnożenie macierzy. Każda warstwa, każda głowica uwagi, każde przejście w przód -- to mnożenia macierzy (matmuls) od początku do końca. Warstwa liniowa pobiera wektor wejściowy, mnoży go przez macierz wag i dodaje wektor biasu: y = Wx + b. To jedno równanie to 90% obliczeń w sieci neuronowej.
 
-Utrzymując (i zbierając na tej bazie i podstawie) ma "wagi" no i ma "bias". Do wywołania robi "forward" co pobiera sygnał na wierzch po aktywacji.
+Warstwa przechowuje macierz wag i wektor biasu. Jej metoda forward pobiera wektor wejściowy i zwraca aktywowane wyjście.
 
 ```python
 class Layer:
@@ -178,11 +196,11 @@ class Layer:
         return self.last_output
 ```
 
-I macierz i wagi – Kształt tego to: (n_neurons, n_inputs). Każdy rząd = to 1 sieć i neurony ułożone na każdy podany wymiar pod wejścia. Akcja idzie "Forward", sumuje plus przelicza ze swoimi bias, używając sigmoid a następnie przechowuje.
+Macierz wag ma kształt (n_neurons, n_inputs). Każdy wiersz to wagi jednego neuronu dla wszystkich wejść. Metoda forward iteruje po neuronach, obliczając sumę ważoną plus bias, stosuje sigmoid i zbiera wyniki.
 
-### Krok 3: Sieć (Network) i Warstwy (Layers)
+### Krok 3: Klasa Network
 
-Tu system zapisuje w 1 i używa warstw dla forward.
+Sieć to lista warstw. Przejście w przód łączy je w łańcuch: wyjście warstwy k jest wejściem warstwy k+1.
 
 ```python
 class Network:
@@ -196,11 +214,11 @@ class Network:
         return current
 ```
 
-Właśnie taki masz komplet. Przepływ poszedł i ma w całości te kilka wyżej wymienionych punktów po przejściu każdej z użytych sieci.
+To jest całe przejście w przód. Cztery linie logiki. Dane wchodzą, przepływają przez każdą warstwę, wychodzą z drugiej strony.
 
-### Krok 4: XOR
+### Krok 4: XOR z ręcznie dostrojonymi wagami
 
-To jak dla 01, z podanymi od 2 po przez wytyczne dla AND OR czy NAND! Architektura to ułożenie takie jak 2-2-1! 2 startowe (input), 2 to baza - to hidden, i wyjdzie ten 1 dla finalizacji.
+W Lekcji 01 rozwiązaliśmy XOR, kombinując perceptrony OR, NAND i AND. Teraz zrób to samo, używając naszych klas Layer i Network. Architektura 2-2-1: dwa wejścia, dwa neurony skryte, jedno wyjście.
 
 ```python
 hidden = Layer(
@@ -232,11 +250,11 @@ for inputs, expected in xor_data:
     print(f"  {inputs} -> {result[0]:.6f} (rounded: {predicted}, expected: {expected})")
 ```
 
-Użyte wysokie -/+ wielkie parametry dla wag z bias działają teraz jak "Ściana". Ułatwia, jako ta aktywacyjna funkcja to samo działanie na układ: pierwszy udaje OR a drugi z "ukrytych" – jest po protu ułożonym układem z systemu NAND i ten ostatni ułoży go i ujednolici pod XOR (Z użyciem logiki AND na układ)!
+Duże wagi (20, -20) powodują, że sigmoid działa jak funkcja skoku. Pierwszy neuron skryty przybliża OR. Drugi przybliża NAND. Neuron wyjściowy kombinuje je w AND, co daje XOR.
 
-### Krok 5: Granice i problem decyzyjny 
+### Krok 5: Klasyfikacja okręgu
 
-Trudniejszy dla tej sieci będzie proces dla kół. Poza oraz we wnętrzu o r=0.5 na środku (orign)? Złożone to dla perceprona który na starcie by uciekł z płaczem przy takim prostym dla ludzkiego oka pytaniu, bo perceprony radzą sobie jak wcześniej poinformowano za sprawą 1 wymiaru dla płaskich, a nie okrągłych rzutów na granicy.
+Trudniejszy problem: klasyfikacja punktów 2D jako leżących wewnątrz lub poza okręgiem o radiusie 0.5 wycentrowanym na początku układu współrzędnych. Wymaga to zakrzywionej granicy decyzyjnej -- niemożliwej dla pojedynczego perceptronu.
 
 ```python
 import random
@@ -257,7 +275,7 @@ circle_net = Network([
 ])
 ```
 
-Dla "Random" nie będzie dobrze. Choć wciąż pędzi dalej z liczeniem bez straty płynności (forward pędzi)! "Uczenieniem", i "nauczaniem" będziemy obierać u steru kurs, w procesie i to się tyczy "Backpropagation" w nr lekcji – "03".
+Przy losowych wagach sieć nie sklasyfikuje danych dobrze. Ale przejście w przód i tak się wykona. To jest cała rzecz -- przejście w przód to tylko obliczenia. Nauczenie się właściwych wag to backpropagation, omawiana w Lekcji 03.
 
 ```python
 correct = 0
@@ -270,12 +288,11 @@ for inputs, expected in data:
 print(f"Accuracy with random weights: {correct}/{len(data)} ({100*correct/len(data):.1f}%)")
 ```
 
-Random działa niemal tak złą i losową statystyką (Acz bywa to i po mimo że "mniej" w poprawności co do zasady zwykłego strzelania z głowy!). Lecz po lekcji 3 (szkolenie wag), te okrągłe rzuty pojdą mu lekko!
+Losowe wagi dają słabą dokładność -- często gorszą niż zgadywanie klasy większościowej. Po treningu (Lekcja 03) ta sama architektura z 8 neuronami skrytymi narysuje zakrzywioną granicę, która oddzieli punkty wewnątrz od punktów na zewnątrz.
 
+## Użyj tego
 
-## Użyj Tego
-
-PyTorch używa tego co my zbudowaliśmy tam na samej górze za pomocą tego małego polecenia! (Wystarczą 4 linie dla wykonania) 
+PyTorch robi wszystko powyższe w czterech liniach:
 
 ```python
 import torch
@@ -293,37 +310,48 @@ output = model(x)
 print(output)
 ```
 
-Wywołane tam w Python (`nn.Linear(2,8)`) – to jest klasa: Warstwy z Wag (Layer) w ułożeniu (8,2) ze statusem "bias" i jego ustawionym wektorem po ujęciu rzędu co da wymiaru - kształt na wskaźnik do (8,). My odniesiemy z tej PyTorch aktywację z sigmoidem – po użyciu (`nn.Sigmoid()`), i połączonej i sprawnie na końcu odwołanej przy okazji dla (`nn.Sequential`), jako Sieci (Więc też z odpytanym wywołaniem!).
+`nn.Linear(2, 8)` to Twoja klasa Layer: macierz wag o kształcie (8, 2), wektor biasu o kształcie (8,). `nn.Sigmoid()` to Twoja funkcja sigmoid zastosowana element po elemencie. `nn.Sequential` to Twoja klasa Network: łączenie warstw w łańcuch w odpowiednim porządku.
 
-Różnica tkwi w samej wydajności u GPU na obliczanie przy dziesiątkach dla tych co by chcieli mieć miliony lub tysiące i dla funkcji automatycznego procesu w generowaniu u wag z odwołania wstecz (backpropagation). Lecz tu - jest "czysta matematyka". Pedał i przyspieszenie bez różnic po zapleczach mechanicznych.
+Różnica polega na prędkości i skali. PyTorch działa na GPU, obsługuje partie (batche) milionów próbek i automatycznie oblicza gradienty dla propagacji wstecznej. Ale logika przejścia w przód jest identyczna z tą, którą właśnie zbudowałeś od zera.
 
-## Wdrażaj
+## Wysyłka (Ship It)
 
-Poniższe zajęcia, które dają szablony do określania budowy ułożenia wielkich układów sieci - to tu do utworzenia się podano i w to to zamieniono w system na produkcje:
+Ta lekcja produkuje wielokrotnie używalny prompt do projektowania architektur sieci:
 
 - `outputs/prompt-network-architect.md`
 
-Stosuj jako "Poradnik". Przypisuje on odpowiednie wymiary po czym radzi przy ustaleniu węzłów pod układ, oraz aktywacji pod zadane zadanie problematyczne.
+Użyj go, gdy musisz zdecydować, ile warstw, ile neuronów na warstwę i jakich funkcji aktywacji użyć dla danego problemu.
 
 ## Ćwiczenia
 
-1. Skonfiguruj 2-4-2-1 z ukrytym systemem pod (podwójnymi układami dla tego), aby to szło do tego naprzód przy funkcji XOR pod ten "losowy wariant".
-2. Pobaw się ukrytą strefą - Zmień z 8 dla funkcji kół, pod - na początek 2, a potem dla 32. Używaj "W_przód" i rzucaj losowym. Po podmienianiu ukrytych ilości pod te ułożone układy, ma ta cała zmiana jakikolwiek ustrój i sens? Sprawdź i zapisz powody pod tego zmianę.
-3. Utwórz funkcję - czyli z metod `count_parameters` "licznik pod parametry" z Systemów ("Z klasy - dla Sieci Network" – Co generuje całkowity ujęty zakres "wszystkich opcji dla wag po systemie uczenia). Sprawdź i dodaj 784-256-128-10. Czego ma to dotyczyć – no to słynne ułożenie – dla stref od MNIST. Podaj ich ilostan co do owych wyżej parametrów?
-4. Przeprowadź z modelem ("Przepływ do Przodu") po strukturze (3-4-4-2). Skieruj je by jadło Kolory RGB z zakresów do normalizowanych z "od-do 0-1", patrz pod 2 ostatnie kanały i wyłuskuj klasyfikatorów dla "Kolorowych dwóch-klas" barwnych rzutów opcji pod to zadanie. 
-5. Czym podmienisz te "miękkie wcięcie" i ten Sigmoid (leaky step): 0.01 z "jesli z zera, i daj" do - lub nie, to odrzuć do "1.0." – Wyślij z wariantem dla z przodu! Czy po zmianie ma jeszcze prawo "działać z użyciem na wyznaczony system u ręki wagi z Krok nr4 (XOR)" – "Czemu ten "gładki / soft" system Sigmoidalny wygrywa i ma sens z brutalnym i ostro rzucanym układem ucięcia przy aktywacjach układów tych ucięć dla odgrodzeń granicy?
+1. Zbuduj sieć 2-4-2-1 (dwie warstwy skryte) i wykonaj przejście w przód na danych XOR z losowymi wagami. Wypisz wyjścia pośrednich warstw skrytych, aby zobaczyć, jak reprezentacja zmienia się w każdej warstwie.
 
-## Kluczowe pojęcia
+2. Zmień rozmiar warstwy skrytej w klasyfikatorze okręgu z 8 na 2, a następnie na 32. Każdorazowo wykonaj przejście w przód z losowymi wagami. Czy liczba neuronów skrytych zmienia zakres lub rozkład wyjścia? Czemu?
 
-| Termin | Co mówią ludzie | Co to właściwie oznacza |
+3. Zaimplementuj metodę `count_parameters` w klasie Network, która zwraca całkowitą liczbę trenowalnych wag i biasów. Przetestuj ją na sieci 784-256-128-10 (klasyczna architektura MNIST). Ile parametrów ma ta sieć?
+
+4. Zbuduj przejście w przód dla sieci 3-4-4-2. Podaj jej wartości kolorów RGB (znormalizowane do 0-1) i zaobserwuj dwa wyjścia. To jest architektura prostego klasyfikatora kolorów z dwiema klasami.
+
+5. Zastąp sigmoid funkcją "leaky step": zwróć 0.01 * z jeśli z < 0, w przeciwnym razie 1.0. Wykonaj przejście w przód na XOR z tymi samymi ręcznie dostrojonymi wagami z Kroku 4. Czy wciąż działa? Czemu gładki sigmoid jest preferowany ponad ostre cięcia (hard cutoffs)?
+
+## Kluczowe terminy
+
+| Termin | Co ludzie mówią | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Przebieg w przód (Forward pass) | "Uruchamianie modelu" | Popychanie danych wejściowych przez każdą warstwę -- mnożenie przez wagi, dodawanie obciążenia, aktywacja -- w celu wyprodukowania wyniku |
-| Warstwa ukryta (Hidden layer) | "Środkowa część" | Każda warstwa między wejściem a wyjściem, której wartości nie są bezpośrednio obserwowane w danych |
-| Sieć wielowarstwowa (Multi-layer network) | "Głęboka sieć neuronowa" | Warstwy neuronów układane jedna po drugiej, gdzie wyjście każdej warstwy zasila wejście następnej |
-| Funkcja aktywacji (Activation function) | "Nieliniowość" | Funkcja stosowana po liniowej transformacji, która wprowadza krzywe do granicy decyzyjnej |
-| Sigmoid | "Krzywa w kształcie S" | sigma(z) = 1/(1+e^(-z)), "ściska" dowolną liczbę rzeczywistą do przedziału (0,1), gładka i różniczkowalna wszędzie |
-| Macierz wag (Weight matrix) | "Parametry" | Macierz W o wymiarach (neurony_obecnej_warstwy, neurony_poprzedniej_warstwy) zawierająca możliwe do wyuczenia siły połączeń |
-| Wektor obciążeń (Bias vector) | "Przesunięcie" | Wektor dodawany po mnożeniu macierzy, który pozwala neuronom aktywować się, nawet jeśli wszystkie wejścia wynoszą zero |
-| Uniwersalna aproksymacja | "Sieci neuronowe mogą nauczyć się wszystkiego" | Jedna warstwa ukryta z wystarczającą liczbą neuronów może przybliżyć dowolną funkcję ciągłą -- ale "wystarczająca" może oznaczać miliardy |
-| Transformacja liniowa | "Krok mnożenia macierzy" | z = W * x + b, obliczenia przed aktywacją, które mapują wejścia do nowej przestrzeni |
-| Granica decyzyjna | "Gdzie klasyfikator przełącza" | Powierzchnia w przestrzeni wejściowej, gdzie wyjście sieci przekracza próg klasyfikacji |
+| Forward pass (przejście w przód) | "Odpalenie modelu" | Przepuszczenie wejścia przez każdą warstwę -- pomnóż przez wagi, dodaj bias, aktywuj -- aby uzyskać wyjście |
+| Hidden layer (warstwa skryta) | "Ta środkowa część" | Każda warstwa między wejściem a wyjściem, której wartości nie są bezpośrednio obserwowane w danych |
+| Multi-layer network (sieć wielowarstwowa) | "Głęboka sieć neuronowa" | Warstwy neuronów ułożone sekwencyjnie, gdzie wyjście każdej warstwy zasila wejście następnej |
+| Activation function (funkcja aktywacji) | "Ta nieliniowość" | Funkcja zastosowana po transformacji liniowej, która wprowadza krzywizny do granicy decyzyjnej |
+| Sigmoid | "Krzywa S" | sigma(z) = 1/(1+e^(-z)), spłaszcza każdą liczbę rzeczywistą do (0,1), gładka i różniczkowalna wszędzie |
+| Weight matrix (macierz wag) | "Parametry" | Macierz W o kształcie (neurony_obecnej_warstwy, neurony_poprzedniej_warstwy) zawierająca uczone siły połączeń |
+| Bias vector (wektor biasu) | "Przesunięcie" | Wektor dodawany po mnożeniu macierzowym, który pozwala neuronom aktywować się nawet, gdy wszystkie wejścia są zerowe |
+| Universal approximation (aproksymacja uniwersalna) | "Sieci neuronowe mogą się nauczyć wszystkiego" | Jedna warstwa skryta z wystarczającą liczbą neuronów może przybliżyć każdą funkcję ciągłą -- ale "wystarczająca" może oznaczać miliardy |
+| Linear transformation (transformacja liniowa) | "Krok mnożenia macierzowego" | z = W * x + b, obliczenie przed aktywacją, które mapuje wejścia na nową przestrzeń |
+| Decision boundary (granica decyzyjna) | "Tam, gdzie klasyfikator się przełącza" | Powierzchnia w przestrzeni wejściowej, gdzie wyjście sieci przekracza próg klasyfikacji |
+
+## Dalsze materiały
+
+- Michael Nielsen, "Neural Networks and Deep Learning", rozdziały 1-2 (http://neuralnetworksanddeeplearning.com/) -- najjaśniejsze darmowe wyjaśnienie przejść w przód i struktury sieci, z interaktywnymi wizualizacjami
+- Cybenko, "Approximation by Superpositions of a Sigmoidal Function" (1989) -- oryginalna praca o teorii aproksymacji uniwersalnej, zaskakująco czytelna
+- 3Blue1Brown, "But what is a neural network?" (https://www.youtube.com/watch?v=aircAruvnKk) -- 20-minutowe wizualne wprowadzenie do warstw, wag i przejść w przód, które buduje właściwy model mentalny
+- Goodfellow, Bengio, Courville, "Deep Learning", rozdział 6 (https://www.deeplearningbook.org/) -- standardowe odniesienie dla sieci wielowarstwowych, darmowe online
