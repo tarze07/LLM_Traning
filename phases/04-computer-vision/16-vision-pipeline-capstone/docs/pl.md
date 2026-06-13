@@ -1,30 +1,30 @@
-# Zbuduj kompletny rurociąg wizyjny — Capstone
+# Zbuduj kompletny pipeline wizyjny — projekt zaliczeniowy
 
-> System wizji produkcji to łańcuch modeli i zasad połączonych kontraktami dotyczącymi danych. Elementy są już w tej fazie; zwieńczenie łączy je ze sobą od końca do końca.
+> Produkcyjny system wizyjny to łańcuch modeli i reguł połączonych kontraktami danych. Wszystkie elementy są już dostępne w tej fazie; projekt zaliczeniowy łączy je w jeden przepływ end-to-end.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
-**Wymagania wstępne:** Faza 4 Lekcje 01-15
+**Wymagania wstępne:** Faza 4, lekcje 01-15
 **Czas:** ~120 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zaprojektuj potok wizji produkcyjnej, który wykrywa obiekty, klasyfikuje je i emituje ustrukturyzowany JSON — z obsługiwaną każdą ścieżką awarii
-- Podłącz detektor (Mask R-CNN lub YOLO), klasyfikator (ConvNeXt-Tiny) i kontrakt danych (Pydantic) do jednej usługi
-- Dokonaj analizy porównawczej kompleksowego rurociągu i zidentyfikuj pierwsze wąskie gardło (zwykle przetwarzanie wstępne, następnie detektor)
-- Wyślij minimalną usługę FastAPI, która akceptuje przesyłanie obrazu, uruchamia potok i zwraca wykrycia z klasyfikacją
+- Zaprojektować produkcyjny pipeline wizyjny, który wykrywa obiekty, klasyfikuje je i emituje ustrukturyzowany JSON — z obsłużoną każdą ścieżką błędu
+- Połączyć detektor (Mask R-CNN lub YOLO), klasyfikator (ConvNeXt-Tiny) i kontrakt danych (Pydantic) w jedną usługę
+- Zmierzyć wydajność pipeline'u end-to-end i zidentyfikować pierwszy wąski gardło (zwykle preprocessing, potem detektor)
+- Wdrożyć minimalną usługę FastAPI, która przyjmuje przesłany obraz, uruchamia pipeline i zwraca detekcje z klasyfikacjami
 
 ## Problem
 
-Indywidualne modele widzenia są przydatne; Produkty Vision to ich łańcuchy. Audyt półki detalicznej to detektor, klasyfikator produktu i potok cen-OCR. Jazda autonomiczna to detektor 2D, detektor 3D, segmenter, tracker i planista. Wstępny ekran medyczny to moduł segmentujący, klasyfikator regionu oraz interfejs lekarza.
+Pojedyncze modele wizyjne są przydatne; produkty wizyjne to ich łańcuchy. Audyt półki w sklepie to detektor plus klasyfikator produktów plus pipeline OCR do cen. Jazda autonomiczna to detektor 2D plus detektor 3D plus segmentator plus tracker plus planner. Wstępne badanie medyczne to segmentator plus klasyfikator regionów plus interfejs dla klinicysty.
 
-Okablowanie tych łańcuchów to część oddzielająca prototyp ML od produktu. Każdy interfejs pomiędzy modelami jest nowym miejscem na błędy. Każda transformacja współrzędnych, każda normalizacja, każda zmiana rozmiaru maski jest kandydatem na cichą awarię. Rurociąg jest tak mocny, jak jego najsłabszy interfejs.
+Łączenie tych łańcuchów to element, który odróżnia prototyp ML od produktu. Każdy interfejs między modelami to nowe miejsce na błędy. Każda transformacja współrzędnych, każda normalizacja, każde przeskalowanie maski to kandydat na cichą awarię. Pipeline jest tak silny, jak jego najsłabszy interfejs.
 
-To zwieńczenie ustanawia minimalny realny potok: wykrywanie + klasyfikacja + ustrukturyzowane dane wyjściowe + warstwa obsługująca. Wszystko inne w fazie 4 pasuje do tego szkieletu: zamień Maskę R-CNN na YOLOv8, dodaj głowicę OCR, dodaj gałąź segmentacji, dodaj moduł śledzący. Architektura jest stabilna; elementy można podłączyć.
+Ten projekt zaliczeniowy ustawia minimalny działający pipeline: detekcja + klasyfikacja + ustrukturyzowane wyjście + warstwa serwująca. Wszystko inne w Fazie 4 wpasowuje się w ten szkielet: zamień Mask R-CNN na YOLOv8, dodaj głowicę OCR, dodaj odgałęzienie segmentacyjne, dodaj tracker. Architektura jest stabilna; elementy są wymienne.
 
 ## Koncepcja
 
-### Rurociąg
+### Pipeline
 
 ```mermaid
 flowchart LR
@@ -43,11 +43,11 @@ flowchart LR
     style SCHEMA fill:#dcfce7,stroke:#16a34a
 ```
 
-Siedem etapów. Obydwa etapy modelu są drogie; na pięciu pozostałych etapach żyją robaki.
+Siedem etapów. Dwa etapy modelowe są kosztowne; w pozostałych pięciu żyją błędy.
 
-### Umowy dotyczące danych z Pydantic
+### Kontrakty danych z Pydantic
 
-Każda granica modelu staje się obiektem wpisanym. Dzięki temu ciche awarie zamieniają się w głośne.
+Każda granica między modelami staje się typowanym obiektem. To zamienia ciche awarie w głośne.
 
 ```
 Detection(
@@ -65,35 +65,35 @@ PipelineResult(
 )
 ```
 
-Kiedy detektor zwraca pola w `(cx, cy, w, h)` zamiast `(x1, y1, x2, y2)`, weryfikacja Pydantic kończy się niepowodzeniem na granicy i dowiadujesz się o tym natychmiast, zamiast debugować dalszy zbiór, który po cichu zwraca puste regiony.
+Gdy detektor zwraca boksy w formacie `(cx, cy, w, h)` zamiast `(x1, y1, x2, y2)`, walidacja Pydantic zawodzi na granicy i dowiadujesz się o tym od razu, zamiast debugować dalszy etap przycinania, który po cichu zwraca puste regiony.
 
-### Gdzie idzie opóźnienie
+### Gdzie ucieka czas
 
-Trzy prawdy kryją się w niemal każdym procesie wizji:
+Trzy prawdy obowiązują w prawie każdym pipelinie wizyjnym:
 
-1. **Przetwarzanie wstępne to często największy pojedynczy blok.** Dekodowanie plików JPEG, konwertowanie przestrzeni kolorów, zmiana rozmiaru — te czynności obciążają procesor i łatwo je zapomnieć.
-2. **Detektor dominuje w czasie GPU.** 70–90% czasu GPU przypada na przebieg detekcji w przód.
-3. **Przetwarzanie końcowe (NMS, kodowanie/dekodowanie RLE) jest tanie w przypadku procesora graficznego i kosztowne w przypadku procesora.** Zawsze profiluj z rzeczywistym celem.
+1. **Preprocessing jest często największym pojedynczym blokiem.** Dekodowanie JPEG-ów, konwersja przestrzeni kolorów, przeskalowanie — to operacje obciążające CPU, łatwe do przegapienia.
+2. **Detektor dominuje czas GPU.** 70-90% czasu GPU przypada na przejście w przód detektora.
+3. **Postprocessing (NMS, kodowanie/dekodowanie RLE) jest tani na GPU, kosztowny na CPU.** Zawsze profiluj na docelowym sprzęcie.
 
-Znajomość dystrybucji sprawia, że ​​optymalizacja staje się listą priorytetów.
+Znajomość tego rozkładu zamienia optymalizację w listę priorytetów.
 
 ### Tryby awarii
 
-- **Puste wykrycia** — zwraca pustą listę, nie powoduje awarii. Dziennik.
-- **Obszar poza granicami** — dopasuj do rozmiaru obrazu przed przycięciem.
-- **Drobne uprawy** — pomiń klasyfikację dla pól mniejszych niż minimalne dane wejściowe klasyfikatora.
-- **Przesyłanie uszkodzone** — odpowiedź 400 z określonym kodem błędu, a nie 500.
-- **Awaria ładowania modelu** — awaria przy uruchomieniu usługi, a nie przy pierwszym żądaniu.
+- **Puste detekcje** — zwróć pustą listę, nie powoduj awarii. Zaloguj.
+- **Boksy wykraczające poza granice obrazu** — przyciąć do rozmiaru obrazu przed przycinaniem.
+- **Zbyt małe wycinki** — pomiń klasyfikację dla boksów mniejszych niż minimalny rozmiar wejścia klasyfikatora.
+- **Uszkodzony upload** — odpowiedź 400 z konkretnym kodem błędu, nie 500.
+- **Błąd wczytania modelu** — niepowodzenie przy starcie usługi, nie przy pierwszym żądaniu.
 
-Potok produkcyjny obsługuje każdy z nich bez pisania ogólnego `try/except`, który ukrywa awarię. Każda awaria otrzymuje nazwany kod i odpowiedź.
+Produkcyjny pipeline obsługuje każdy z tych przypadków bez pisania ogólnego `try/except`, który skrywa awarię. Każda awaria ma nazwany kod i odpowiedź.
 
-### Grupowanie
+### Batching
 
-Usługa produkcyjna obsługuje wielu klientów. Grupowanie wykryć i klasyfikacji w ramach żądań zwielokrotnia przepustowość. Kompromis: dodatkowe opóźnienie wynikające z oczekiwania na wypełnienie partii. Typowa konfiguracja: zbieranie żądań przez maksymalnie 20 ms, grupowanie, przetwarzanie i dystrybucja odpowiedzi. `torchserve` i `triton` robią to natywnie; małe usługi z przewidywalnym obciążeniem korzystają z własnego mikrodozownika.
+Produkcyjna usługa serwuje wielu klientów. Batchowanie detekcji i klasyfikacji między żądaniami zwielokrotnia przepustowość. Koszt: dodatkowe opóźnienie wynikające z czekania na zapełnienie batcha. Typowa konfiguracja: zbieraj żądania do 20 ms, połącz w batch, przetwórz, rozdziel odpowiedzi. `torchserve` i `triton` robią to natywnie; małe usługi z przewidywalnym obciążeniem implementują własny mikro-batcher.
 
 ## Zbuduj to
 
-### Krok 1: Kontrakty dotyczące danych
+### Krok 1: Kontrakty danych
 
 ```python
 from pydantic import BaseModel, Field
@@ -105,11 +105,13 @@ class Detection(BaseModel):
     class_id: int = Field(ge=0)
     mask_rle: Optional[str] = None
 
+
 class Classification(BaseModel):
     detection_index: int
     class_id: int
     class_name: str
     score: float = Field(ge=0, le=1)
+
 
 class PipelineResult(BaseModel):
     image_id: str
@@ -118,9 +120,9 @@ class PipelineResult(BaseModel):
     inference_ms: float
 ```
 
-Pięć sekund kodu oszczędza godzinę debugowania w każdym poważnym potoku.
+Pięć sekund kodu oszczędza godzinę debugowania w każdym poważnym pipelinie.
 
-### Krok 2: Minimalna klasa potoku
+### Krok 2: Minimalna klasa Pipeline
 
 ```python
 import time
@@ -209,9 +211,9 @@ class VisionPipeline:
         )
 ```
 
-Każdy interfejs jest wpisany. Każda ścieżka awarii ma określoną decyzję dotyczącą obsługi.
+Każdy interfejs jest typowany. Każda ścieżka błędu ma konkretną decyzję obsługi.
 
-### Krok 3: Podłącz detektor i klasyfikator
+### Krok 3: Połącz detektor i klasyfikator
 
 ```python
 from torchvision.models.detection import maskrcnn_resnet50_fpn_v2
@@ -259,9 +261,9 @@ async def detect_endpoint(file: UploadFile):
     return result.model_dump()
 ```
 
-Uruchom z `uvicorn main:app --host 0.0.0.0 --port 8000`. Przetestuj z `curl -F 'file=@dog.jpg' http://localhost:8000/detect`.
+Uruchom za pomocą `uvicorn main:app --host 0.0.0.0 --port 8000`. Przetestuj za pomocą `curl -F 'file=@dog.jpg' http://localhost:8000/detect`.
 
-### Krok 5: Wykonaj test porównawczy potoku
+### Krok 5: Zmierz wydajność pipeline'u
 
 ```python
 import time
@@ -300,49 +302,49 @@ def benchmark(pipe, num_runs=20, image_size=(400, 600)):
         print(f"{stage:12s}  p50={times[len(times)//2]:7.1f} ms  p95={times[int(len(times)*0.95)]:7.1f} ms")
 ```
 
-Typowe wyjście na procesorze: przetwarzanie wstępne ~3 ms, wykrywanie 300-500 ms, klasyfikacja 20-40 ms, łącznie 350-550 ms. Na GPU wykrywanie wynosi 20–40 ms, a rozpoczęcie przetwarzania wstępnego i klasyfikowania ma większe znaczenie w kategoriach względnych.
+Typowy wynik na CPU: preprocessing ~3 ms, detekcja 300-500 ms, klasyfikacja 20-40 ms, łącznie 350-550 ms. Na GPU detekcja trwa 20-40 ms, a preprocessing i klasyfikacja zaczynają mieć większe znaczenie względne.
 
-## Użyj tego
+## Zastosuj to
 
-Szablony produkcyjne mają tę samą strukturę, a ponadto:
+Produkcyjne szablony zbiegają do tej samej struktury, dodatkowo z:
 
-- **Wersjonowanie modelu** — zawsze zapisuj w odpowiedzi nazwę modelu i skrót wagi.
-- **Identyfikatory śledzenia na żądanie** — rejestruj czas każdego etapu dla każdego żądania, dzięki czemu możesz powiązać powolne odpowiedzi z etapami.
-- **Ścieżka rezerwowa** — jeśli upłynie limit czasu klasyfikatora, zwracane są wykrycia bez klasyfikacji, zamiast odrzucić całe żądanie.
-- **Filtry bezpieczeństwa** — Filtry NSFW/PII uruchamiane są po klasyfikacji, zanim odpowiedź opuści usługę.
-- **Wsadowy punkt końcowy** — `/detect_batch` akceptujący listę adresów URL obrazów do masowego przetwarzania.
+- **Wersjonowaniem modeli** — zawsze loguj nazwę modelu i hash wag w odpowiedzi.
+- **Identyfikatorami śledzenia per żądanie** — loguj czasy każdego etapu dla każdego żądania, aby móc skorelować wolne odpowiedzi z etapami.
+- **Ścieżką zapasową** — jeśli klasyfikator przekroczy limit czasu, zwróć detekcje bez klasyfikacji, zamiast odrzucać całe żądanie.
+- **Filtrami bezpieczeństwa** — filtry NSFW/PII działają po klasyfikacji, przed wysłaniem odpowiedzi z usługi.
+- **Endpointem wsadowym** — `/detect_batch` przyjmujący listę adresów URL obrazów do przetwarzania wsadowego.
 
-W przypadku obsługi produkcyjnej `torchserve`, `Triton Inference Server` i `BentoML` od razu obsługują przetwarzanie wsadowe, wersjonowanie, metryki i sprawdzanie stanu. Bezpośrednie uruchomienie `FastAPI` jest dobre w przypadku prototypów i produktów na małą skalę.
+Do serwowania produkcyjnego `torchserve`, `Triton Inference Server` i `BentoML` obsługują batching, wersjonowanie, metryki i health checki "z pudełka". Uruchamianie `FastAPI` bezpośrednio jest w porządku dla prototypów i produktów małej skali.
 
-## Wyślij to
+## Wynik
 
-Ta lekcja daje:
+Ta lekcja tworzy:
 
-- `outputs/prompt-vision-service-shape-reviewer.md` — monit przeglądający kod usługi wizyjnej pod kątem naruszeń kształtu umowy/odpowiedzi i wymieniający pierwszy zakłócający błąd.
-- `outputs/skill-pipeline-budget-planner.md` — umiejętność, która przy docelowym opóźnieniu i przepustowości przydziela budżet czasu każdemu etapowi potoku i zaznacza, który etap jako pierwszy straci budżet.
+- `outputs/prompt-vision-service-shape-reviewer.md` — prompt, który przegląda kod usługi wizyjnej w poszukiwaniu naruszeń kontraktu/kształtu odpowiedzi i nazywa pierwszy błąd, który ją złamie.
+- `outputs/skill-pipeline-budget-planner.md` — skill, który dla danej docelowej latencji i przepustowości przypisuje budżet czasowy każdemu etapowi pipeline'u i wskazuje, który etap pierwszy przekroczy swój budżet.
 
 ## Ćwiczenia
 
-1. **(Łatwe)** Uruchom potok na 10 obrazach z dowolnego otwartego zbioru danych. Podaj średni czas na etap i rozkład liczby wykryć na obraz.
-2. **(Średni)** Dodaj pole wyjściowe maski do `Detection` i zakoduj je jako RLE. Sprawdź, czy rozmiar JSON pozostaje mniejszy niż 1 MB nawet w przypadku obrazu zawierającego 10 obiektów.
-3. **(Trudny)** Dodaj mikrodozownik przed klasyfikatorem: zbieraj plony przez maksymalnie 10 ms, klasyfikuj je wszystkie w jednym wywołaniu GPU, zwracaj wyniki na żądanie. Zmierz przyrost przepustowości przy 5 równoczesnych żądaniach na sekundę i dodanym opóźnieniu.
+1. **(Łatwe)** Uruchom pipeline na 10 obrazach z dowolnego otwartego zbioru danych. Zaraportuj średni czas na etap oraz rozkład liczby detekcji na obraz.
+2. **(Średnie)** Dodaj pole wyjściowe maski do `Detection` i zakoduj je jako RLE. Sprawdź, czy JSON pozostaje poniżej 1MB nawet dla obrazu z 10 obiektami.
+3. **(Trudne)** Dodaj mikro-batcher przed klasyfikatorem: zbieraj wycinki przez maksymalnie 10 ms, sklasyfikuj je wszystkie w jednym wywołaniu GPU, zwróć wyniki dla każdego żądania. Zmierz przyrost przepustowości przy 5 równoczesnych żądaniach na sekundę oraz dodane opóźnienie.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie oznacza |
 |------|----------------|----------------------|
-| Rurociąg | „System” | Uporządkowany łańcuch etapów przetwarzania wstępnego, wnioskowania i przetwarzania końcowego z interfejsem tekstowym pomiędzy każdą parą |
-| Umowa dotycząca danych | „Schemat” | Definicje Pydantic/dataclass, z którymi zgodne jest każde wejście i wyjście stopnia; wyłapuje błędy integracyjne na granicy |
-| Przetwarzanie wstępne | „Przed modelem” | Dekodowanie, konwersja kolorów, zmiana rozmiaru, normalizacja; zwykle największy pochłaniacz czasu procesora |
-| Przetwarzanie końcowe | „Po modelu” | NMS, zmiana rozmiaru maski, próg, kodowanie RLE; tanie na GPU, drogie na CPU |
-| Mikrodozownik | „Odbierz i przekaż dalej” | Agregator, który czeka przez stałe okno na wiele żądań, uruchamia pojedyncze wsadowe przejście do przodu |
-| Identyfikator śledzenia | „Identyfikator żądania” | Identyfikator żądania rejestrowany na każdym etapie, dzięki czemu można śledzić powolne żądania od początku do końca
-| Kod błędu | „Nazwany błąd” | Konkretny kod błędu dla każdej klasy awarii zamiast ogólnego 500; włącza logikę ponownych prób klienta |
-| Kontrola stanu zdrowia | „Sonda gotowości” | Tani punkt końcowy, który raportuje, czy usługa może odpowiedzieć; moduły równoważenia obciążenia na tym polegają |
+| Pipeline | "System" | Uporządkowany łańcuch etapów preprocessingu, wnioskowania i postprocessingu z typowanym interfejsem między każdą parą |
+| Kontrakt danych | "Schemat" | Definicje Pydantic / dataclass, którym musi odpowiadać wejście i wyjście każdego etapu; wychwytuje błędy integracji na granicy |
+| Preprocessing | "Przed modelem" | Dekodowanie, konwersja kolorów, skalowanie, normalizacja; zwykle największy pożeracz czasu CPU |
+| Postprocessing | "Po modelu" | NMS, przeskalowanie maski, threshold, kodowanie RLE; tanie na GPU, kosztowne na CPU |
+| Microbatcher | "Zbierz, a potem przekaż dalej" | Agregator, który czeka ustalone okno czasowe na wiele żądań i wykonuje jedno przejście wsadowe w przód |
+| Trace ID | "Identyfikator żądania" | Identyfikator przypisany do żądania, logowany na każdym etapie, aby wolne żądania można było śledzić od początku do końca |
+| Kod błędu | "Nazwany błąd" | Konkretny kod błędu dla każdej klasy awarii zamiast ogólnego 500; umożliwia logikę ponawiania po stronie klienta |
+| Health check | "Sonda gotowości" | Tani endpoint informujący, czy usługa może odpowiadać; load balancery na tym polegają |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-- [Full Stack Deep Learning — wdrażanie modeli](https://fullstackdeeplearning.com/course/2022/lecture-5-deployment/) — kanoniczny przegląd wdrożenia produkcyjnego uczenia maszynowego
-- [Dokumentacja BentoML](https://docs.bentoml.com) — framework obsługujący przetwarzanie wsadowe, wersjonowanie i metryki
-- [dokumentacja torchserve](https://pytorch.org/serve/) — oficjalna biblioteka obsługująca PyTorch
-- [NVIDIA Triton Inference Server](https://developer.nvidia.com/triton-inference-server) — obsługa o dużej przepustowości z przetwarzaniem wsadowym i obsługą wielu modeli
+- [Full Stack Deep Learning — Deploying Models](https://fullstackdeeplearning.com/course/2022/lecture-5-deployment/) — kanoniczny przegląd produkcyjnego wdrażania ML
+- [BentoML docs](https://docs.bentoml.com) — framework serwujący z batchingiem, wersjonowaniem i metrykami
+- [torchserve docs](https://pytorch.org/serve/) — oficjalna biblioteka serwująca PyTorch
+- [NVIDIA Triton Inference Server](https://developer.nvidia.com/triton-inference-server) — wysokoprzepustowe serwowanie z batchingiem i obsługą wielu modeli

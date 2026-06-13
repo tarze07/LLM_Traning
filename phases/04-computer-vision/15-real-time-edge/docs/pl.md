@@ -1,26 +1,26 @@
-# Wizja w czasie rzeczywistym — wdrożenie brzegowe
+# Wizja w czasie rzeczywistym — wdrożenie na urządzeniach brzegowych (Edge)
 
-> Wnioskowanie brzegowe to dyscyplina polegająca na uzyskaniu modelu o dokładności 90, działającego z szybkością 30 klatek na sekundę na urządzeniu z 2 GB pamięci RAM. Każdy punkt procentowy dokładności jest zamieniany na milisekundy opóźnienia.
+> Wnioskowanie na urządzeniach brzegowych (edge inference) to dyscyplina sprowadzająca się do tego, jak sprawić, by model o dokładności 90% działał z prędkością 30 fps na urządzeniu z 2 GB RAM. Każdy punkt procentowy dokładności jest wymieniany na milisekundy opóźnienia.
 
-**Typ:** Ucz się + Buduj
+**Typ:** Nauka + Budowa
 **Języki:** Python
-**Wymagania wstępne:** Faza 4, lekcja 04 (Klasyfikacja obrazu), faza 10, lekcja 11 (kwantyzacja)
+**Wymagania wstępne:** Faza 4, Lekcja 04 (Klasyfikacja obrazów), Faza 10, Lekcja 11 (Kwantyzacja)
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zmierz opóźnienie wnioskowania, pamięć szczytową i przepustowość dla dowolnego modelu PyTorch i przeczytaj kompromis FLOP/param/opóźnienie
-- Kwantyzacja modelu widzenia do INT8 przy użyciu kwantyzacji potreningowej PyTorch i zweryfikowanie utraty dokładności < 1%
-- Eksportuj do ONNX i kompiluj za pomocą ONNX Runtime lub TensorRT; wymień trzy najczęstsze błędy eksportu i ich rozwiązania
-- Wyjaśnij, kiedy wybrać MobileNetV3, EfficientNet-Lite, ConvNeXt-Tiny lub MobileViT w przypadku ograniczenia krawędzi
+- Zmierzyć opóźnienie wnioskowania, szczytowe zużycie pamięci i przepustowość dla dowolnego modelu PyTorch oraz odczytać kompromis między FLOPs / liczbą parametrów / opóźnieniem
+- Skwantyzować model wizyjny do INT8 za pomocą kwantyzacji posttreningowej (post-training quantisation) w PyTorch i zweryfikować, że spadek dokładności jest mniejszy niż 1%
+- Wyeksportować model do ONNX i skompilować go za pomocą ONNX Runtime lub TensorRT; wymienić trzy najczęstsze przyczyny błędów eksportu i sposoby ich naprawy
+- Wyjaśnić, kiedy wybrać MobileNetV3, EfficientNet-Lite, ConvNeXt-Tiny lub MobileViT w kontekście ograniczeń urządzenia brzegowego
 
 ## Problem
 
-Model widzenia w czasie treningu to zmiennoprzecinkowy potwór. Parametry 100M, 10 GFLOPów na przebieg w przód, 2 GB pamięci VRAM. Żadne z nich nie pasuje do telefonu, samochodowego urządzenia informacyjno-rozrywkowego, kamery przemysłowej ani drona. Wysyłka systemu wizyjnego oznacza dopasowanie tych samych przewidywań do 100 razy mniejszego budżetu.
+Model wizyjny powstały w fazie treningu to potwór zmiennoprzecinkowy. 100M parametrów, 10 GFLOPs na jeden przebieg w przód, 2 GB VRAM. Nic z tego nie zmieści się na telefonie, w jednostce multimedialnej samochodu, w kamerze przemysłowej czy w dronie. Wdrożenie systemu wizyjnego oznacza zmieszczenie tych samych predykcji w budżecie 100 razy mniejszym.
 
-Większość pracy wykonują trzy pokrętła: wybór modelu (mniejsza architektura o tej samej recepturze), kwantyzacja (INT8 zamiast FP32) i czas działania wnioskowania (ONNX Runtime, TensorRT, Core ML, TFLite). Właściwe ich wykonanie stanowi różnicę między wersją demonstracyjną działającą na stacji roboczej a produktem dostarczanym z modułem kamery o wartości 30 USD.
+Trzy gałki odpowiadają za większość pracy: wybór modelu (mniejsza architektura realizująca tę samą recepturę), kwantyzacja (INT8 zamiast FP32) oraz środowisko wykonawcze wnioskowania (ONNX Runtime, TensorRT, Core ML, TFLite). Dobranie ich poprawnie to różnica między demo działającym na stacji roboczej a produktem działającym na module kamery za 30 dolarów.
 
-W tej lekcji najpierw zostanie ustalona dyscyplina pomiaru (nie można zoptymalizować tego, czego nie można zmierzyć), a następnie omówione zostaną trzy pokrętła. Celem nie jest nauczenie się każdego środowiska wykonawczego brzegowego, ale wiedza, jakie istnieją dźwignie i sposób sprawdzenia, czy każda z nich robi to, co myślisz.
+Ta lekcja najpierw ustanawia dyscyplinę pomiarową (nie można optymalizować czegoś, czego nie można zmierzyć), a następnie przechodzi przez te trzy gałki. Celem nie jest poznanie każdego środowiska wykonawczego dla urządzeń brzegowych, ale wiedza, jakie dźwignie istnieją i jak zweryfikować, że każda z nich robi to, co myślisz.
 
 ## Koncepcja
 
@@ -28,11 +28,11 @@ W tej lekcji najpierw zostanie ustalona dyscyplina pomiaru (nie można zoptymali
 
 ```mermaid
 flowchart LR
-    M["Model"] --> LAT["Latency<br/>ms per image"]
-    M --> MEM["Memory<br/>peak MB"]
-    M --> PWR["Power<br/>mJ per inference"]
+    M["Model"] --> LAT["Opóźnienie<br/>ms na obraz"]
+    M --> MEM["Pamięć<br/>szczyt MB"]
+    M --> PWR["Moc<br/>mJ na wnioskowanie"]
 
-    LAT --> SHIP["Ship / no-ship<br/>decision"]
+    LAT --> SHIP["Decyzja:<br/>wdrażamy / nie wdrażamy"]
     MEM --> SHIP
     PWR --> SHIP
 
@@ -41,70 +41,70 @@ flowchart LR
     style PWR fill:#dbeafe,stroke:#2563eb
 ```
 
-- **Opóźnienie**: p50, p95, p99. Uśrednianie tylko p50 ukrywa ogonowe zachowanie, które ma znaczenie dla systemów czasu rzeczywistego.
-- **Pamięć szczytowa**: maksymalna wartość, jaką urządzenie kiedykolwiek widzi, a nie średnia w stanie ustalonym. Ma to znaczenie, ponieważ OOM są śmiertelne w przypadku osadzonych celów.
-- **Moc / energia**: milidżule na wnioskowanie w urządzeniu zasilanym bateryjnie. Często przesyłane przez serwer proxy według wykorzystania procesora/GPU *czas.
+- **Opóźnienie**: p50, p95, p99. Uśrednianie tylko p50 skrywa zachowanie ogona rozkładu, które ma znaczenie dla systemów czasu rzeczywistego.
+- **Szczytowa pamięć**: maksimum, jakie urządzenie kiedykolwiek zobaczy, a nie średnia w stanie ustalonym. Ma znaczenie, ponieważ błędy braku pamięci (OOM) są fatalne na urządzeniach wbudowanych.
+- **Moc / energia**: miliodżule na wnioskowanie na urządzeniu zasilanym bateryjnie. Często przybliżana przez wykorzystanie CPU/GPU * czas.
 
-Tabela (model, opóźnienie, pamięć, dokładność) jest podstawą decyzji brzegowej. Każda komórka jest mierzona na urządzeniu docelowym, a nie na stacji roboczej.
+Tabela (model, opóźnienie, pamięć, dokładność) jest tym, na podstawie czego podejmuje się decyzję dotyczącą urządzenia brzegowego. Każda komórka jest mierzona na docelowym urządzeniu, nie na stacji roboczej.
 
 ### Dyscyplina pomiarowa
 
-Trzy zasady, którymi powinien kierować się każdy profil krawędziowy:
+Trzy zasady, których powinien przestrzegać każdy profil dla urządzeń brzegowych:
 
-1. **Rozgrzej** modela, wykonując 5-10 podań w przód z manekinem przed pomiarem. Zimne pamięci podręczne i kompilacja JIT dają niereprezentatywne pierwsze liczby.
-2. **Zsynchronizuj** obciążenia GPU z `torch.cuda.synchronize()` przed i po bloku czasowym. Bez tego mierzysz wysyłanie jądra, a nie wykonanie jądra.
-3. **Dostosuj rozmiary wejściowe** do rozdzielczości produkcyjnej. Opóźnienie na 224x224 nie jest opóźnieniem na 512x512.
+1. **Rozgrzej** model za pomocą 5-10 fikcyjnych przebiegów w przód przed pomiarem. Zimne pamięci podręczne i kompilacja JIT dają niereprezentatywne pierwsze wyniki.
+2. **Synchronizuj** obciążenia GPU za pomocą `torch.cuda.synchronize()` przed i po mierzonym blokiem. Bez tego mierzysz dyspozycję jąder (kernel dispatch), a nie ich wykonanie.
+3. **Ustal rozmiary wejściowe** na rozdzielczość produkcyjną. Opóźnienie przy 224x224 nie jest opóźnieniem przy 512x512.
 
-### FLOPy jako proxy
+### FLOPs jako proxy
 
-FLOP (operacje zmiennoprzecinkowe na wnioskowanie) to tani, niezależny od urządzenia serwer proxy dla opóźnień. Przydatny do porównywania architektury, mylący jako absolutny zegar ścienny. Model z 10% większą liczbą FLOPów może być w praktyce 2x szybszy, ponieważ wykorzystuje operacje przyjazne dla sprzętu (konwersje wgłębne dobrze się kompilują, duże konwersje 7x7 nie).
+FLOPs (operacje zmiennoprzecinkowe na wnioskowanie) to tani, niezależny od urządzenia wskaźnik zastępczy opóźnienia. Przydatny do porównywania architektur, ale myleący jako absolutny czas rzeczywisty. Model z 10% większą liczbą FLOPs może w praktyce być 2x szybszy, ponieważ używa operacji przyjaznych dla sprzętu (konwolucje depthwise kompilują się dobrze, duże konwolucje 7x7 nie).
 
-Reguła: używaj FLOPów do wyszukiwania architektury, używaj opóźnień na urządzeniu przy podejmowaniu decyzji o wdrożeniu.
+Zasada: używaj FLOPs do przeszukiwania architektur, używaj opóźnienia na urządzeniu do decyzji o wdrożeniu.
 
-### Kwantyzacja w jednym akapicie
+### Kwantyzacja w jednym paragrafie
 
-Zamień wagi i aktywacje FP32 na INT8. Rozmiar modelu spada 4x, przepustowość pamięci spada 4x, moc obliczeniowa spada 2-4x na sprzęcie z jądrem INT8 (każdy nowoczesny mobilny SoC, każdy procesor graficzny NVIDIA z rdzeniami Tensor). Utrata dokładności zadań związanych ze wzrokiem wynosi zazwyczaj 0,1–1 punktu procentowego w przypadku kwantyzacji statycznej po treningu.
+Zastąp wagi i aktywacje FP32 wartościami INT8. Rozmiar modelu spada 4x, przepustowość pamięci spada 4x, obliczenia spadają 2-4x na sprzęcie posiadającym jądra INT8 (każdy nowoczesny mobilny SoC, każde GPU NVIDIA z Tensor Cores). Spadek dokładności w zadaniach wizyjnych wynosi typowo 0,1-1 punktu procentowego przy statycznej kwantyzacji posttreningowej.
 
 Typy:
 
-- **Dynamiczny** — kwantyfikuj wagi do INT8, aktywacje obliczane w FP. Łatwe, małe przyspieszenie.
-- **Statyczny (po treningu)** — kwantyfikacja ciężarów + kalibracja zakresów aktywacji na małym zestawie kalibracyjnym. Dużo szybciej niż dynamicznie.
-- **Szkolenie uwzględniające kwantyzację (QAT)** — symuluj kwantyzację podczas szkolenia, aby model uczył się na jej podstawie. Najlepsza dokładność, wymaga oznaczonych danych.
+- **Dynamiczna** — kwantyzuje wagi do INT8, aktywacje są obliczane w FP. Łatwa, niewielkie przyspieszenie.
+- **Statyczna (posttreningowa)** — kwantyzuje wagi + kalibruje zakresy aktywacji na małym zbiorze kalibracyjnym. Znacznie szybsza niż dynamiczna.
+- **Trening świadomy kwantyzacji (QAT)** — symuluje kwantyzację podczas treningu, dzięki czemu model uczy się ją omijać. Najlepsza dokładność, wymaga oznaczonych danych.
 
-W przypadku wzroku kwantyzacja statyczna po treningu daje 95% korzyści przy 5% wysiłku. Używaj QAT tylko wtedy, gdy utrata dokładności spowodowana PTQ jest nie do przyjęcia.
+W przypadku wizji statyczna kwantyzacja posttreningowa daje 95% korzyści za 5% nakładu pracy. Używaj QAT tylko wtedy, gdy spadek dokładności wynikający z PTQ jest niedopuszczalny.
 
 ### Przycinanie i destylacja
 
-- **Przycinanie** — usuń nieistotne wagi (w oparciu o wielkość) lub kanały (ustrukturyzowane). Działa dobrze w modelach przeparametryzowanych; mniej przydatne w już kompaktowych architekturach.
-- **Destylacja** — naucz małego ucznia naśladować logity dużego nauczyciela. Często odzyskuje większość dokładności utraconej w wyniku zmniejszenia modelu. Standard dla modeli krawędzi produkcyjnej.
+- **Przycinanie (pruning)** — usuwa nieistotne wagi (na podstawie wartości) lub kanały (strukturalnie). Działa dobrze na modelach z nadmiarem parametrów; mniej przydatne w już zwartych architekturach.
+- **Destylacja** — trenuje mały model uczeń (student), by imitował logity dużego modelu nauczyciela (teacher). Często odzyskuje większość dokładności utraconej przy zmniejszeniu modelu. Standard dla produkcyjnych modeli edge.
 
-### Czasy działania wnioskowania
+### Środowiska wykonawcze wnioskowania
 
-- **PyTorch chętny** — powolny, nie do wdrożenia. Używaj wyłącznie do celów programistycznych.
-- **TorchScript** — dziedzictwo. Zastąpiony przez `torch.compile` i eksport ONNX.
-- **ONNX Runtime** — neutralny czas działania. CPU, CUDA, CoreML, TensorRT, OpenVINO mają dostawców ONNX. Zacznij tutaj.
-- **TensorRT** — kompilator NVIDIA. Najlepsze opóźnienia na procesorach graficznych NVIDIA (stacja robocza i Jetson). Integruje się z ONNX Runtime lub jest samodzielny.
-- **Core ML** — środowisko wykonawcze Apple dla systemu iOS/macOS. Potrzebuje `.mlmodel` lub `.mlpackage`.
-- **TFlite** — środowisko wykonawcze Google dla Androida/ARM. Potrzebuje `.tflite`.
-- **OpenVINO** — środowisko wykonawcze Intela dla procesora/VPU. Potrzebuje `.xml` + `.bin`.
+- **PyTorch eager** — wolne, nie do wdrożenia. Używaj tylko podczas rozwoju.
+- **TorchScript** — przestarzałe. Zastąpione przez `torch.compile` i eksport do ONNX.
+- **ONNX Runtime** — neutralne środowisko wykonawcze. CPU, CUDA, CoreML, TensorRT, OpenVINO — wszystkie mają dostawców (providers) ONNX. Zacznij tutaj.
+- **TensorRT** — kompilator NVIDII. Najlepsze opóźnienie na GPU NVIDIA (stacje robocze i Jetson). Integruje się z ONNX Runtime lub działa samodzielnie.
+- **Core ML** — środowisko wykonawcze Apple dla iOS/macOS. Wymaga `.mlmodel` lub `.mlpackage`.
+- **TFLite** — środowisko wykonawcze Google dla Android/ARM. Wymaga `.tflite`.
+- **OpenVINO** — środowisko wykonawcze Intela dla CPU/VPU. Wymaga `.xml` + `.bin`.
 
-W praktyce: eksportuj PyTorch -> ONNX -> wybierz środowisko wykonawcze dla celu. ONNX to język francuski.
+W praktyce: eksportuj PyTorch -> ONNX -> wybierz środowisko wykonawcze dla docelowego urządzenia. ONNX jest lingua franca.
 
-### Selektor architektury brzegowej
+### Selektor architektury edge
 
-| Budżet | Modelka | Dlaczego |
-|------------|-------|-----|
-| < Parametry 3M | MobileNetV3 — mały | Kompiluje się wszędzie, dobry poziom bazowy |
+| Budżet | Model | Dlaczego |
+|--------|-------|-----|
+| < 3M parametrów | MobileNetV3-Small | Kompiluje się wszędzie, dobry punkt odniesienia |
 | 3-10M | EfficientNet-Lite-B0 | Najlepsza dokładność na parametr w TFLite |
-| 10-20M | ConvNeXt-Tiny | Najlepsza dokładność na parametr, przyjazna dla procesora |
-| 20-30M | MobileViT-S lub EfficientViT | Transformator z dokładnością ImageNet |
-| 30-80M | Swin-V2-Mały | Jeśli stos obsługuje uwagę okna |
+| 10-20M | ConvNeXt-Tiny | Najlepsza dokładność na parametr, przyjazny dla CPU |
+| 20-30M | MobileViT-S lub EfficientViT | Transformer z dokładnością na poziomie ImageNet |
+| 30-80M | Swin-V2-Tiny | Jeśli stos wsparcia obsługuje window attention |
 
-Skwantyzuj to wszystko do INT8, chyba że masz konkretny powód, aby tego nie robić.
+Kwantyzuj wszystkie te modele do INT8, o ile nie masz konkretnego powodu, by tego nie robić.
 
 ## Zbuduj to
 
-### Krok 1: Prawidłowo zmierz opóźnienie
+### Krok 1: Poprawne mierzenie opóźnienia
 
 ```python
 import time
@@ -136,9 +136,9 @@ def measure_latency(model, input_shape, device="cpu", warmup=10, iters=50):
     }
 ```
 
-Rozgrzej się, zsynchronizuj, użyj `time.perf_counter()`. Podawaj percentyle, a nie tylko średnie.
+Rozgrzej, synchronizuj, używaj `time.perf_counter()`. Raportuj percentyle, nie tylko średnią.
 
-### Krok 2: Liczenie parametrów i FLOP
+### Krok 2: Liczba parametrów i FLOPs
 
 ```python
 def parameter_count(model):
@@ -171,9 +171,9 @@ def flops_estimate(model, input_shape):
     return total
 ```
 
-W przypadku prawdziwych projektów użyj `fvcore.nn.FlopCountAnalysis` lub `ptflops`; poprawnie obsługują każdy typ modułu.
+Do prawdziwych projektów użyj `fvcore.nn.FlopCountAnalysis` lub `ptflops`; obsługują poprawnie każdy typ modułu.
 
-### Krok 3: Kwantyzacja statyczna po treningu
+### Krok 3: Statyczna kwantyzacja posttreningowa
 
 ```python
 def quantise_ptq(model, calibration_loader, backend="x86"):
@@ -188,9 +188,9 @@ def quantise_ptq(model, calibration_loader, backend="x86"):
     return model
 ```
 
-Trzy kroki: konfiguracja, przygotowanie (wstawienie obserwatorów), kalibracja z rzeczywistymi danymi, konwersja (zabezpieczenie + kwantyzacja). Wymaga połączenia modelu (`Conv -> BN -> ReLU` -> `ConvBnReLU`), który obsługuje `torch.ao.quantization.fuse_modules`.
+Trzy kroki: konfiguracja, przygotowanie (wstawienie obserwatorów), kalibracja na rzeczywistych danych, konwersja (fuzja + kwantyzacja). Wymaga, by model był wcześniej zespolony (`Conv -> BN -> ReLU` -> `ConvBnReLU`), co obsługuje `torch.ao.quantization.fuse_modules`.
 
-### Krok 4: Eksportuj do ONNX
+### Krok 4: Eksport do ONNX
 
 ```python
 def export_onnx(model, sample_input, path="model.onnx"):
@@ -207,9 +207,9 @@ def export_onnx(model, sample_input, path="model.onnx"):
     return path
 ```
 
-`opset_version=17` to bezpieczna wartość domyślna w 2026 r. `dynamic_axes` umożliwia uruchomienie modelu ONNX z dowolną wielkością partii.
+`opset_version=17` jest bezpiecznym domyślnym wyborem w 2026 roku. `dynamic_axes` pozwala uruchomić model ONNX z dowolnym rozmiarem batcha.
 
-### Krok 5: Test porównawczy i porównanie systemów
+### Krok 5: Benchmark i porównanie reżimów
 
 ```python
 import torch.nn as nn
@@ -224,47 +224,47 @@ def compare_regimes():
           f"p50={lat_fp32['p50_ms']:.2f}ms  p95={lat_fp32['p95_ms']:.2f}ms")
 ```
 
-Uruchom tę samą funkcję dla `resnet50`, `efficientnet_v2_s` i `convnext_tiny`, aby uzyskać tabelę porównawczą potrzebną do podjęcia decyzji o wdrożeniu.
+Uruchom tę samą funkcję dla `resnet50`, `efficientnet_v2_s` i `convnext_tiny`, i otrzymasz tabelę porównawczą potrzebną do decyzji o wdrożeniu.
 
-## Użyj tego
+## Zastosowanie
 
-Stosy produkcyjne zbiegają się na jednej z trzech ścieżek:
+Stosy produkcyjne zbiegają się do jednej z trzech ścieżek:
 
-- **Web/bezserwerowy**: PyTorch -> ONNX -> ONNX Runtime (dostawca procesora lub CUDA). Najprostszy, wystarczający dla większości.
-- **NVIDIA Edge (Jetson, serwer GPU)**: PyTorch -> ONNX -> TensorRT. Najlepsze opóźnienie, największy wysiłek inżynieryjny.
-- **Mobilne**: PyTorch -> ONNX -> Core ML (iOS) lub TFLite (Android). Kwantyfikacja przed eksportem.
+- **Web / serverless**: PyTorch -> ONNX -> ONNX Runtime (provider CPU lub CUDA). Najprostsze, wystarczające w większości przypadków.
+- **Edge NVIDIA (Jetson, serwer GPU)**: PyTorch -> ONNX -> TensorRT. Najlepsze opóźnienie, największy wysiłek inżynieryjny.
+- **Mobile**: PyTorch -> ONNX -> Core ML (iOS) lub TFLite (Android). Kwantyzuj przed eksportem.
 
-Do pomiarów `torch-tb-profiler`, `nvprof` / `nsys` i instrumenty w systemie macOS udostępniają podziały warstwa po warstwie. `benchmark_app` (OpenVINO) i `trtexec` (TensorRT) dają samodzielne numery CLI.
+Do pomiarów `torch-tb-profiler`, `nvprof` / `nsys` oraz Instruments na macOS dają rozbicie warstwa po warstwie. `benchmark_app` (OpenVINO) i `trtexec` (TensorRT) dają samodzielne wyniki z linii komend.
 
-## Wyślij to
+## Wynik końcowy
 
-Ta lekcja daje:
+Ta lekcja produkuje:
 
-- `outputs/prompt-edge-deployment-planner.md` — monit, który wybiera szkielet, strategię kwantyzacji i czas działania, biorąc pod uwagę urządzenie docelowe i umowę SLA dotyczącą opóźnienia.
-- `outputs/skill-latency-profiler.md` — umiejętność polegająca na pisaniu kompletnego skryptu do analizy porównawczej opóźnień z rozgrzewką, synchronizacją, percentylami i śledzeniem pamięci.
+- `outputs/prompt-edge-deployment-planner.md` — prompt, który wybiera backbone, strategię kwantyzacji i środowisko wykonawcze na podstawie docelowego urządzenia i SLA opóźnienia.
+- `outputs/skill-latency-profiler.md` — skill, który pisze kompletny skrypt do benchmarkowania opóźnienia z rozgrzewką, synchronizacją, percentylami i śledzeniem pamięci.
 
 ## Ćwiczenia
 
-1. **(Łatwe)** Zmierz opóźnienie p50 dla `resnet18`, `mobilenet_v3_small`, `efficientnet_v2_s` i `convnext_tiny` przy rozdzielczości 224x224 na procesorze. Zgłoś tabelę i określ, która architektura ma najlepszą dokładność na ms.
-2. **(Średni)** Zastosuj kwantyzację statyczną po treningu do `mobilenet_v3_small`. Zgłoś opóźnienie i utratę dokładności FP32 w porównaniu z INT8 w wstrzymanym podzbiorze CIFAR-10 lub podobnym.
-3. **(Trudny)** Eksportuj `convnext_tiny` do ONNX, uruchom go przez `onnxruntime` z `CPUExecutionProvider` i porównaj opóźnienie z linią bazową chętniej PyTorch. Zidentyfikuj pierwszą warstwę, w której środowisko wykonawcze ONNX jest szybsze i wyjaśnij dlaczego.
+1. **(Łatwe)** Zmierz opóźnienie p50 dla `resnet18`, `mobilenet_v3_small`, `efficientnet_v2_s` i `convnext_tiny` przy 224x224 na CPU. Zaraportuj tabelę i zidentyfikuj, która architektura ma najlepszą dokładność na milisekundę.
+2. **(Średnie)** Zastosuj statyczną kwantyzację posttreningową do `mobilenet_v3_small`. Zaraportuj opóźnienie FP32 vs INT8 oraz spadek dokładności na wydzielonym podzbiorze CIFAR-10 lub podobnego zbioru.
+3. **(Trudne)** Wyeksportuj `convnext_tiny` do ONNX, uruchom go przez `onnxruntime` z `CPUExecutionProvider` i porównaj opóźnienie z bazowym wynikiem PyTorch eager. Zidentyfikuj pierwszą warstwę, w której ONNX Runtime jest szybszy, i wyjaśnij, dlaczego.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co mówią ludzie | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Opóźnienie | „Jak szybko” | Czas od wejścia do wyjścia; percentyle p50/p95/p99, nie średnia |
-| FLOPy | „Rozmiar modelu” | Operacje zmiennoprzecinkowe na podanie w przód; przybliżony przybliżony koszt obliczeń |
-| Kwantyzacja INT8 | „8-bitowy” | Zamień wagi/aktywacje FP32 na 8-bitowe liczby całkowite; ~4x mniejszy, 2-4x szybszy |
-| PTQ | „Kwantyzacja potreningowa” | Kwantyzuj przeszkolony model bez ponownego uczenia; łatwe, zwykle wystarczające |
-| QAT | „Szkolenie świadome kwantyzacji” | Symuluj kwantyzację podczas treningu; najlepsza dokładność, wymaga oznaczonych danych |
-| ONNNX | „Neutralny format” | Format wymiany modeli obsługiwany przez każde środowisko wykonawcze wnioskowania głównego nurtu |
-| TensorRT | „Kompilator NVIDIA” | Kompiluje ONNX w zoptymalizowany silnik dla procesorów graficznych NVIDIA |
-| Destylacja | „Nauczyciel -> uczeń” | Trenuj mały model, aby naśladował logity dużego modelu; odzyskuje większość utraconej dokładności |
+| Latency (opóźnienie) | "Jak szybko" | Czas od wejścia do wyjścia; percentyle p50/p95/p99, nie średnia |
+| FLOPs | "Rozmiar modelu" | Operacje zmiennoprzecinkowe na przebieg w przód; przybliżony wskaźnik kosztu obliczeniowego |
+| Kwantyzacja INT8 | "8-bitowy" | Zastąpienie wag/aktywacji FP32 8-bitowymi liczbami całkowitymi; ~4x mniejszy, 2-4x szybszy |
+| PTQ | "Kwantyzacja posttreningowa" | Kwantyzacja wytrenowanego modelu bez ponownego treningu; łatwe, zwykle wystarczające |
+| QAT | "Trening świadomy kwantyzacji" | Symulacja kwantyzacji podczas treningu; najlepsza dokładność, wymaga oznaczonych danych |
+| ONNX | "Neutralny format" | Format wymiany modeli wspierany przez każde popularne środowisko wykonawcze wnioskowania |
+| TensorRT | "Kompilator NVIDII" | Kompiluje ONNX do zoptymalizowanego silnika dla GPU NVIDIA |
+| Destylacja | "Nauczyciel -> uczeń" | Trening małego modelu, by imitował logity dużego modelu; odzyskuje większość utraconej dokładności |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-- [EfficientNet (Tan & Le, 2019)](https://arxiv.org/abs/1905.11946) — skalowanie złożone dla wydajnych architektur
-- [MobileNetV3 (Howard et al., 2019)](https://arxiv.org/abs/1905.02244) — architektura przede wszystkim mobilna z h-swish i wyciskaniem-excite
-- [Praktyczny przewodnik po optymalizacji TensorRT (NVIDIA)](https://developer.nvidia.com/blog/accelerating-model-inference-with-tensorrt-tips-and-best-practices-for-pytorch-users/) — jak faktycznie uzyskać liczby przepustowości w artykule
-- [Dokumentacja ONNX Runtime](https://onnxruntime.ai/docs/) — kwantyzacja, optymalizacja wykresów, wybór dostawcy
+- [EfficientNet (Tan & Le, 2019)](https://arxiv.org/abs/1905.11946) — skalowanie złożone dla efektywnych architektur
+- [MobileNetV3 (Howard et al., 2019)](https://arxiv.org/abs/1905.02244) — architektura mobile-first z h-swish i squeeze-excite
+- [A Practical Guide to TensorRT Optimization (NVIDIA)](https://developer.nvidia.com/blog/accelerating-model-inference-with-tensorrt-tips-and-best-practices-for-pytorch-users/) — jak faktycznie uzyskać wyniki przepustowości z publikacji
+- [ONNX Runtime docs](https://onnxruntime.ai/docs/) — kwantyzacja, optymalizacja grafu, wybór providera

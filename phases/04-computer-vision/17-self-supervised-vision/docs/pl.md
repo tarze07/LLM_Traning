@@ -1,26 +1,26 @@
-# Wizja samonadzorowana — SimCLR, DINO, MAE
+# Self-Supervised Vision — SimCLR, DINO, MAE
 
-> Etykiety stanowią wąskie gardło w nadzorowanej wizji. Samonadzorowane szkolenie wstępne usuwa je: naucz się cech wizualnych na 100 milionach nieoznakowanych obrazów i dopracuj 10 tys. oznaczonych obrazów.
+> Etykiety są wąskim gardłem widzenia komputerowego. Wstępne uczenie samonadzorowane je eliminuje: ucz się cech wizualnych na 100M nieoznakowanych obrazów, dostrajaj na 10k oznakowanych.
 
-**Typ:** Ucz się + Buduj
+**Typ:** Nauka + Budowanie
 **Języki:** Python
-**Wymagania wstępne:** Faza 4 Lekcja 04 (Klasyfikacja obrazu), Faza 4 Lekcja 14 (ViT)
+**Wymagania wstępne:** Faza 4 Lekcja 04 (Klasyfikacja obrazów), Faza 4 Lekcja 14 (ViT)
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Prześledź trzy główne rodziny samonadzorowane — kontrastową (SimCLR), nauczyciel-uczeń (DINO), rekonstrukcję maskowaną (MAE) — i określ, co optymalizuje każda z nich
-- Zaimplementuj od zera stratę InfoNCE i wyjaśnij, dlaczego partia 512 działa, ale partia 32 nie działa
-- Wyjaśnij, dlaczego współczynnik maskowania wynoszący 75% MAE nie jest arbitralny i czym różni się od współczynnika maskowania wynoszącego 15% BERT w przypadku tekstu
-- Użyj punktów kontrolnych DINOv2 lub MAE ImageNet do sondowania liniowego i pobierania zerowego
+- Przejść przez trzy główne rodziny metod samonadzorowanych — kontrastową (SimCLR), nauczyciel-uczeń (DINO), maskowaną rekonstrukcję (MAE) — i określić, co każda z nich optymalizuje
+- Zaimplementować funkcję straty InfoNCE od podstaw i wyjaśnić, dlaczego batch o rozmiarze 512 działa, a batch o rozmiarze 32 zawodzi
+- Wyjaśnić, dlaczego współczynnik maskowania 75% w MAE nie jest przypadkowy i czym różni się od 15% stosowanych przez BERT dla tekstu
+- Wykorzystać checkpointy DINOv2 lub MAE wytrenowane na ImageNet do liniowego sondowania (linear probing) i wyszukiwania zero-shot
 
 ## Problem
 
-W sieci Supervised ImageNet znajduje się 1,3 miliona oznaczonych obrazów, których koszt opisywania szacuje się na 10 milionów dolarów. Zbiory danych medycznych i przemysłowych są mniejsze, a ich etykietowanie jest jeszcze droższe. Każdy zespół wizyjny zadaje sobie pytanie: czy możemy przeprowadzić wstępne szkolenie na tanich, nieoznakowanych danych — klatkach z YouTube, indeksowaniach sieci, nagraniach z kamer internetowych, przeglądach satelitarnych — a następnie dopracować je na małym, oznakowanym zestawie?
+Nadzorowany ImageNet zawiera 1,3M oznakowanych obrazów, których oznakowanie kosztowało szacunkowo 10M dolarów. Zbiory danych medycznych i przemysłowych są mniejsze i jeszcze droższe w etykietowaniu. Każdy zespół zajmujący się widzeniem komputerowym zadaje sobie pytanie: czy możemy przeprowadzić wstępne uczenie na tanich, nieoznakowanych danych — kadrach z YouTube, danych z crawlerów internetowych, nagraniach z kamer internetowych, zdjęciach satelitarnych — a następnie dostroić model na małym oznakowanym zbiorze?
 
-Odpowiedzią jest nauka samonadzorowana. Nowoczesny, samonadzorowany ViT przeszkolony w LAION lub JFT osiąga lub przewyższa nadzorowaną dokładność ImageNet po dokładnym dostrojeniu. Lepiej przenosi się również do dalszych zadań (wykrywanie, segmentacja, głębokość) niż nadzorowane szkolenie wstępne. DINOv2 (Meta, 2023) i MAE (Meta, 2022) to aktualne ustawienia domyślne produkcyjne dla przenośnych funkcji wizyjnych.
+Uczenie samonadzorowane jest odpowiedzią. Współczesny samonadzorowany ViT wytrenowany na LAION lub JFT osiąga lub przewyższa dokładność nadzorowanego ImageNet po dostrojeniu. Lepiej też transferuje się do zadań pochodnych (detekcja, segmentacja, głębia) niż wstępne uczenie nadzorowane. DINOv2 (Meta, 2023) i MAE (Meta, 2022) są obecnie domyślnymi rozwiązaniami produkcyjnymi dla transferowalnych cech wizualnych.
 
-Zmiana koncepcyjna polega na tym, że zadanie pretekstowe – czyli to, do czego model jest szkolony – nie musi być zadaniem dalszym. Ważne jest to, że zmusza model do nauczenia się przydatnych funkcji. Przewiduj kolor obrazów w skali szarości, obracaj obrazy i poproś modela o sklasyfikowanie obrotu, zamaskowanie fragmentów i ich rekonstrukcję — wszystko się sprawdziło. Trzy podejścia tej skali to uczenie się kontrastowe, destylacja nauczyciel-uczeń i rekonstrukcja zamaskowana.
+Koncepcyjna zmiana polega na tym, że zadanie pretekstowe — czyli to, do czego model jest trenowany — nie musi być zadaniem docelowym. Liczy się to, że wymusza na modelu uczenie się użytecznych cech. Przewidywanie kolorów obrazów w skali szarości, obracanie obrazów i proszenie modelu o klasyfikację obrotu, maskowanie fragmentów i ich rekonstrukcja — wszystko to działało. Trzy podejścia, które się skalują, to uczenie kontrastowe, dystylacja nauczyciel-uczeń i maskowana rekonstrukcja.
 
 ## Koncepcja
 
@@ -37,9 +37,9 @@ flowchart LR
     style C fill:#dcfce7,stroke:#16a34a
 ```
 
-### Kontrastywna nauka (SimCLR)
+### Uczenie kontrastowe (SimCLR)
 
-Zrób jedno zdjęcie, zastosuj dwa losowe ulepszenia, uzyskaj dwa widoki. Obydwa sygnały przesyłaj przez ten sam enkoder i głowicę projekcyjną. Zminimalizuj stratę, która mówi „te dwa osadzenia powinny być blisko siebie” i „to osadzenie powinno być daleko od osadzania pozostałych obrazów w partii”.
+Weź jeden obraz, zastosuj dwie losowe augmentacje, otrzymując dwa widoki. Przepuść oba przez ten sam enkoder oraz głowicę projekcyjną. Minimalizuj funkcję straty, która mówi "te dwa embeddingi powinny być bliskie sobie" oraz "ten embedding powinien być daleko od embeddingów wszystkich innych obrazów w batchu."
 
 ```
 Loss for positive pair (z_i, z_j) among 2N views per batch:
@@ -50,11 +50,11 @@ sim = cosine similarity
 tau = temperature (0.1 standard)
 ```
 
-To strata InfoNCE. Wymaga wielu negatywów na jeden pozytyw, więc wielkość partii ma znaczenie — SimCLR potrzebuje 512-8192. MoCo wprowadziło kolejkę dynamiki poprzednich partii, aby oddzielić ujemną liczbę od wielkości partii.
+To jest funkcja straty InfoNCE. Wymaga wielu negatywów na jeden pozytyw, więc rozmiar batcha ma znaczenie — SimCLR potrzebuje 512-8192. MoCo wprowadziło kolejkę momentum z poprzednich batchy, aby oddzielić liczbę negatywów od rozmiaru batcha.
 
 ### Nauczyciel-uczeń (DINO)
 
-Dwie sieci o tej samej architekturze: uczeń i nauczyciel. Nauczyciel jest wykładniczą średnią ruchomą (EMA) wag uczniów. Obydwa widzą powiększony widok obrazu. Efekty pracy ucznia są dostosowywane do wyników nauczyciela — nie ma żadnych wyraźnych negatywów.
+Dwie sieci o tej samej architekturze: uczeń i nauczyciel. Nauczyciel jest wykładniczą średnią ruchomą (EMA) wag ucznia. Obie sieci widzą zaugmentowane widoki obrazu. Wyjście ucznia jest trenowane tak, aby odpowiadało wyjściu nauczyciela — bez jawnych negatywów.
 
 ```
 loss = CE( student_output(view_1),  teacher_output(view_2) )
@@ -63,13 +63,13 @@ loss = CE( student_output(view_1),  teacher_output(view_2) )
 teacher_weights = m * teacher_weights + (1 - m) * student_weights   (m ≈ 0.996)
 ```
 
-Dlaczego nie zapada się, aby „przewidzieć stałą”: wyniki pracy nauczyciela są wyśrodkowane (odejmij średnią z wymiaru) i wyostrzone (podzielone przez małą temperaturę). Centrowanie zapobiega dominacji jednego wymiaru; wyostrzanie zapobiega zapadnięciu się wydruku do jednolitego kształtu.
+Dlaczego nie dochodzi do kolapsu do "przewiduj stałą wartość": wyjście nauczyciela jest centrowane (odejmowana jest średnia po wymiarach) i wyostrzane (dzielone przez małą temperaturę). Centrowanie zapobiega zdominowaniu przez jeden wymiar; wyostrzanie zapobiega kolapsowi wyjścia do rozkładu jednorodnego.
 
-DINO jest tym, co można skalować w DINOv2 na 142 milionach wyselekcjonowanych obrazów. Powstałe funkcje to bieżąca SOTA do wyszukiwania wizualnego z zerowym efektem i gęstego przewidywania.
+DINO jest podejściem, które DINOv2 skaluje do 142M wyselekcjonowanych obrazów. Otrzymane cechy są obecnie SOTA dla zero-shot wyszukiwania wizualnego i gęstej predykcji.
 
-### Rekonstrukcja zamaskowana (MAE)
+### Maskowana rekonstrukcja (MAE)
 
-Maskuj 75% poprawek sygnału wejściowego ViT. Przepuszczaj przez koder tylko widoczne 25%. Mały dekoder odbiera sygnał wyjściowy kodera oraz żetony maski w zamaskowanych pozycjach i jest szkolony w zakresie rekonstrukcji pikseli zamaskowanych obszarów.
+Zamaskuj 75% fragmentów (patchy) wejścia ViT. Przepuść przez enkoder tylko widoczne 25%. Mały dekoder otrzymuje wyjście enkodera plus tokeny maskujące w zamaskowanych pozycjach i jest trenowany do rekonstrukcji pikseli zamaskowanych fragmentów.
 
 ```
 Encoder:  visible 25% of patches -> features
@@ -77,37 +77,37 @@ Decoder:  features + mask tokens at masked positions -> reconstructed pixels
 Loss:     MSE between reconstructed and original pixels on masked patches only
 ```
 
-Kluczowe wybory projektowe, które sprawiają, że MAE działa:
+Kluczowe decyzje projektowe, które sprawiają, że MAE działa:
 
-- **Stosunek maski 75%** — wysoki. Zmusza koder do uczenia się cech semantycznych; rekonstrukcja 25% byłaby niemal trywialna (sąsiadujące piksele są tak skorelowane, że CNN mogłaby to zrobić).
-- **Asymetryczny koder/dekoder** — duży koder ViT widzi tylko widoczne plamy; mały dekoder (8-warstwowy, 512-dim) obsługuje rekonstrukcję. 3x szybsze przygotowanie do treningu niż naiwny BEiT.
-- **Cel rekonstrukcji przestrzeni pikseli** — prostszy niż stokenizowany cel BEiT i działa lepiej na ViT.
+- **Współczynnik maskowania 75%** — wysoki. Wymusza na enkoderze uczenie się cech semantycznych; rekonstrukcja 25% byłaby prawie trywialna (sąsiadujące piksele są tak silnie skorelowane, że CNN poradziłby sobie z tym bez problemu).
+- **Asymetryczny enkoder/dekoder** — duży enkoder ViT widzi tylko widoczne fragmenty; mały dekoder (8 warstw, wymiar 512) zajmuje się rekonstrukcją. 3 razy szybsze wstępne uczenie niż naiwny BEiT.
+- **Cel rekonstrukcji w przestrzeni pikseli** — prostszy niż tokenizowany cel BEiT i działa lepiej na ViT.
 
-Po wstępnym szkoleniu wyrzuć dekoder. Koder to ekstraktor cech.
+Po wstępnym uczeniu dekoder jest odrzucany. Enkoder jest ekstraktorem cech.
 
 ### Dlaczego 75%, a nie 15%
 
-BERT maskuje 15% tokenów. MAE maskuje 75%. Różnica polega na gęstości informacji.
+BERT maskuje 15% tokenów. MAE maskuje 75%. Różnica wynika z gęstości informacji.
 
-- Język naturalny ma wysoką entropię na token. Przewidywanie 15% tokenów jest nadal trudne, ponieważ każda zamaskowana pozycja ma wiele prawdopodobnych uzupełnień.
-- Plamy obrazu mają niską entropię — niezamaskowane sąsiedztwo często określa niemal dokładnie piksele zamaskowanej plamy. Aby przewidywanie wymagało zrozumienia semantycznego, musisz agresywnie się maskować.
+- Język naturalny ma wysoką entropię na token. Przewidywanie 15% tokenów jest wciąż trudne, ponieważ każda zamaskowana pozycja ma wiele możliwych dopełnień.
+- Fragmenty obrazów mają niską entropię — niezamaskowane sąsiedztwo często determinuje piksele zamaskowanego fragmentu z dużą precyzją. Aby przewidywanie wymagało zrozumienia semantycznego, trzeba maskować agresywnie.
 
-75% to na tyle dużo, że prosta ekstrapolacja przestrzenna nie jest w stanie rozwiązać zadania; koder musi reprezentować zawartość obrazu.
+75% jest wystarczająco wysokie, aby prosta ekstrapolacja przestrzenna nie mogła rozwiązać zadania; enkoder musi reprezentować treść obrazu.
 
-### Ocena sondy liniowej
+### Ewaluacja przez liniowy sondaż (linear probe)
 
-Po samonadzorowanym szkoleniu wstępnym standardowa ocena to **sonda liniowa**: zamroź koder, wytrenuj pojedynczy klasyfikator liniowy na etykietach ImageNet. Raportuje najwyższą dokładność.
+Po wstępnym uczeniu samonadzorowanym standardową ewaluacją jest **liniowy sondaż (linear probe)**: zamroź enkoder, wytrenuj jeden liniowy klasyfikator na jego wyjściu na etykietach ImageNet. Raportowana jest dokładność top-1.
 
 - SimCLR ResNet-50: ~71% (2020)
 - DINO ViT-S/16: ~77% (2021)
 - MAE ViT-L/16: ~76% (2022)
 - DINOv2 ViT-g/14: ~86% (2023)
 
-Sonda liniowa jest czystą miarą jakości cechy; dostrajanie zazwyczaj dodaje 2-5 punktów, ale także miesza efekt przekwalifikowania głowy.
+Liniowy sondaż jest czystą miarą jakości cech; dostrajanie (fine-tuning) zwykle dodaje 2-5 punktów, ale miesza się w nim również efekt ponownego trenowania głowicy.
 
 ## Zbuduj to
 
-### Krok 1: Potok powiększania w dwóch widokach
+### Krok 1: Pipeline augmentacji dwuwidokowej
 
 ```python
 import torch
@@ -120,6 +120,7 @@ two_view_train = lambda: T.Compose([
     T.RandomGrayscale(p=0.2),
     T.ToTensor(),
 ])
+
 
 class TwoViewDataset(torch.utils.data.Dataset):
     def __init__(self, base):
@@ -136,9 +137,9 @@ class TwoViewDataset(torch.utils.data.Dataset):
         return v1, v2
 ```
 
-Każdy __getitem__ zwraca dwa rozszerzone widoki tego samego obrazu; etykiety nie są potrzebne.
+Każde wywołanie __getitem__ zwraca dwa zaugmentowane widoki tego samego obrazu; etykiety nie są potrzebne.
 
-### Krok 2: Utrata InfoNCE
+### Krok 2: Funkcja straty InfoNCE
 
 ```python
 import torch.nn.functional as F
@@ -158,9 +159,9 @@ def info_nce(z1, z2, tau=0.1):
     return F.cross_entropy(sim, targets)
 ```
 
-L2 — normalizuj osadzanie przed wywołaniem. `tau=0.1` jest wartością domyślną SimCLR; niższa powoduje, że strata jest ostrzejsza i wymaga większej liczby negatywów.
+Znormalizuj embeddingi za pomocą L2 przed wywołaniem. `tau=0.1` to domyślna wartość w SimCLR; niższa wartość wyostrza funkcję straty i wymaga większej liczby negatywów.
 
-### Krok 3: Kontrola poprawności InfoNCE
+### Krok 3: Test poprawności InfoNCE
 
 ```python
 z1 = F.normalize(torch.randn(16, 32), dim=-1)
@@ -172,7 +173,7 @@ print(f"InfoNCE with identical pairs:  {loss_same:.3f}")
 print(f"InfoNCE with random pairs:     {loss_random:.3f}")
 ```
 
-Identyczne pary powinny dawać niskie straty (bliskie 0 dla dużej partii i niskiej temperatury). Losowe pary powinny dać log(2N-1) = ~log(31) = ~3,4 w przypadku partii 16 par.
+Identyczne pary powinny dawać niską stratę (bliską 0 dla dużego batcha i niskiej temperatury). Losowe pary powinny dawać log(2N-1) = ~log(31) = ~3.4 dla batcha o rozmiarze 16 par.
 
 ### Krok 4: Maskowanie w stylu MAE
 
@@ -185,17 +186,18 @@ def random_mask_indices(num_patches, mask_ratio=0.75, seed=0):
     masked = perm[n_keep:]
     return visible.sort().values, masked.sort().values
 
+
 num_patches = 196
 visible, masked = random_mask_indices(num_patches, mask_ratio=0.75)
 print(f"visible: {len(visible)} / {num_patches}")
 print(f"masked:  {len(masked)} / {num_patches}")
 ```
 
-Proste, szybkie i deterministyczne dla danego materiału siewnego. Prawdziwe implementacje MAE grupują to i zachowują maski dla poszczególnych próbek.
+Proste, szybkie i deterministyczne dla danego seeda. Rzeczywiste implementacje MAE wykonują to wsadowo i przechowują maski dla każdej próbki.
 
-## Użyj tego
+## Wykorzystaj to
 
-DINOv2 to standard produkcyjny w 2026 roku:
+DINOv2 jest standardem produkcyjnym w 2026 roku:
 
 ```python
 import torch
@@ -212,39 +214,39 @@ with torch.no_grad():
     embedding = outputs.last_hidden_state[:, 0]  # CLS token
 ```
 
-Powstałe w ten sposób osadzanie w rozdzielczości 768 przyćmień stanowi podstawę współczesnego wyszukiwania obrazów, gęstej korespondencji i potoków przesyłu zerowego strzału. Dostrajanie dalszych zadań rzadko wymaga czegoś więcej niż głowicy liniowej.
+Wynikowy 768-wymiarowy embedding jest fundamentem nowoczesnych pipeline'ów wyszukiwania obrazów, gęstego dopasowywania (dense correspondence) i transferu zero-shot. Dostrojenie do zadania docelowego rzadko wymaga więcej niż liniowej głowicy.
 
-W przypadku osadzania obrazu i tekstu odpowiednikiem jest SigLIP lub OpenCLIP; w celu dostrojenia w stylu MAE repozytorium `timm` dostarcza każdy punkt kontrolny MAE.
+W przypadku embeddingów obraz-tekst odpowiednikiem jest SigLIP lub OpenCLIP; do dostrajania w stylu MAE repozytorium `timm` udostępnia każdy checkpoint MAE.
 
-## Wyślij to
+## Wdroż to
 
-Ta lekcja daje:
+Ta lekcja tworzy:
 
-- `outputs/prompt-ssl-pretraining-picker.md` — zachęta, która wybiera SimCLR / MAE / DINOv2, biorąc pod uwagę rozmiar zbioru danych, obliczenia i dalsze zadanie.
-- `outputs/skill-linear-probe-runner.md` — umiejętność zapisywania oceny sondy liniowej dla dowolnego zamrożonego kodera + oznaczonego zbioru danych.
+- `outputs/prompt-ssl-pretraining-picker.md` — prompt, który wybiera SimCLR / MAE / DINOv2 na podstawie rozmiaru zbioru danych, dostępnej mocy obliczeniowej i zadania docelowego.
+- `outputs/skill-linear-probe-runner.md` — skill, który pisze ewaluację liniowego sondażu dla każdego zamrożonego enkodera + oznakowanego zbioru danych.
 
 ## Ćwiczenia
 
-1. **(Łatwe)** Sprawdź, czy strata InfoNCE spada, gdy obniżasz temperaturę w przypadku dobrze wyrównanych osadzania i rośnie, gdy obniżasz temperaturę w przypadku przypadkowych osadów. Utwórz wykres `tau in [0.05, 0.1, 0.2, 0.5]` w funkcji straty.
-2. **(Średni)** Zastosuj bufor środkowy w stylu DINO. Pokaż, że bez centrowania student w ciągu kilku epok zapada się do wektora stałego.
-3. **(Trudny)** Trenuj MAE na CIFAR-100, używając TinyUNet z Lekcji 10 jako szkieletu. Podaj dokładność sondy liniowej w 10, 50 i 200 epokach. Pokaż, że wstępnie wyszkolona sonda liniowa MAE pokonuje nadzorowaną od podstaw sondę liniową w tym samym podzbiorze 1000 obrazów.
+1. **(Łatwe)** Zweryfikuj, że strata InfoNCE spada, gdy zmniejszasz temperaturę dla dobrze wyrównanych embeddingów, a rośnie, gdy zmniejszasz temperaturę dla losowych embeddingów. Wygeneruj wykres `tau in [0.05, 0.1, 0.2, 0.5]` vs strata.
+2. **(Średnie)** Zaimplementuj bufor centrujący w stylu DINO. Pokaż, że bez centrowania uczeń kolapsuje do stałego wektora w ciągu kilku epok.
+3. **(Trudne)** Wytrenuj MAE na CIFAR-100, używając TinyUNet z Lekcji 10 jako backbone'u. Zaraportuj dokładność liniowego sondażu po 10, 50 i 200 epokach. Pokaż, że liniowy sondaż na enkoderze wstępnie wytrenowanym za pomocą MAE przewyższa liniowy sondaż wytrenowany od zera w sposób nadzorowany na tym samym podzbiorze 1000 obrazów.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Samonadzorowany | „Bez etykiet” | Zadanie pretekstowe, które tworzy przydatne reprezentacje z nieoznakowanych danych |
-| Zadanie pretekstowe | „Fałszywe zadanie” | Cel używany podczas SSL (rekonstrukcja poprawek, dopasowywanie widoków); odrzucony po treningu wstępnym |
-| Sonda liniowa | „Zamrożony enkoder + głowica liniowa” | Standardowa ocena SSL: trenuj tylko klasyfikator liniowy na podstawie zamrożonych funkcji |
-| InformacjeNCE | „Strata kontrastowa” | softmax na podobieństwach cosinus; klasa docelowa jest parą dodatnią, wszystkie pozostałe są klasą ujemną |
-| Nauczyciel EMA | „Nauczyciel średniej ruchomej” | Nauczyciel, którego wagi są wykładniczą średnią ruchomą ucznia; używany przez BYOL, MoCo, DINO |
-| Stosunek maski | „% ukrytych poprawek” | Część plam zamaskowanych podczas MAE; 75% na obraz, 15% na tekst |
-| Upadek reprezentacji | „Stała moc wyjściowa” | Awaria SSL, gdy koder wysyła stały wektor dla wszystkich wejść; zapobiegane przez centrowanie, wyostrzanie lub negatywy |
-| DINOv2 | „Produkcyjny szkielet SSL” | Samonadzorowany ViT Meta 2023; najsilniejsze cechy obrazu ogólnego przeznaczenia w 2026 r. |
+| Self-supervised | "Bez etykiet" | Zadanie pretekstowe, które generuje użyteczne reprezentacje z nieoznakowanych danych |
+| Pretext task | "Fałszywe zadanie" | Cel używany podczas SSL (rekonstrukcja fragmentów, dopasowywanie widoków); odrzucany po wstępnym uczeniu |
+| Linear probe | "Zamrożony enkoder + liniowa głowica" | Standardowa ewaluacja SSL: trenuj tylko liniowy klasyfikator na zamrożonych cechach |
+| InfoNCE | "Strata kontrastowa" | softmax po podobieństwach kosinusowych; pozytywna para jest klasą docelową, wszystkie inne są negatywami |
+| EMA teacher | "Nauczyciel ze średnią ruchomą" | Nauczyciel, którego wagi są wykładniczą średnią ruchomą wag ucznia; używany przez BYOL, MoCo, DINO |
+| Mask ratio | "% zamaskowanych fragmentów" | Część fragmentów zamaskowana podczas MAE; 75% dla obrazów, 15% dla tekstu |
+| Representation collapse | "Stałe wyjście" | Awaria SSL, w której enkoder generuje stały wektor dla wszystkich wejść; zapobiega się temu centrowaniem, wyostrzaniem lub negatywami |
+| DINOv2 | "Produkcyjny backbone SSL" | Samonadzorowany ViT od Meta z 2023 roku; najsilniejsze ogólnego przeznaczenia cechy obrazów w 2026 roku |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-- [SimCLR (Chen et al., 2020)](https://arxiv.org/abs/2002.05709) — odniesienie do uczenia się kontrastowego
-- [DINO (Caron et al., 2021)](https://arxiv.org/abs/2104.14294) — nauczyciel-uczeń z pędem, centrowaniem, wyostrzaniem
-- [MAE (He et al., 2022)](https://arxiv.org/abs/2111.06377) — wstępne szkolenie zamaskowanego autoenkodera dla ViT
-- [DINOv2 (Oquab et al., 2023)](https://arxiv.org/abs/2304.07193) — skalowanie samonadzorowanego ViT do funkcji produkcyjnych
+- [SimCLR (Chen et al., 2020)](https://arxiv.org/abs/2002.05709) — referencja uczenia kontrastowego
+- [DINO (Caron et al., 2021)](https://arxiv.org/abs/2104.14294) — nauczyciel-uczeń z momentum, centrowaniem i wyostrzaniem
+- [MAE (He et al., 2022)](https://arxiv.org/abs/2111.06377) — wstępne uczenie maskowanego autoenkodera dla ViT
+- [DINOv2 (Oquab et al., 2023)](https://arxiv.org/abs/2304.07193) — skalowanie samonadzorowanego ViT do cech produkcyjnych
