@@ -1,42 +1,42 @@
-# Generowanie obrazu — modele dyfuzyjne
+# Generowanie obrazów — modele dyfuzyjne
 
-> Model dyfuzyjny uczy się odszumiać. Wytrenuj go, aby usuwał odrobinę szumu z zaszumionego obrazu, powtórz to tysiąc razy od tyłu, a otrzymasz generator obrazu.
+> Model dyfuzyjny uczy się odszumiania. Wytrenuj go, aby usuwał niewielką ilość szumu z zaszumionego obrazu, powtórz to wstecz tysiąc razy, i masz generator obrazów.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
 **Wymagania wstępne:** Faza 4 Lekcja 07 (U-Net), Faza 1 Lekcja 06 (Prawdopodobieństwo), Faza 3 Lekcja 06 (Optymalizatory)
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Wyprowadź proces szumowania w przód `x_0 -> x_1 -> ... -> x_T` i wyjaśnij, dlaczego forma zamknięta `q(x_t | x_0)` obowiązuje dla dowolnego t
-- Zaimplementuj cel szkoleniowy w stylu DDPM, który regresuje szum dodany na każdym kroku, oraz próbnik, który wraca od czystego szumu do obrazu
-- Zbuduj uwarunkowaną czasowo sieć U-Net (wystarczająco małą, aby trenować na procesorze), która przewiduje szum w dowolnym kroku czasowym
-- Wyjaśnij różnicę pomiędzy próbkowaniem DDPM i DDIM oraz kiedy każdy z nich jest odpowiedni (lekcja 23 omawia szczegółowo dopasowanie przepływu i skorygowany przepływ)
+- Wyprowadzić proces zaszumiania w przód `x_0 -> x_1 -> ... -> x_T` i wyjaśnić, dlaczego forma zamknięta `q(x_t | x_0)` zachodzi dla każdego t
+- Zaimplementować cel treningowy w stylu DDPM, który regresuje szum dodany w każdym kroku, oraz sampler, który wraca od czystego szumu do obrazu
+- Zbudować U-Net warunkowany czasem (wystarczająco mały, aby trenować na CPU), który przewiduje szum dla dowolnego kroku czasowego
+- Wyjaśnić różnicę między samplowaniem DDPM i DDIM oraz kiedy stosować każde z nich (lekcja 23 szczegółowo opisuje flow matching i rectified flow)
 
 ## Problem
 
-Sieci GAN generują jednorazowo: wejście szumu, wyjście obrazu, jedno przejście do przodu. Są szybkie i trudne w szkoleniu. Modele dyfuzji są generowane iteracyjnie: zacznij od czystego szumu, odszumiaj go małymi krokami, aż pojawi się obraz. Są powolne i łatwe w szkoleniu. Przez ostatnie pięć lat dominowała ta druga właściwość: każdy mały zespół może wytrenować model dyfuzji i uzyskać rozsądne próbki; Trening GAN to rzemiosło, którego uczysz się przez lata nieudanych biegów.
+GAN-y generują jednorazowo: szum na wejściu, obraz na wyjściu, jeden przebieg w przód. Są szybkie i trudne w treningu. Modele dyfuzyjne generują iteracyjnie: zaczynają od czystego szumu, odszumiają w małych krokach, obraz się wyłania. Są wolne i łatwe w treningu. W ciągu ostatnich pięciu lat ta druga właściwość okazała się dominująca: każdy mały zespół może wytrenować model dyfuzyjny i otrzymać rozsądne próbki; trening GAN-ów jest rzemiosłem, którego uczysz się przez lata nieudanych przebiegów.
 
-Poza stabilnością treningu, iteracyjna struktura dyfuzji odblokowuje wszystko, co robi współczesne generowanie obrazu: warunkowanie tekstu, malowanie, edycja obrazu, superrozdzielczość, kontrolowany styl. Każdy krok pętli próbkowania jest miejscem, w którym można wprowadzić nowe ograniczenie. Właśnie dlatego Stable Diffusion, Imagen, DALL-E 3, Midjourney i każdy kontrolowany model obrazu, którego będziesz używać, opierają się na dyfuzji.
+Poza stabilnością treningu, iteracyjna struktura dyfuzji jest tym, co odblokowuje wszystko, co robi dzisiejsze generowanie obrazów: warunkowanie tekstem, inpainting, edycję obrazów, super-rozdzielczość, kontrolowalny styl. Każdy krok pętli samplowania jest miejscem, w którym można wstrzyknąć nowe ograniczenie. To właśnie ten mechanizm powoduje, że Stable Diffusion, Imagen, DALL-E 3, Midjourney i każdy kontrolowalny model obrazu, z którego będziesz korzystać, są oparte na dyfuzji.
 
-Ta lekcja buduje minimalny DDPM: szum do przodu, odszumianie do tyłu, pętla treningowa. Następna lekcja (Stable Diffusion) łączy go z systemem produkcyjnym z VAE, koderem tekstu i wskazówkami bez klasyfikatorów.
+Ta lekcja buduje minimalny DDPM: zaszumianie w przód, odszumianie w tył, pętlę treningową. Następna lekcja (Stable Diffusion) podłącza go do systemu produkcyjnego z VAE, koderem tekstu i classifier-free guidance.
 
 ## Koncepcja
 
-### Proces do przodu
+### Proces w przód
 
-Zrób zdjęcie `x_0`. Dodaj niewielką ilość szumu Gaussa, aby uzyskać `x_1`. Dodaj jeszcze odrobinę, aby otrzymać `x_2`. Kontynuuj wykonywanie T kroków, aż `x_T` będzie prawie nie do odróżnienia od czystego szumu Gaussa.
+Weź obraz `x_0`. Dodaj niewielką ilość szumu gaussowskiego, aby otrzymać `x_1`. Dodaj jeszcze odrobinę, aby otrzymać `x_2`. Kontynuuj przez T kroków, aż `x_T` będzie praktycznie nieodróżnialne od czystego szumu gaussowskiego.
 
 ```
 q(x_t | x_{t-1}) = N(x_t; sqrt(1 - beta_t) * x_{t-1},  beta_t * I)
 ```
 
-`beta_t` to harmonogram małej wariancji, zazwyczaj liniowy od 0,0001 do 0,02 w T=1000 kroków. Każdy krok nieznacznie zmniejsza sygnał i wprowadza świeży szum.
+`beta_t` to harmonogram małych wariancji, zazwyczaj liniowy od 0.0001 do 0.02 na przestrzeni T=1000 kroków. Każdy krok lekko zmniejsza sygnał i wstrzykuje świeży szum.
 
 ### Skok w formie zamkniętej
 
-Dodawanie szumu krok po kroku to łańcuch Markowa, ale matematyka się sprawdza: możesz próbkować `x_t` bezpośrednio z `x_0` w jednym kroku.
+Dodawanie szumu krok po kroku to łańcuch Markowa, ale matematyka się "zwija": można wylosować `x_t` bezpośrednio z `x_0` w jednym kroku.
 
 ```
 Define alpha_t = 1 - beta_t
@@ -50,11 +50,11 @@ Equivalently:
   where epsilon ~ N(0, I)
 ```
 
-To pojedyncze równanie stanowi cały powód, dla którego dyfuzja jest praktyczna. Podczas szkolenia wybierasz losowo `t`, pobierasz próbkę `x_t` bezpośrednio z `x_0` i trenujesz w jednym kroku — nie jest wymagana symulacja pełnego łańcucha Markowa.
+To jedno równanie jest całym powodem, dla którego dyfuzja jest praktyczna. Podczas treningu wybierasz losowe `t`, samplujesz `x_t` bezpośrednio z `x_0` i trenujesz w jednym kroku — bez symulowania całego łańcucha Markowa.
 
-### Proces odwrotny
+### Proces w tył
 
-Proces przekazywania jest ustalony. Sieć neuronowa uczy się procesu odwrotnego `p(x_{t-1} | x_t)`. Modele dyfuzji nie przewidują bezpośrednio `x_{t-1}`; przewidują szum `epsilon` dodany w kroku t, a matematyka wyprowadza z niego `x_{t-1}`.
+Proces w przód jest ustalony. Proces w tył `p(x_{t-1} | x_t)` to to, czego uczy się sieć neuronowa. Modele dyfuzyjne nie przewidują `x_{t-1}` bezpośrednio; przewidują szum `epsilon` dodany w kroku t, a matematyka wyprowadza z niego `x_{t-1}`.
 
 ```mermaid
 flowchart LR
@@ -74,22 +74,22 @@ flowchart LR
     style X0S fill:#dbeafe,stroke:#2563eb
 ```
 
-### Strata w treningu
+### Funkcja straty treningowej
 
-Na każdym etapie szkolenia:
+Dla każdego kroku treningowego:
 
-1. Wypróbuj prawdziwy obraz `x_0`.
-2. Próbkuj krok czasowy `t` równomiernie z [1, T].
-3. Przykładowy szum `epsilon ~ N(0, I)`.
-4. Oblicz `x_t = sqrt(alpha_bar_t) * x_0 + sqrt(1 - alpha_bar_t) * epsilon`.
-5. Przewiduj `epsilon_theta(x_t, t)` za pomocą sieci.
-6. Zminimalizuj `|| epsilon - epsilon_theta(x_t, t) ||^2`.
+1. Wylosuj prawdziwy obraz `x_0`.
+2. Wylosuj krok czasowy `t` z rozkładu jednostajnego na [1, T].
+3. Wylosuj szum `epsilon ~ N(0, I)`.
+4. Wyznacz `x_t = sqrt(alpha_bar_t) * x_0 + sqrt(1 - alpha_bar_t) * epsilon`.
+5. Przewidź `epsilon_theta(x_t, t)` za pomocą sieci.
+6. Minimalizuj `|| epsilon - epsilon_theta(x_t, t) ||^2`.
 
-To jest to. Sieć neuronowa uczy się przewidywać hałas w dowolnym momencie. Strata to MSE. Nie ma gry kontradyktoryjnej, żadnego upadku, żadnej oscylacji.
+I to wszystko. Sieć neuronowa uczy się przewidywać szum w dowolnym kroku czasowym. Funkcja straty to MSE. Nie ma żadnej gry adwersarialnej, żadnego collapse'u, żadnych oscylacji.
 
-### Próbnik (DDPM)
+### Sampler (DDPM)
 
-Aby wygenerować: zacznij od `x_T ~ N(0, I)` i cofaj się krok po kroku.
+Aby generować: zacznij od `x_T ~ N(0, I)` i idź wstecz, krok po kroku.
 
 ```
 for t = T, T-1, ..., 1:
@@ -99,36 +99,37 @@ for t = T, T-1, ..., 1:
 return x_0
 ```
 
-Kluczem jest to, że chociaż odwrotny tryb warunkowy nie jest ogólnie znany w postaci zamkniętej, w przypadku tego konkretnego procesu Gaussa do przodu jest tak. Brzydko wyglądające współczynniki są tym, co daje reguła Bayesa.
+Kluczowe jest to, że choć rozkład warunkowy procesu odwrotnego nie jest znany w formie zamkniętej w ogólnym przypadku, dla tego konkretnego gaussowskiego procesu w przód — jest. Te koślawo wyglądające współczynniki to to, co daje reguła Bayesa.
 
-### Po co 1000 kroków
+### Dlaczego 1000 kroków
 
-Harmonogram szumów w przód jest wybierany tak, aby każdy krok dodał tyle szumu, że krok odwrotny był prawie gaussowski. Za mało kroków i krok odwrotny jest daleki od Gaussa, sieć nie może tego dobrze modelować. Zbyt wiele kroków i próbkowanie staje się kosztowne wraz ze zmniejszającym się wzmocnieniem. Domyślną wartością DDPM jest T=1000 z harmonogramem liniowym.
+Harmonogram szumu w przód jest wybrany tak, aby każdy krok dodawał akurat tyle szumu, że krok odwrotny jest prawie gaussowski. Za mało kroków — krok odwrotny jest daleki od gaussowskiego, sieć nie może go dobrze modelować. Za dużo kroków — samplowanie staje się kosztowne przy malejących zyskach. T=1000 z liniowym harmonogramem to wartość domyślna w DDPM.
 
-### DDIM: 20x szybsze próbkowanie
+### DDIM: 20x szybsze samplowanie
 
-Trening jest taki sam. Zmiany w próbkowaniu. DDIM (Song i in., 2020) definiuje deterministyczny proces odwrotny, który pomija etapy czasowe bez ponownego szkolenia. Próbkowanie w 50 krokach za pomocą DDIM daje jakość DDPM prawie 1000 kroków. Każdy system produkcyjny wykorzystuje DDIM lub jeszcze szybszy wariant (DPM-Solver, przodek Eulera).
+Trening jest taki sam. Zmienia się samplowanie. DDIM (Song i in., 2020) definiuje deterministyczny proces odwrotny, który pomija kroki czasowe bez ponownego treningu. Samplowanie w 50 krokach z DDIM daje jakość zbliżoną do 1000-krokowego DDPM. Każdy system produkcyjny używa DDIM lub jeszcze szybszego wariantu (DPM-Solver, Euler ancestral).
 
-### Warunkowanie czasu
+### Warunkowanie czasem
 
-Sieć `epsilon_theta(x_t, t)` musi wiedzieć, który krok czasowy odszumia. Nowoczesne modele dyfuzji wprowadzają `t` poprzez sinusoidalne osadzanie czasu (ten sam pomysł, co kodowanie pozycyjne w transformatorach), które są dodawane do map obiektów na każdym poziomie U-Net.
+Sieć `epsilon_theta(x_t, t)` musi wiedzieć, który krok czasowy odszumia. Współczesne modele dyfuzyjne wstrzykują `t` za pomocą sinusoidalnych embeddingów czasu (ta sama idea co positional encoding w transformerach), które są dodawane do map cech na każdym poziomie U-Net.
 
 ```
 t_embedding = sinusoidal(t)
 feature_map += MLP(t_embedding)
 ```
 
-Bez warunkowania czasowego sieć musi odgadnąć poziom szumu na podstawie samego obrazu, co działa, ale jest znacznie mniej wydajne pod względem próbkowania.
+Bez warunkowania czasem sieć musiałaby zgadywać poziom szumu z samego obrazu, co działa, ale jest dużo mniej efektywne pod względem liczby próbek.
 
 ## Zbuduj to
 
-### Krok 1: Harmonogram szumów
+### Krok 1: Harmonogram szumu
 
 ```python
 import torch
 
 def linear_beta_schedule(T=1000, beta_start=1e-4, beta_end=2e-2):
     return torch.linspace(beta_start, beta_end, T)
+
 
 def precompute_schedule(betas):
     alphas = 1.0 - betas
@@ -145,9 +146,9 @@ def precompute_schedule(betas):
 schedule = precompute_schedule(linear_beta_schedule(T=1000))
 ```
 
-Oblicz wstępnie raz, zbierz według indeksu podczas uczenia i pobierania próbek.
+Oblicz raz, indeksuj podczas treningu i samplowania.
 
-### Krok 2: Rozpowszechnienie w przód (q_sample)
+### Krok 2: Dyfuzja w przód (q_sample)
 
 ```python
 def q_sample(x0, t, noise, schedule):
@@ -156,9 +157,9 @@ def q_sample(x0, t, noise, schedule):
     return sqrt_a * x0 + sqrt_one_minus_a * noise
 ```
 
-Jednoliniowy formularz zamknięty. `t` to grupa kroków czasowych, po jednym na obraz w partii.
+Jednolinijkowa forma zamknięta. `t` to wsad kroków czasowych, jeden na obraz w batchu.
 
-### Krok 3: Mała, uwarunkowana czasowo sieć U-Net
+### Krok 3: Mały U-Net warunkowany czasem
 
 ```python
 import torch.nn as nn
@@ -171,6 +172,7 @@ def timestep_embedding(t, dim=64):
     args = t[:, None].float() * freqs[None]
     emb = torch.cat([args.sin(), args.cos()], dim=-1)
     return emb
+
 
 class TinyUNet(nn.Module):
     def __init__(self, img_channels=3, base=32, t_dim=64):
@@ -201,7 +203,7 @@ class TinyUNet(nn.Module):
         return self.dec2(d2)
 ```
 
-Dwupoziomowa sieć U-Net z warunkowaniem czasowym wprowadzonym w wąskie gardło. Skaluj głębokość i szerokość, aby uzyskać prawdziwe obrazy.
+Dwupoziomowy U-Net z warunkowaniem czasem wstrzykiwanym w bottlenecku. Zwiększ głębokość i szerokość dla prawdziwych obrazów.
 
 ### Krok 4: Pętla treningowa
 
@@ -221,9 +223,9 @@ def train_step(model, x0, schedule, optimizer, device, T=1000):
     return loss.item()
 ```
 
-To jest cała pętla treningowa. Żadnej gry GAN, żadnej specjalistycznej straty, jedno połączenie MSE.
+To cała pętla treningowa. Bez gry GAN, bez specjalnej funkcji straty, jedno wywołanie MSE.
 
-### Krok 5: Próbnik (DDPM)
+### Krok 5: Sampler (DDPM)
 
 ```python
 @torch.no_grad()
@@ -246,9 +248,9 @@ def sample(model, schedule, shape, T=1000, device="cpu"):
     return x
 ```
 
-1000 przejść do przodu w celu wyprodukowania jednej partii próbek. W prawdziwym kodzie zamieniłbyś to na 50-stopniowy próbnik DDIM.
+1000 przebiegów w przód, aby wyprodukować jeden batch próbek. W rzeczywistym kodzie zamieniłbyś to na 50-krokowy sampler DDIM.
 
-### Krok 6: Próbnik DDIM (deterministyczny, ~20x szybszy)
+### Krok 6: Sampler DDIM (deterministyczny, ~20x szybszy)
 
 ```python
 @torch.no_grad()
@@ -273,11 +275,11 @@ def sample_ddim(model, schedule, shape, steps=50, T=1000, device="cpu", eta=0.0)
     return x
 ```
 
-`eta=0` jest w pełni deterministyczny (ten sam sygnał wejściowy szumu zawsze daje ten sam wynik). `eta=1` odzyskuje DDPM.
+`eta=0` jest w pełni deterministyczne (to samo wejściowe ziarno szumu zawsze daje to samo wyjście). `eta=1` odtwarza DDPM.
 
 ## Użyj tego
 
-Do prac produkcyjnych użyj `diffusers`:
+Do pracy produkcyjnej użyj `diffusers`:
 
 ```python
 from diffusers import DDPMScheduler, UNet2DModel
@@ -286,39 +288,39 @@ unet = UNet2DModel(sample_size=32, in_channels=3, out_channels=3, layers_per_blo
 scheduler = DDPMScheduler(num_train_timesteps=1000)
 ```
 
-Biblioteka zawiera gotowe harmonogramy (DDPM, DDIM, DPM-Solver, Euler, Heun), konfigurowalne sieci U-Net, potoki dla zamiany tekstu na obraz i obrazu na obraz oraz pomoce dostrajające LoRA.
+Biblioteka udostępnia gotowe schedulery (DDPM, DDIM, DPM-Solver, Euler, Heun), konfigurowalne U-Nety, pipeline'y do text-to-image i image-to-image oraz pomocnicze narzędzia do fine-tuningu LoRA.
 
-Do celów badawczych `k-diffusion` (Katherine Crowson) dysponuje najwierniejszymi implementacjami referencyjnymi i najlepszymi wariantami próbkowania.
+Do badań `k-diffusion` (Katherine Crowson) ma najbardziej wierne implementacje referencyjne i najlepsze warianty samplowania.
 
-## Wyślij to
+## Wypuść to
 
-Ta lekcja daje:
+Ta lekcja produkuje:
 
-- `outputs/prompt-diffusion-sampler-picker.md` — monit, który wybiera DDPM / DDIM / DPM-Solver / Euler na podstawie docelowej jakości, budżetu opóźnień i typu warunkowania.
-- `outputs/skill-noise-schedule-designer.md` — umiejętność, która tworzy liniowy, cosinusowy lub sigmoidalny harmonogram beta przy danym T i docelowym poziomie zniekształcenia, a także wykresy diagnostyczne stosunku sygnału do szumu w czasie.
+- `outputs/prompt-diffusion-sampler-picker.md` — prompt, który wybiera DDPM / DDIM / DPM-Solver / Euler na podstawie docelowej jakości, budżetu czasowego oraz typu warunkowania.
+- `outputs/skill-noise-schedule-designer.md` — skill, który produkuje liniowy, kosinusowy lub sigmoidalny harmonogram beta dla danego T i docelowego poziomu zniekształcenia, wraz z diagnostycznymi wykresami współczynnika sygnał-szum (signal-to-noise ratio) w czasie.
 
 ## Ćwiczenia
 
-1. **(Łatwy)** Wizualizuj dalszy proces: weź jeden obraz i narysuj `x_t` w `t in [0, 100, 250, 500, 750, 1000]`. Sprawdź, czy `x_1000` wygląda jak czysty szum Gaussa.
-2. **(Średni)** Trenuj TinyUNet na zbiorze danych syntetycznych okręgów dla 20 epok i próbkuj 16 okręgów. Porównaj próbkowanie DDPM (1000 kroków) i DDIM (50 kroków) — czy dają one podobne obrazy z tego samego źródła szumu?
-3. **(Trudny)** Wprowadź harmonogram szumu cosinus (Nichol i Dhariwal, 2021): `alpha_bar_t = cos^2((t/T + s) / (1 + s) * pi / 2)`. Wytrenuj ten sam model za pomocą harmonogramów liniowych i cosinusowych i pokaż, że cosinus daje lepsze próbki przy małej liczbie kroków.
+1. **(Łatwe)** Zwizualizuj proces w przód: weź jeden obraz i narysuj `x_t` dla `t in [0, 100, 250, 500, 750, 1000]`. Sprawdź, że `x_1000` wygląda jak czysty szum gaussowski.
+2. **(Średnie)** Wytrenuj TinyUNet na zbiorze syntetycznych okręgów (synthetic-circles) przez 20 epok i wygeneruj 16 okręgów. Porównaj samplowanie DDPM (1000 kroków) i DDIM (50 kroków) — czy z tego samego ziarna szumu (seed) produkują podobne obrazy?
+3. **(Trudne)** Zaimplementuj kosinusowy harmonogram szumu (Nichol & Dhariwal, 2021): `alpha_bar_t = cos^2((t/T + s) / (1 + s) * pi / 2)`. Wytrenuj ten sam model z harmonogramem liniowym i kosinusowym i pokaż, że harmonogram kosinusowy daje lepsze próbki przy małej liczbie kroków.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Dalszy proces | „Dodaj szum w miarę upływu czasu” | Naprawiono łańcuch Markowa, który psuje obraz do szumu Gaussa w T krokach |
-| Proces odwrotny | „Odszumianie krok po kroku” | Wyuczona dystrybucja, która przechodzi od szumu do obrazu |
-| Przewidywanie epsilona | „Przewiduj hałas” | Cel uczenia: `epsilon_theta(x_t, t)` przewiduje szum dodany w kroku t |
-| Harmonogram wersji beta | „Ilości hałasu” | Sekwencja T małych wariancji, które definiują ilość szumu wprowadzanego na krok |
-| alfa_bar_t | „Skumulowany współczynnik zatrzymania” | Iloczyn (1 - beta_s) do czasu t; większe t oznacza mniej sygnału |
-| Próbnik DDPM | „Przodkowie, stochastyczni” | Próbkuje każdy x_{t-1} z jego warunkowego Gaussa; 1000 kroków |
-| Próbnik DDIM | „Deterministyczny, szybki” | Przepisuje próbkowanie jako deterministyczną ODE; 20-100 kroków o podobnej jakości |
-| Warunkowanie czasu | „Powiedz modelowi, który t” | Sinusoidalne osadzenie t wprowadzonego do sieci U-Net, aby znała poziom hałasu |
+| Proces w przód (forward process) | "Dodawanie szumu w czasie" | Ustalony łańcuch Markowa, który zniekształca obraz w szum gaussowski przez T kroków |
+| Proces w tył (reverse process) | "Odszumianie krok po kroku" | Wyuczony rozkład, który wraca od szumu do obrazu |
+| Predykcja epsilon | "Przewidywanie szumu" | Cel treningowy: `epsilon_theta(x_t, t)` przewiduje szum dodany w kroku t |
+| Harmonogram beta | "Wielkości szumu" | Sekwencja T małych wariancji, które definiują, ile szumu wchodzi w każdym kroku |
+| alpha_bar_t | "Skumulowany współczynnik zachowania" | Iloczyn (1 - beta_s) do czasu t; większe t oznacza mniej pozostałego sygnału |
+| Sampler DDPM | "Ancestralny, stochastyczny" | Próbkuje każde x_{t-1} z jego warunkowego rozkładu gaussowskiego; 1000 kroków |
+| Sampler DDIM | "Deterministyczny, szybki" | Przepisuje samplowanie jako deterministyczne ODE; 20-100 kroków o podobnej jakości |
+| Warunkowanie czasem | "Powiedz modelowi, jakie jest t" | Sinusoidalny embedding t wstrzykiwany do U-Net, aby znał poziom szumu |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-- [Denoising Diffusion Probabilistic Models (Ho et al., 2020)](https://arxiv.org/abs/2006.11239) — artykuł, który uczynił dyfuzję praktyczną i pokonał GAN w FID
-- [Ulepszony DDPM (Nichol i Dhariwal, 2021)](https://arxiv.org/abs/2102.09672) — harmonogram cosinus i parametryzacja v
-– [DDIM (Song, Meng, Ermon, 2020)](https://arxiv.org/abs/2010.02502) — deterministyczny próbnik, który umożliwił wnioskowanie w czasie rzeczywistym
-- [Elucidating the Design Space of Diffusion (Karras et al., 2022)](https://arxiv.org/abs/2206.00364) — ujednolicony widok na każdy wybór projektu dyfuzji; aktualne najlepsze referencje
+- [Denoising Diffusion Probabilistic Models (Ho i in., 2020)](https://arxiv.org/abs/2006.11239) — artykuł, który uczynił dyfuzję praktyczną i pobił GAN-y w metryce FID
+- [Improved DDPM (Nichol & Dhariwal, 2021)](https://arxiv.org/abs/2102.09672) — harmonogram kosinusowy i v-parametryzacja
+- [DDIM (Song, Meng, Ermon, 2020)](https://arxiv.org/abs/2010.02502) — deterministyczny sampler, który umożliwił wnioskowanie w czasie rzeczywistym
+- [Elucidating the Design Space of Diffusion (Karras i in., 2022)](https://arxiv.org/abs/2206.00364) — zunifikowany przegląd wszystkich decyzji projektowych dotyczących dyfuzji; obecnie najlepsze źródło referencyjne
