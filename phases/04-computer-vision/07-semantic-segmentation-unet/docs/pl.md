@@ -1,30 +1,30 @@
 # Segmentacja semantyczna — U-Net
 
-> Segmentacja to klasyfikacja w każdym pikselu. U-Net sprawia, że ​​działa to poprzez połączenie kodera zmniejszającego próbkowanie z dekoderem zwiększającym próbkowanie i pomijanie połączeń między nimi.
+> Segmentacja to klasyfikacja na poziomie każdego piksela. U-Net realizuje to, łącząc enkoder zmniejszający rozdzielczość z dekoderem ją zwiększającym, połączonymi za pomocą połączeń skip.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
-**Wymagania wstępne:** Faza 4, lekcja 03 (CNN), Faza 4, lekcja 04 (klasyfikacja obrazów)
+**Wymagania wstępne:** Faza 4 Lekcja 03 (CNN), Faza 4 Lekcja 04 (Klasyfikacja obrazów)
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Rozróżnij segmentację semantyczną, instancyjną i panoptyczną i wybierz odpowiednie zadanie dla danego problemu
-- Zbuduj od podstaw sieć U-Net w PyTorch z blokami kodera, wąskim gardłem, dekoderem z transponowanymi splotami i pomiń połączenia
-- Zaimplementuj pikselową entropię krzyżową, utratę kości i łączną stratę, która jest obecnie domyślną segmentacją medyczną i przemysłową
-- Przeczytaj metryki IoU i Dice dla każdej klasy i zdiagnozuj, czy zły wynik wynika z przypominania sobie małych obiektów, dokładności granic lub braku równowagi klas
+- Rozróżnienie segmentacji semantycznej, instancyjnej i panoptycznej oraz wybór odpowiedniego zadania dla danego problemu
+- Zbudowanie sieci U-Net od zera w PyTorch z blokami enkodera, bottleneckiem, dekoderem z konwolucjami transponowanymi oraz połączeniami skip
+- Implementacja pikselowej entropii skrośnej (cross-entropy), funkcji straty Dice oraz połączonej funkcji straty, która jest obecnym standardem w segmentacji medycznej i przemysłowej
+- Odczytywanie metryk IoU i Dice dla poszczególnych klas oraz diagnozowanie, czy słaby wynik wynika z odzysku małych obiektów (recall), dokładności granic czy niezbalansowania klas
 
 ## Problem
 
-Klasyfikacja generuje jedną etykietę na obraz. Funkcja wykrywania generuje kilka pól na obraz. Segmentacja generuje jedną etykietę na piksel. Dla danych wejściowych o rozmiarze `H x W` wynikiem jest tensor kształtu `H x W` (semantyczny) lub `H x W x N_instances` (instancja). To miliony podpowiedzi na obraz, a nie jedna.
+Klasyfikacja zwraca jedną etykietę na obraz. Detekcja zwraca kilka prostokątów (boxów) na obraz. Segmentacja zwraca jedną etykietę na piksel. Dla wejścia o rozmiarze `H x W` wyjściem jest tensor o kształcie `H x W` (semantyczna) lub `H x W x N_instances` (instancyjna). To miliony predykcji na obraz, a nie jedna.
 
-Dzięki strukturze segmentacji obsługuje on prawie każdy produkt wizyjny o gęstej predykcji: obrazowanie medyczne (maski nowotworowe), jazdę autonomiczną (droga, pas ruchu, przeszkoda), satelitę (ślady budynków, granice upraw), analizę dokumentów (strefy układu), robotykę (obszary możliwe do uchwycenia). Żadnego z tych zadań nie da się rozwiązać, umieszczając ramkę wokół obiektu; potrzebują dokładnej sylwetki.
+Ta struktura segmentacji sprawia, że stoi ona za prawie każdym produktem wizyjnym opartym na gęstej predykcji: obrazowanie medyczne (maski guzów), jazda autonomiczna (droga, pas, przeszkoda), zdjęcia satelitarne (zarysy budynków, granice pól), parsowanie dokumentów (strefy układu), robotyka (obszary możliwe do chwycenia). Żadnego z tych zadań nie da się rozwiązać poprzez obrysowanie obiektu prostokątem — potrzebna jest dokładna sylwetka.
 
-Problem architektoniczny jest prosty do sformułowania i niełatwy do rozwiązania: potrzebujesz sieci, aby jednocześnie zobaczyć globalny kontekst obrazu (co to za scena) i szczegóły lokalnych pikseli (dokładnie, który piksel to droga, a który chodnik). Standardowa CNN kompresuje przestrzennie, aby uzyskać kontekst, co powoduje utratę szczegółów. U-Net był projektem, który połączył jedno i drugie.
+Problem architektoniczny jest prosty do sformułowania, ale niełatwy do rozwiązania: sieć musi widzieć zarówno globalny kontekst obrazu (jaka to scena), jak i lokalny szczegół pikselowy (który dokładnie piksel jest drogą, a który chodnikiem) — jednocześnie. Standardowa sieć CNN kompresuje przestrzennie, aby uzyskać kontekst, co usuwa szczegóły. U-Net to projekt, który osiągnął oba cele.
 
 ## Koncepcja
 
-### Semantyka vs instancja vs panoptyka
+### Semantyczna vs instancyjna vs panoptyczna
 
 ```mermaid
 flowchart LR
@@ -37,13 +37,13 @@ flowchart LR
     style PAN fill:#dcfce7,stroke:#16a34a
 ```
 
-- **Semantyczny** mówi „ten piksel to droga, ten piksel to samochód”. Dwa samochody obok siebie zapadają się w jedną kulę.
-- **Instancja** mówi: „ten piksel to samochód nr 3, ten piksel to samochód nr 5”. Ignoruje elementy tła („rzeczy” = niebo, droga, trawa).
-- **Panoptic** jednoczy jedno i drugie: każdy piksel otrzymuje etykietę klasy, każda instancja otrzymuje unikalny identyfikator, a elementy i elementy są podzielone na segmenty.
+- **Semantyczna** mówi „ten piksel to droga, tamten to samochód". Dwa samochody stojące blisko siebie zlewają się w jeden obszar.
+- **Instancyjna** mówi „ten piksel to samochód #3, tamten to samochód #5". Ignoruje elementy tła („stuff" = niebo, droga, trawa).
+- **Panoptyczna** łączy obie: każdy piksel otrzymuje etykietę klasy, każda instancja otrzymuje unikalny identyfikator, segmentowane są jednocześnie elementy tła i obiekty pierwszoplanowe.
 
-Ta lekcja dotyczy semantyki. Następna lekcja (Maska R-CNN) dotyczy przykładu.
+Ta lekcja obejmuje segmentację semantyczną. Następna lekcja (Mask R-CNN) obejmuje segmentację instancyjną.
 
-### Kształt U-Net
+### Kształt sieci U-Net
 
 ```mermaid
 flowchart LR
@@ -72,74 +72,74 @@ flowchart LR
     style DEC fill:#dcfce7,stroke:#16a34a
 ```
 
-Koder czterokrotnie zmniejsza o połowę rozdzielczość przestrzenną i podwaja kanały. Dekoder odwraca: czterokrotnie podwaja rozdzielczość przestrzenną i dzieli kanały na pół. Połączenia pomijane łączą pasujące funkcje kodera z funkcjami dekodera w każdej rozdzielczości. Ostateczne mapy konw. 1x1 `64 -> num_classes` w pełnej rozdzielczości.
+Enkoder cztery razy zmniejsza rozdzielczość przestrzenną o połowę i podwaja liczbę kanałów. Dekoder działa odwrotnie: cztery razy podwaja rozdzielczość przestrzenną i zmniejsza liczbę kanałów o połowę. Połączenia skip łączą (konkatenacja) odpowiadające sobie cechy enkodera z cechami dekodera na każdym poziomie rozdzielczości. Końcowa konwolucja 1x1 mapuje `64 -> num_classes` w pełnej rozdzielczości.
 
-Dlaczego pomijanie połączeń jest konieczne: dekoder widział tylko małe mapy obiektów, zanim próbował wygenerować przewidywania na poziomie pikseli. Bez przeskoków nie jest w stanie dokładnie zlokalizować krawędzi, ponieważ informacja ta została skompresowana w koderze. Pomiń połączenia, ponieważ funkcja wysokiej rozdzielczości odwzorowuje koder obliczany w drodze w dół.
+Dlaczego połączenia skip są niezbędne: dekoder w momencie generowania predykcji na poziomie pikseli widział tylko małe mapy cech. Bez skipów nie może precyzyjnie zlokalizować krawędzi, ponieważ ta informacja została skompresowana w enkoderze. Połączenia skip przekazują mu mapy cech o wysokiej rozdzielczości obliczone przez enkoder podczas zmniejszania rozdzielczości.
 
-### Transpozycja vs próbkowanie dwuliniowe
+### Konwolucja transponowana vs upsampling bilinearny
 
-Dekoder musi rozszerzać wymiary przestrzenne. Dwie opcje:
+Dekoder musi powiększać wymiary przestrzenne. Dwie opcje:
 
-- **Transponowany splot** (`nn.ConvTranspose2d`) — upsample, którego można się nauczyć. Historyczne ustawienie domyślne U-Net. Może powodować artefakty szachownicy, jeśli krok i rozmiar jądra nie dzielą się równomiernie.
-- **Bilinearny próbkowanie + konw. 3x3** — gładki próbkowanie, po którym następuje konw. Mniej artefaktów, mniej parametrów – teraz współczesne ustawienia domyślne.
+- **Konwolucja transponowana** (`nn.ConvTranspose2d`) — uczalny upsampling. Historyczny standard w U-Net. Może wytwarzać artefakty typu „szachownica" (checkerboard), jeśli stride i rozmiar kernela nie dzielą się równo.
+- **Upsampling bilinearny + konwolucja 3x3** — gładki upsampling, po którym następuje konwolucja. Mniej artefaktów, mniej parametrów, obecnie nowy standard.
 
-Obydwa pojawiają się na wolności. W przypadku pierwszej sieci U-Net rozwiązanie dwuliniowe jest bezpieczniejsze.
+Obie metody są spotykane w praktyce. Dla pierwszej implementacji U-Net wariant bilinearny jest bezpieczniejszy.
 
-### Entropia krzyżowa na siatce pikseli
+### Entropia skrośna na siatce pikseli
 
-W przypadku segmentacji semantycznej z klasami C wyjście modelu to `(N, C, H, W)`. Celem jest `(N, H, W)` z identyfikatorami klas w postaci liczb całkowitych. Entropia krzyżowa jest identyczna z przypadkiem klasyfikacji, zastosowana właśnie w każdej pozycji przestrzennej:
+Dla segmentacji semantycznej z C klasami wyjście modelu ma kształt `(N, C, H, W)`. Cel (target) ma kształt `(N, H, W)` z całkowitoliczbowymi identyfikatorami klas. Entropia skrośna (cross-entropy) jest identyczna jak w przypadku klasyfikacji, tylko zastosowana w każdej pozycji przestrzennej:
 
 ```
 Loss = mean over (n, h, w) of -log( softmax(logits[n, :, h, w])[target[n, h, w]] )
 ```
 
-`F.cross_entropy` w PyTorch obsługuje ten kształt natywnie. Nie ma potrzeby zmiany kształtu.
+`F.cross_entropy` w PyTorch obsługuje ten kształt natywnie. Nie jest wymagane przekształcanie kształtu (reshape).
 
-### Utrata kości i dlaczego jej potrzebujesz
+### Funkcja straty Dice i dlaczego jest potrzebna
 
-Entropia krzyżowa traktuje każdy piksel jednakowo. Jest to błędne podejście, gdy w kadrze dominuje jedna klasa (obrazowanie medyczne: 99% tła, 1% guza). Sieć może osiągnąć 99% dokładności, przewidując tło wszędzie i nadal być bezużyteczna.
+Entropia skrośna traktuje każdy piksel jednakowo. To błąd, gdy jedna klasa dominuje w kadrze (obrazowanie medyczne: 99% tła, 1% guza). Sieć może osiągnąć 99% dokładności, przewidując samo tło wszędzie, i wciąż być bezużyteczna.
 
-Utrata kości rozwiązuje ten problem poprzez bezpośrednią optymalizację nakładania się maski przewidywanej i prawdziwej:
+Funkcja straty Dice rozwiązuje to, optymalizując bezpośrednio nakładanie się (overlap) między przewidywaną a prawdziwą maską:
 
 ```
 Dice(p, y) = 2 * sum(p * y) / (sum(p) + sum(y) + epsilon)
 Dice_loss = 1 - Dice
 ```
 
-gdzie `p` to sigmoidalna/softmax mapa prawdopodobieństwa dla klasy, a `y` to binarna maska prawdy. Strata wynosi zero tylko wtedy, gdy zachodzenie na siebie jest idealne. Ponieważ opiera się na stosunkach, nierównowaga klas jest nieistotna.
+gdzie `p` to mapa prawdopodobieństw sigmoid/softmax dla danej klasy, a `y` to binarna maska ground-truth. Strata jest równa zeru tylko wtedy, gdy nakładanie się jest idealne. Ponieważ jest oparta na proporcji (ratio), niezbalansowanie klas nie ma znaczenia.
 
-W praktyce zastosuj **stratę łączną**:
+W praktyce stosuje się **połączoną funkcję straty (combined loss)**:
 
 ```
 L = L_cross_entropy + lambda * L_dice       (lambda ~ 1)
 ```
 
-Entropia krzyżowa zapewnia stabilne gradienty na początku treningu; Dice skupia się na ostatecznym dopasowaniu kształtu maski. Ta kombinacja jest domyślną kombinacją obrazowania medycznego i jest trudna do pokonania w przypadku dowolnego zbioru danych niezrównoważonego klasowo.
+Entropia skrośna zapewnia stabilne gradienty na początku treningu; Dice koncentruje końcową fazę treningu na faktycznym dopasowaniu kształtu maski. Ta kombinacja jest standardem w obrazowaniu medycznym i trudno ją przebić na jakimkolwiek zbiorze danych z niezbalansowanymi klasami.
 
-### Metryki oceny
+### Metryki ewaluacyjne
 
-- **Dokładność pikseli** — procent poprawnie przewidywanych pikseli. Tani. Uszkodzony w przypadku niezrównoważonych danych z tego samego powodu, co dokładność klasyfikacji.
-- **IoU na klasę** — przecięcie przez sumę dla maski każdej klasy; średnia dla klas = mIoU.
-- **Kostki (F1 na pikselach)** — podobne do IoU; `Dice = 2 * IoU / (1 + IoU)`. Obrazowanie medyczne preferuje kości, społeczność kierowców preferuje IoU; są ze sobą monotonicznie powiązane.
-- **Granica F1** — mierzy, jak blisko przewidywanych granic znajdują się granice rzeczywiste, co karze nawet małe przesunięcia. Ważne w przypadku zadań wymagających dużej precyzji, takich jak kontrola półprzewodników.
+- **Dokładność pikselowa (pixel accuracy)** — procent prawidłowo przewidzianych pikseli. Tania w obliczeniu. Zawodna na niezbalansowanych danych z tego samego powodu co dokładność (accuracy) w klasyfikacji.
+- **IoU per klasa** — iloczyn przez sumę (intersection over union) dla maski każdej klasy; średnia po klasach = mIoU.
+- **Dice (F1 na pikselach)** — podobna do IoU; `Dice = 2 * IoU / (1 + IoU)`. Obrazowanie medyczne preferuje Dice, środowisko motoryzacyjne preferuje IoU; są one monotonicznie powiązane.
+- **Boundary F1** — mierzy, jak blisko przewidziane granice są granic ground-truth, penalizując nawet niewielkie przesunięcia. Ważne dla zadań wymagających wysokiej precyzji, jak inspekcja półprzewodników.
 
-Raportuj IoU na każdą klasę, a nie tylko mIoU. Średni IoU ukrywa klasę na poziomie 15%, podczas gdy dziewięć innych ma wartość 85%.
+Raportuj IoU per klasa, nie tylko mIoU. Średnie IoU może skryć klasę na poziomie 15%, gdy dziewięć innych jest na poziomie 85%.
 
-### Kompromis w zakresie rozdzielczości wejściowej
+### Kompromis dotyczący rozdzielczości wejściowej
 
-Koder U-Net czterokrotnie zmniejsza rozdzielczość o połowę, więc dane wejściowe muszą być podzielne przez 16. Obrazy medyczne mają często wymiary 512x512 lub 1024x1024. Uprawy autonomicznie poruszające się mają wymiary 2048 x 1024. Koszt pamięci U-Net skaluje się z `H * W * C_max`, a przy rozdzielczości 1024x1024 z 1024 kanałami wąskiego gardła przepustowość w przód wykorzystuje już gigabajty pamięci VRAM.
+Enkoder U-Net cztery razy zmniejsza rozdzielczość o połowę, więc wejście musi być podzielne przez 16. Obrazy medyczne mają często rozmiar 512x512 lub 1024x1024. Wycinki z jazdy autonomicznej mają 2048x1024. Koszt pamięciowy U-Net skaluje się wraz z `H * W * C_max`, a przy 1024x1024 i 1024 kanałach w bottlenecku przejście w przód (forward pass) już zajmuje gigabajty VRAM.
 
-Dwa standardowe obejścia:
-1. Rozłóż wejście — przetwórz płytki 256x256 z zakładką i zszyciem.
-2. Zastąp wąskie gardło rozszerzonymi splotami, które utrzymają wyższą rozdzielczość przestrzenną, ale poszerzą pole recepcyjne (rodzina DeepLab).
+Dwa standardowe rozwiązania:
+1. Podziel wejście na kafelki (tiling) — przetwarzaj kafelki 256x256 z nakładaniem (overlap) i zszywaj.
+2. Zastąp bottleneck konwolucjami dylatowanymi (dilated convolutions), które zachowują wyższą rozdzielczość przestrzenną, jednocześnie poszerzając pole recepcyjne (rodzina DeepLab).
 
-W przypadku pierwszego modelu wejście 256 x 256 z 64-kanałową siecią U-Net pozwala wygodnie trenować na 8 GB pamięci VRAM.
+Dla pierwszego modelu wejście 256x256 z U-Net o bazowej liczbie kanałów 64 trenuje się komfortowo na 8 GB VRAM.
 
-## Zbuduj to
+## Budowa
 
 ### Krok 1: Blok enkodera
 
-Dwie konwersje 3x3 z normą wsadową i ReLU. Pierwsza konwersja zmienia liczbę kanałów; drugi go utrzymuje.
+Dwie konwolucje 3x3 z batch norm i ReLU. Pierwsza konwolucja zmienia liczbę kanałów; druga ją zachowuje.
 
 ```python
 import torch
@@ -162,9 +162,9 @@ class DoubleConv(nn.Module):
         return self.net(x)
 ```
 
-Ten blok jest ponownie używany w całym tekście. `bias=False`, ponieważ wersja beta BN radzi sobie z odchyleniami.
+Ten blok jest wielokrotnie wykorzystywany w całej sieci. `bias=False`, ponieważ beta z BN obsługuje bias.
 
-### Krok 2: Bloki w dół i w górę
+### Krok 2: Bloki down i up
 
 ```python
 class Down(nn.Module):
@@ -177,6 +177,7 @@ class Down(nn.Module):
 
     def forward(self, x):
         return self.net(x)
+
 
 class Up(nn.Module):
     def __init__(self, in_c, out_c):
@@ -192,9 +193,9 @@ class Up(nn.Module):
         return self.conv(x)
 ```
 
-Kontrola kształtu dotycząca wyłącznie przestrzeni (`shape[-2:]`) obsługuje dane wejściowe, których wymiary nie są podzielne przez 16; bezpieczny `F.interpolate` wyrównuje tensor przed konkatem. Porównanie pełnego kształtu spowodowałoby również różnice w liczbie kanałów, co powinno być głośnym błędem, a nie cichą interpolacją.
+Sprawdzenie kształtu ograniczone do wymiarów przestrzennych (`shape[-2:]`) obsługuje wejścia, których wymiary nie są podzielne przez 16; bezpieczne `F.interpolate` wyrównuje tensor przed konkatenacją. Porównywanie pełnego kształtu wywołałoby tę ścieżkę również przy różnicach w liczbie kanałów, co powinno być głośnym błędem, a nie cichym interpolowaniem.
 
-### Krok 3: Sieć U
+### Krok 3: Sieć U-Net
 
 ```python
 class UNet(nn.Module):
@@ -229,9 +230,9 @@ print(f"output: {net(x).shape}")
 print(f"params: {sum(p.numel() for p in net.parameters()):,}")
 ```
 
-Kształt wyjściowy `(1, 2, 256, 256)` — ten sam rozmiar przestrzenny co wejście, kanały `num_classes`. Około 7,7 mln parametrów w `base=32`.
+Kształt wyjścia `(1, 2, 256, 256)` — taki sam rozmiar przestrzenny jak wejście, `num_classes` kanałów. Około 7,7M parametrów przy `base=32`.
 
-### Krok 4: Straty
+### Krok 4: Funkcje straty
 
 ```python
 def dice_loss(logits, targets, num_classes, eps=1e-6):
@@ -243,15 +244,16 @@ def dice_loss(logits, targets, num_classes, eps=1e-6):
     dice = (2 * intersection + eps) / (denom + eps)
     return 1 - dice.mean()
 
+
 def combined_loss(logits, targets, num_classes, lam=1.0):
     ce = F.cross_entropy(logits, targets)
     dc = dice_loss(logits, targets, num_classes)
     return ce + lam * dc, {"ce": ce.item(), "dice": dc.item()}
 ```
 
-Kości są obliczane dla każdej klasy, a następnie uśredniane (makro kości). `eps` zapobiega dzieleniu przez zero klas nieobecnych w partii.
+Dice jest obliczane per klasa, a następnie uśredniane (macro Dice). `eps` zapobiega dzieleniu przez zero dla klas nieobecnych w danym batchu.
 
-### Krok 5: Wskaźnik IoU
+### Krok 5: Metryka IoU
 
 ```python
 @torch.no_grad()
@@ -267,11 +269,11 @@ def iou_per_class(logits, targets, num_classes):
     return ious
 ```
 
-Zwraca wektor o długości C. `nan` oznacza klasy nieobecne w partii — przy obliczaniu mIoU nie należy ich uśredniać.
+Zwraca wektor o długości C. `nan` oznacza klasy nieobecne w batchu — nie należy ich uśredniać podczas obliczania mIoU.
 
-### Krok 6: Syntetyczny zbiór danych do kompleksowej weryfikacji
+### Krok 6: Syntetyczny zbiór danych do weryfikacji end-to-end
 
-Generuj kształty na kolorowym tle, aby sieć musiała uczyć się kształtu, a nie koloru pikseli.
+Generuj kształty na kolorowych tłach, aby sieć musiała nauczyć się rozpoznawać kształt, a nie kolor pikseli.
 
 ```python
 import numpy as np
@@ -302,6 +304,7 @@ def synthetic_segmentation(num_samples=200, size=64, seed=0):
         images[i] = np.clip(images[i], 0, 1)
     return images, masks
 
+
 class SegDataset(Dataset):
     def __init__(self, images, masks):
         self.images = images
@@ -316,7 +319,7 @@ class SegDataset(Dataset):
         return img, mask
 ```
 
-Trzy klasy: tło (0), koła (1), kwadraty (2). Sieć musi nauczyć się rozróżniać kształty.
+Trzy klasy: tło (0), okręgi (1), kwadraty (2). Sieć musi nauczyć się rozróżniać kształty.
 
 ### Krok 7: Pętla treningowa
 
@@ -338,11 +341,11 @@ def train_one_epoch(model, loader, optimizer, device, num_classes):
     return loss_sum / total, iou_sum / len(loader)
 ```
 
-Uruchom to dla 10-30 epok na syntetycznym zbiorze danych i obserwuj, jak mIoU przekracza 0,9 dla klas kształtu. Zauważ, że `nan_to_num(0)` traktuje klasy nieobecne w partii jako zero; aby uzyskać dokładne IoU dla poszczególnych klas, maskuj według obecności i używaj `torch.nanmean` w partiach w czasie oceny, zamiast tutaj uśredniać.
+Uruchom to przez 10-30 epok na syntetycznym zbiorze danych i obserwuj, jak mIoU wzrasta powyżej 0,9 dla klas kształtów. Zwróć uwagę, że `nan_to_num(0)` traktuje klasy nieobecne w danym batchu jako zero; dla dokładnego IoU per klasa należy maskować na podstawie obecności klasy i podczas ewaluacji używać `torch.nanmean` po batchach, a nie uśredniać w ten sposób.
 
-## Użyj tego
+## Zastosowanie
 
-Na potrzeby produkcyjne `segmentation_models_pytorch` („smp”) obejmuje każdą standardową architekturę segmentacji dowolnym szkieletem Torchvision lub Timm. Trzy linie:
+W produkcji `segmentation_models_pytorch` ("smp") opakowuje każdą standardową architekturę segmentacyjną w połączeniu z dowolnym backbone'em z torchvision lub timm. Trzy linie kodu:
 
 ```python
 import segmentation_models_pytorch as smp
@@ -355,42 +358,42 @@ model = smp.Unet(
 )
 ```
 
-Warto znać także w przypadku prawdziwej pracy:
-- **DeepLabV3+** zastępuje próbkowanie w oparciu o maksymalną pulę konwersjami rozszerzonymi, dzięki czemu wąskie gardło utrzymuje rozdzielczość; szybsze granice danych satelitarnych i jazdy.
-- **SegFormer** zamienia koder konwersji na transformator hierarchiczny; obecna SOTA w wielu benchmarkach.
-- **Mask2Former** / **OneFormer** ujednolica segmentację semantyczną, instancyjną i panoptyczną w jednej architekturze.
+Warto też znać do pracy produkcyjnej:
+- **DeepLabV3+** zastępuje zmniejszanie rozdzielczości oparte na max-pool konwolucjami dylatowanymi, dzięki czemu bottleneck zachowuje rozdzielczość; szybsze i dokładniejsze granice na danych satelitarnych i motoryzacyjnych.
+- **SegFormer** zastępuje konwolucyjny enkoder hierarchicznym transformerem; obecny SOTA w wielu benchmarkach.
+- **Mask2Former** / **OneFormer** łączą segmentację semantyczną, instancyjną i panoptyczną w jednej architekturze.
 
-Wszystkie trzy są zamiennikami typu drop-in w `smp` lub `transformers` z tym samym modułem ładującym dane.
+Wszystkie trzy są zamiennikami „plug-in" w `smp` lub `transformers` z tym samym data loaderem.
 
-## Wyślij to
+## Co dalej
 
-Ta lekcja daje:
+Ta lekcja generuje:
 
-- `outputs/prompt-segmentation-task-picker.md` — zachęta, która wybiera pomiędzy segmentacją semantyczną, instancyjną i panoptyczną oraz nazywa architekturę dla danego zadania.
-- `outputs/skill-segmentation-mask-inspector.md` — umiejętność raportująca rozkład klas, statystyki przewidywanej maski oraz klasy, które są niedoszacowane lub zamazane granice.
+- `outputs/prompt-segmentation-task-picker.md` — prompt, który wybiera między segmentacją semantyczną, instancyjną i panoptyczną oraz wskazuje architekturę dla danego zadania.
+- `outputs/skill-segmentation-mask-inspector.md` — skill, który raportuje rozkład klas, statystyki przewidywanej maski oraz klasy, które są niedoszacowane lub mają rozmyte granice.
 
-## Ćwiczenia
+## Zadania
 
-1. **(Łatwy)** Zaimplementuj `bce_dice_loss` dla zadania segmentacji binarnej (pierwszy plan vs tło). Sprawdź na syntetycznym zbiorze danych dwóch klas, że łączna strata zbiega się szybciej niż sama BCE, gdy pierwszy plan obejmuje 5% pikseli.
-2. **(Średni)** Zamień blok w górę `nn.Upsample + conv` na blok w górę `nn.ConvTranspose2d`. Trenuj oba na syntetycznym zestawie danych i porównaj mIoU. Zwróć uwagę, gdzie w wersji transponowanej konwersji pojawiają się artefakty szachownicy.
-3. **(Trudne)** Weź prawdziwy zbiór danych segmentacyjnych (Oxford-IIIT Pets, mini split Cityscapes lub podzbiór medyczny) i wytrenuj sieć U-Net w zakresie 2 punktów IoU od odniesienia `smp.Unet`. Zgłaszaj IoU dla poszczególnych klas i określ, które klasy czerpią najwięcej korzyści z dodania kości do straty.
+1. **(Łatwe)** Zaimplementuj `bce_dice_loss` dla zadania segmentacji binarnej (pierwszy plan vs tło). Sprawdź na syntetycznym zbiorze dwuklasowym, czy połączona funkcja straty zbiega szybciej niż samo BCE, gdy pierwszy plan stanowi 5% pikseli.
+2. **(Średnie)** Zastąp blok up `nn.Upsample + conv` blokiem up wykorzystującym `nn.ConvTranspose2d`. Wytrenuj obie wersje na syntetycznym zbiorze danych i porównaj mIoU. Zaobserwuj, gdzie pojawiają się artefakty typu „szachownica" w wersji z konwolucją transponowaną.
+3. **(Trudne)** Weź rzeczywisty zbiór danych segmentacyjny (Oxford-IIIT Pets, mini split Cityscapes lub podzbiór medyczny) i wytrenuj U-Net do wyniku w granicach 2 punktów IoU od referencyjnego `smp.Unet`. Zaraportuj IoU per klasa i wskaż, które klasy najbardziej zyskują na dodaniu Dice do funkcji straty.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Segmentacja semantyczna | „Oznacz każdy piksel” | Klasyfikacja per piksel na klasy C; instancje tej samej klasy scalają |
-| Segmentacja instancji | „Oznacz każdy obiekt” | Oddziela różne instancje tej samej klasy; tylko na pierwszym planie |
-| Segmentacja panoptyczna | „Semantyka + instancja” | Każdy piksel otrzymuje klasę; każda instancja rzeczy otrzymuje również unikalny identyfikator |
-| Pomiń połączenie | „Most U-Net” | Połączenie funkcji kodera w funkcje dekodera o dopasowanej rozdzielczości; zachowuje szczegóły wysokich częstotliwości |
-| Przeniesione konw. | „Dekonwolucja” | Możliwość nauczenia się upsamplingu; może wytwarzać artefakty szachownicy |
-| Utrata kości | „Utrata nakładania się” | 1 - 2|A ∩ B| / (|A| + |B|); optymalizuje bezpośrednie nakładanie się masek i jest odporny na brak równowagi klas |
-| mioU | „Średnie przecięcie przez sumę” | Średni IoU w klasach; standardowa metryka społeczności dotycząca segmentacji |
-| Granica F1 | „Dokładność granic” | Wynik F1 obliczony tylko dla pikseli brzegowych; ma znaczenie w przypadku zadań o znaczeniu krytycznym |
+| Segmentacja semantyczna | "Oznacz każdy piksel" | Klasyfikacja per-piksel na C klas; instancje tej samej klasy łączą się w jedną |
+| Segmentacja instancyjna | "Oznacz każdy obiekt" | Rozdziela poszczególne instancje tej samej klasy; tylko pierwszy plan (foreground) |
+| Segmentacja panoptyczna | "Semantyczna + instancyjna" | Każdy piksel otrzymuje klasę; każda instancja obiektu (thing) otrzymuje też unikalny identyfikator |
+| Połączenie skip | "Mostek U-Net" | Konkatenacja cech enkodera z cechami dekodera o tej samej rozdzielczości; zachowuje szczegóły wysokiej częstotliwości |
+| Konwolucja transponowana | "Dekonwolucja" | Uczalny upsampling; może wytwarzać artefakty typu „szachownica" |
+| Funkcja straty Dice | "Strata nakładania" | 1 - 2|A ∩ B| / (|A| + |B|); optymalizuje bezpośrednio nakładanie się masek i jest odporna na niezbalansowanie klas |
+| mIoU | "Średnie iloczyn przez sumę" | Średnie IoU po klasach; standardowa metryka stosowana powszechnie w segmentacji |
+| Boundary F1 | "Dokładność granic" | Wynik F1 obliczany tylko na pikselach granicznych; istotne dla zadań wymagających wysokiej precyzji |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-- [U-Net: Convolutional Networks for Biomedical Image Segmentation (Ronneberger et al., 2015)](https://arxiv.org/abs/1505.04597) — praca oryginalna; rysunek, który wszyscy kopiują, znajduje się na stronie 2
-– [Fully Convolutional Networks (Long et al., 2015)](https://arxiv.org/abs/1411.4038) – artykuł, w którym po raz pierwszy segmentacja stała się kompleksowym problemem konwersji
-- [segmentation_models_pytorch](https://github.com/qubvel/segmentation_models.pytorch) — odniesienie do segmentacji produkcji; każda standardowa architektura plus każda standardowa strata
-- [Wnioski wyciągnięte ze szkolenia segmentacji SOTA (konkursy kaggle.com)](https://www.kaggle.com/code/iafoss/carvana-unet-pytorch) — przewodnik pokazujący, dlaczego TTA, pseudo-labeling i wagi klas mają znaczenie w rzeczywistych danych
+- [U-Net: Convolutional Networks for Biomedical Image Segmentation (Ronneberger et al., 2015)](https://arxiv.org/abs/1505.04597) — oryginalna publikacja; rysunek, który wszyscy kopiują, znajduje się na stronie 2
+- [Fully Convolutional Networks (Long et al., 2015)](https://arxiv.org/abs/1411.4038) — publikacja, która jako pierwsza uczyniła segmentację problemem konwolucyjnym end-to-end
+- [segmentation_models_pytorch](https://github.com/qubvel/segmentation_models.pytorch) — punkt odniesienia dla segmentacji produkcyjnej; wszystkie standardowe architektury i wszystkie standardowe funkcje straty
+- [Lessons learned from training SOTA segmentation (kaggle.com competitions)](https://www.kaggle.com/code/iafoss/carvana-unet-pytorch) — opis tego, dlaczego TTA, pseudo-etykietowanie i wagi klas mają znaczenie na rzeczywistych danych
