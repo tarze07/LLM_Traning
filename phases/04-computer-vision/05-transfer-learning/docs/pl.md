@@ -1,40 +1,40 @@
-# Przenieś naukę i dostrajanie
+# Transfer Learning i fine-tuning
 
-> Ktoś inny spędził milion godzin na GPU, ucząc sieć, jak wyglądają krawędzie, tekstury i części obiektów. Powinieneś pożyczyć te funkcje przed szkoleniem własnych.
+> Ktoś inny spędził milion godzin GPU, ucząc sieć, jak wyglądają krawędzie, tekstury i części obiektów. Powinieneś pożyczyć te cechy, zanim wytrenujesz własną sieć od zera.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
-**Wymagania wstępne:** Faza 4, lekcja 03 (CNN), Faza 4, lekcja 04 (klasyfikacja obrazów)
+**Wymagania wstępne:** Faza 4 Lekcja 03 (CNN), Faza 4 Lekcja 04 (Klasyfikacja obrazów)
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Odróżnij ekstrakcję funkcji od dostrajania i wybierz właściwą na podstawie rozmiaru zestawu danych, odległości domeny i budżetu obliczeniowego
-- Załaduj wstępnie wytrenowany szkielet, wymień jego głowę klasyfikatora i wytrenuj tylko głowę do roboczej linii bazowej w mniej niż 20 liniach
-- Stopniowo odmrażaj warstwy z dyskryminacyjnym współczynnikiem uczenia się, tak aby wczesne funkcje ogólne otrzymywały mniejsze aktualizacje niż późne funkcje specyficzne dla zadania
-- Zdiagnozuj trzy typowe awarie: dryf funkcji ze zbyt wysokiego LR na niezamrożonych blokach, załamanie statystyk BN na małych zbiorach danych i katastrofalne zapominanie
+- Odróżnienie feature extraction od fine-tuningu i wybór właściwego podejścia na podstawie rozmiaru zbioru danych, odległości domenowej i budżetu obliczeniowego
+- Wczytanie pretrenowanego backbone'u, zamiana jego głowicy klasyfikacyjnej i wytrenowanie samej głowicy do działającego baseline'u w mniej niż 20 liniach kodu
+- Progresywne odmrażanie warstw z dyskryminacyjnymi learning rate'ami, tak aby wczesne, ogólne cechy otrzymywały mniejsze aktualizacje niż późne, specyficzne dla zadania
+- Diagnozowanie trzech typowych awarii: dryfu cech (feature drift) spowodowanego za wysokim LR na odmrożonych blokach, zapadnięcia statystyk BN na małych zbiorach danych oraz katastroficznego zapominania
 
 ## Problem
 
-Szkolenie ResNet-50 w ImageNet kosztuje około 2000 godzin pracy procesora graficznego. Bardzo niewiele zespołów dysponuje takim budżetem na każde zadanie, które wysyła. Prawie każdy zespół tak naprawdę dostarcza wstępnie przeszkolony szkielet z nową głową przeszkoloną na kilkuset lub kilku tysiącach obrazów specyficznych dla danego zadania.
+Trenowanie ResNet-50 na ImageNet kosztuje około 2000 godzin GPU. Bardzo niewiele zespołów ma taki budżet na każde zadanie, które wdraża. To, co praktycznie każdy zespół faktycznie wdraża, to pretrenowany backbone z nową głowicą wytrenowaną na kilkuset lub kilku tysiącach obrazów specyficznych dla zadania.
 
-To nie jest skrót. Pierwszy blok konwersji dowolnego CNN przeszkolonego przez ImageNet uczy się krawędzi i filtrów podobnych do Gabora. Kolejne kilka bloków uczy się tekstur i prostych motywów. Środkowe bloki uczą się części obiektu. Ostatnie bloki uczą się kombinacji, które zaczynają wyglądać jak 1000 kategorii ImageNet. Pierwsze 90% tej hierarchii przenosi się niemal w niezmienionej postaci do obrazowania medycznego, inspekcji przemysłowych, danych satelitarnych i wszystkich innych zadań związanych z widzeniem – ponieważ natura ma ograniczone słownictwo dotyczące krawędzi i tekstur. Ostatnie 10% to to, co faktycznie trenujesz.
+To nie jest skrót na łatwą ścieżkę. Pierwszy blok konwolucyjny każdej sieci CNN trenowanej na ImageNet uczy się krawędzi i filtrów przypominających filtry Gabora. Kolejne kilka bloków uczy się tekstur i prostych motywów. Środkowe bloki uczą się części obiektów. Końcowe bloki uczą się kombinacji, które zaczynają przypominać 1000 kategorii ImageNet. Pierwsze 90% tej hierarchii przenosi się praktycznie bez zmian na obrazowanie medyczne, inspekcję przemysłową, dane satelitarne i wszystkie inne zadania związane z wizją — bo natura ma ograniczone słownictwo krawędzi i tekstur. Ostatnie 10% to to, co faktycznie trenujesz.
 
-Prawidłowe wykonanie transferu wiąże się z trzema błędami: niszczeniem wstępnie wyszkolonych funkcji ze zbyt dużą szybkością uczenia się, głodzeniem modelu informacji przez zamrożenie zbyt dużej ilości informacji oraz pozwalaniem, aby bieżące statystyki BatchNorm dryfowały w stronę małego zbioru danych, z którego reszta sieci nigdy się nie nauczyła. Ta lekcja prowadzi każdego z nich celowo.
+Prawidłowe wykonanie transferu wiąże się z trzema błędami, które na ciebie czekają: zniszczenie pretrenowanych cech przy zbyt wysokim learning rate, zagłodzenie modelu informacją przez zamrożenie zbyt wielu warstw oraz dopuszczenie do dryfu uśrednianych statystyk BatchNorm w stronę małego zbioru danych, na którym reszta sieci nigdy się nie uczyła. Ta lekcja przechodzi przez każdy z nich celowo.
 
 ## Koncepcja
 
-### Ekstrakcja funkcji a dostrajanie
+### Feature extraction vs fine-tuning
 
-Dwa tryby wybrane na podstawie tego, jak bardzo ufasz wstępnie wytrenowanym funkcjom i ile masz danych.
+Dwa reżimy, wybierane na podstawie tego, jak bardzo ufasz pretrenowanym cechom i jak dużo masz danych.
 
 ```mermaid
 flowchart TB
-    subgraph FE["Feature extraction — backbone frozen"]
-        FE1["Pretrained backbone<br/>(no gradient)"] --> FE2["New head<br/>(trained)"]
+    subgraph FE["Feature extraction — backbone zamrożony"]
+        FE1["Pretrenowany backbone<br/>(brak gradientu)"] --> FE2["Nowa głowica<br/>(trenowana)"]
     end
     subgraph FT["Fine-tuning — end-to-end"]
-        FT1["Pretrained backbone<br/>(tiny LR)"] --> FT2["New head<br/>(normal LR)"]
+        FT1["Pretrenowany backbone<br/>(mały LR)"] --> FT2["Nowa głowica<br/>(normalny LR)"]
     end
 
     style FE1 fill:#e5e7eb,stroke:#6b7280
@@ -43,50 +43,50 @@ flowchart TB
     style FT2 fill:#dcfce7,stroke:#16a34a
 ```
 
-Praktyczne zasady:
+Zasady ogólne:
 
-| Rozmiar zbioru danych | Odległość domeny | Przepis |
-|-------------|--------------------------------|------------|
-| < 1 tys. obrazów | blisko ImageNet | Zamroź kręgosłup, tylko główka pociągu |
-| 1k-10k | zamknij | Zamroź pierwsze 2-3 etapy, dopracuj resztę |
-| 10 tys.-100 tys. | dowolny | Dostosuj kompleksowo za pomocą dyskryminacyjnego LR |
-| 100 tys.+ | daleko | Dostosuj wszystko; rozważ szkolenie od podstaw, jeśli domena jest wystarczająco odległa |
+| Rozmiar zbioru danych | Odległość domenowa | Przepis |
+|--------------|-----------------|--------|
+| < 1k obrazów | bliska ImageNet | Zamroź backbone, trenuj tylko głowicę |
+| 1k-10k | bliska | Zamroź pierwsze 2-3 etapy, dotrenuj resztę |
+| 10k-100k | dowolna | Fine-tuning end-to-end z dyskryminacyjnym LR |
+| 100k+ | daleka | Dotrenuj wszystko; rozważ trenowanie od zera, jeśli domena jest wystarczająco daleka |
 
-„Blisko ImageNet” oznacza w przybliżeniu naturalne zdjęcia RGB z treścią przypominającą obiekt. Medyczna tomografia komputerowa, zdjęcia satelitarne z góry i mikroskopia to odległe domeny — funkcje nadal są pomocne, ale konieczne będzie dostosowanie większej liczby warstw.
+"Bliska ImageNet" oznacza w przybliżeniu naturalne zdjęcia RGB z zawartością przypominającą obiekty. Tomografia medyczna, zdjęcia satelitarne z lotu ptaka i mikroskopia to dalekie domeny — cechy wciąż pomagają, ale trzeba pozwolić na adaptację większej liczby warstw.
 
-### Dlaczego zamrażanie w ogóle działa
+### Czemu zamrażanie działa w ogóle
 
-Jak dowiaduje się CNN, funkcje ImageNet nie są wyspecjalizowane w 1000 kategoriach. Specjalizują się w statystyce obrazów naturalnych: krawędziach o określonych orientacjach, teksturach, wzorach kontrastowych, prymitywach kształtów. Statystyki te są stabilne w niemal każdej dziedzinie wizualnej, którą człowiek może nazwać. Dlatego model wyszkolony w ImageNet i oceniony zerowo na CIFAR-10 z samą nową głowicą liniową (bez precyzyjnego dostrojenia szkieletu) osiąga dokładność ponad 80%. Głowa uczy się, które z poznanych już cech wyważyć do tego zadania.
+Cechy ImageNet, których uczy się CNN, nie są wyspecjalizowane w 1000 kategorii. Są wyspecjalizowane w statystyce naturalnych obrazów: krawędziach o określonych orientacjach, teksturach, wzorcach kontrastu, prymitywach kształtu. Te statystyki są stabilne w prawie każdej domenie wizualnej, jaką człowiek potrafi nazwać. Dlatego model wytrenowany na ImageNet i ewaluowany zero-shot na CIFAR-10 z zaledwie nową głowicą liniową (bez fine-tuningu backbone'u) osiąga ponad 80% dokładności. Głowica uczy się, które z już nauczonych cech ważyć dla tego zadania.
 
-### Dyskryminacyjne współczynniki uczenia się
+### Dyskryminacyjne learning rate'y
 
-Kiedy odmrozisz, wczesne warstwy powinny trenować wolniej niż późne warstwy. Wczesne warstwy kodują ogólne funkcje, które chcesz zachować; późne warstwy kodują strukturę specyficzną dla zadania, którą trzeba często przenosić.
+Kiedy odmrażasz warstwy, wczesne warstwy powinny trenować się wolniej niż późne. Wczesne warstwy kodują ogólne cechy, które chcesz zachować; późne warstwy kodują strukturę specyficzną dla zadania, którą musisz znacząco zmienić.
 
 ```
-Typical recipe:
+Typowy przepis:
 
-  stage 0 (stem + first group): lr = base_lr / 100    (mostly fixed)
-  stage 1:                       lr = base_lr / 10
-  stage 2:                       lr = base_lr / 3
-  stage 3 (last backbone group): lr = base_lr
-  head:                          lr = base_lr  (or slightly higher)
+  etap 0 (stem + pierwsza grupa): lr = base_lr / 100    (w większości stały)
+  etap 1:                         lr = base_lr / 10
+  etap 2:                         lr = base_lr / 3
+  etap 3 (ostatnia grupa backbone'u): lr = base_lr
+  głowica:                        lr = base_lr  (lub nieco wyższy)
 ```
 
-W PyTorch jest to po prostu lista grup parametrów przekazywana do optymalizatora. Jeden model, pięć szybkości uczenia się, zero dodatkowego kodu.
+W PyTorchu to po prostu lista grup parametrów przekazana do optymalizatora. Jeden model, pięć learning rate'ów, zero dodatkowego kodu.
 
 ### Problem BatchNorm
 
-Warstwy BN zawierają bufory `running_mean` i `running_var`, które zostały obliczone w ImageNet. Jeśli Twoje zadanie ma inny rozkład pikseli — inne oświetlenie, inny czujnik, inną przestrzeń kolorów — te bufory są nieprawidłowe. Trzy opcje w kolejności preferencji:
+Warstwy BN przechowują bufory `running_mean` i `running_var`, które zostały obliczone na ImageNet. Jeśli twoje zadanie ma inny rozkład pikseli — inne oświetlenie, inny sensor, inną przestrzeń kolorów — te bufory są błędne. Trzy opcje w kolejności preferencji:
 
-1. **Dostosuj BN w trybie pociągu.** Pozwól BN aktualizować swoje statystyki działania wraz ze wszystkim innym. Domyślny wybór, gdy zbiór danych zadania jest średniej wielkości (>= 5 tys. przykładów).
-2. **Zamroź BN w trybie eval.** Zachowaj statystyki ImageNet i trenuj tylko z ciężarkami. Popraw, jeśli Twój zbiór danych jest na tyle mały, że średnia ruchoma BN byłaby zaszumiona.
-3. **Zastąp BN przez GroupNorm.** Całkowicie usuwa problem średniej ruchomej. Używany w szkieletach wykrywania i segmentacji, gdzie wielkość partii na procesor graficzny jest niewielka.
+1. **Fine-tuning z BN w trybie train.** Niech BN aktualizuje swoje statystyki bieżące razem z resztą sieci. Domyślny wybór, gdy zbiór danych dla zadania jest średniej wielkości (>= 5k przykładów).
+2. **Zamrożenie BN w trybie eval.** Zachowaj statystyki ImageNet i trenuj tylko wagi. Właściwe, gdy zbiór danych jest tak mały, że średnia bieżąca BN byłaby zaszumiona.
+3. **Zamiana BN na GroupNorm.** Całkowicie usuwa problem średniej bieżącej. Używane w backbone'ach do detekcji i segmentacji, gdzie rozmiar batcha na GPU jest mały.
 
-Zrobienie tego źle powoduje ciche zmniejszenie celności czołgów o 5-15%.
+Pomyłka w tym miejscu po cichu obniża dokładność o 5-15%.
 
-### Projekt głowy
+### Projektowanie głowicy
 
-Głowica klasyfikatora składa się z 1-3 warstw liniowych plus opcjonalny dropout. Każdy szkielet Torchvision ma domyślną głowicę, którą możesz wymienić:
+Głowica klasyfikacyjna to 1-3 warstwy liniowe plus opcjonalny dropout. Każdy backbone z torchvision ma domyślną głowicę, którą zastępujesz:
 
 ```
 backbone.fc = nn.Linear(backbone.fc.in_features, num_classes)          # ResNet
@@ -94,30 +94,30 @@ backbone.classifier[1] = nn.Linear(..., num_classes)                    # Effici
 backbone.heads.head = nn.Linear(..., num_classes)                       # torchvision ViT
 ```
 
-W przypadku małych zbiorów danych zwykle wystarcza pojedyncza warstwa liniowa. Dodanie warstwy ukrytej (Linear -> ReLU -> Dropout -> Linear) pomaga, gdy dystrybucja zadań jest dalej od dystrybucji szkoleniowej szkieletu.
+Dla małych zbiorów danych zwykle wystarczy jedna warstwa liniowa. Dodanie warstwy skrytej (Linear -> ReLU -> Dropout -> Linear) pomaga, gdy rozkład zadania jest dalszy od rozkładu treningowego backbone'u.
 
-### Warstwowy zanik LR
+### Layer-wise LR decay
 
-Płynniejsza wersja dyskryminacyjnego LR stosowana w nowoczesnym dostrajaniu (dostrajanie BEiT, DINOv2, ViT-B). Zamiast grupować warstwy w etapy, nadaj każdej warstwie nieco mniejszy LR niż warstwa znajdująca się nad nią:
+Bardziej gładka wersja dyskryminacyjnego LR używana w nowoczesnych fine-tune'ach (BEiT, DINOv2, fine-tuny ViT-B). Zamiast grupować warstwy w etapy, każdej warstwie przypisuje się nieco mniejszy LR niż warstwie powyżej:
 
 ```
 lr_layer_k = base_lr * decay^(L - k)
 ```
 
-Przy zaniku = 0,75 i L = 12 bloków transformatorowych, pierwszy blok pociągów znajduje się w `0.75^11 ≈ 0.04x` LR głowicy. Ma większe znaczenie w przypadku dostrojenia transformatora niż w przypadku CNN, gdzie zwykle wystarczą LR zgrupowane na scenach.
+Z decay = 0.75 i L = 12 blokami transformera, pierwszy blok trenuje się z LR równym `0.75^11 ≈ 0.04x` LR głowicy. Ma większe znaczenie w fine-tune'ach transformerów niż w CNN, gdzie LR grupowany etapowo zwykle wystarcza.
 
-### Co ocenić
+### Co ewaluować
 
-Przebiegi uczenia się transferu wymagają dwóch liczb, których nie można śledzić w trybie podstawowym:
+Przebiegi transfer learningu wymagają dwóch liczb, których nie śledziłbyś przy treningu od zera:
 
-- **Dokładność tylko wstępnie wytrenowana** — dokładność głowy przy zamrożonym kręgosłupie. To jest twoje piętro.
-- **Dopracowana dokładność** — ten sam model po kompleksowym szkoleniu. To jest twój sufit.
+- **Dokładność tylko-pretrenowana (pretrained-only)** — dokładność głowicy z zamrożonym backbone'em. To twoja podłoga.
+- **Dokładność po fine-tuningu** — ten sam model po treningu end-to-end. To twój sufit.
 
-Jeśli dostrojenie jest mniejsze niż tylko wstępne przeszkolenie, występuje błąd szybkości uczenia się lub błąd BN. Zawsze drukuj oba.
+Jeśli wersja po fine-tuningu jest gorsza niż tylko-pretrenowana, masz błąd learning rate'u lub BN. Zawsze wypisuj obie wartości.
 
 ## Zbuduj to
 
-### Krok 1: Załaduj wstępnie wytrenowany szkielet i sprawdź go
+### Krok 1: Wczytaj pretrenowany backbone i sprawdź go
 
 ```python
 import torch
@@ -131,9 +131,9 @@ print("classifier head:", backbone.fc)
 print("feature dim:", backbone.fc.in_features)
 ```
 
-`ResNet18` ma cztery etapy (`layer1..layer4`) plus rdzeń i `fc`. Każdy szkielet klasyfikacji Torchvision ma analogiczną strukturę.
+`ResNet18` ma cztery etapy (`layer1..layer4`) plus stem i głowicę `fc`. Każdy backbone klasyfikacyjny z torchvision ma analogiczną strukturę.
 
-### Krok 2: Ekstrakcja cech — zamroź wszystko, wymień głowicę
+### Krok 2: Feature extraction — zamroź wszystko, zastąp głowicę
 
 ```python
 def make_feature_extractor(num_classes=10):
@@ -150,11 +150,11 @@ print(f"trainable: {trainable:>10,}")
 print(f"frozen:    {frozen:>10,}")
 ```
 
-Można trenować tylko `model.fc`. Podstawą jest zamrożony ekstraktor funkcji.
+Tylko `model.fc` jest trenowalne. Backbone jest zamrożonym ekstraktorem cech.
 
-### Krok 3: Dostrajanie dyskryminacyjne
+### Krok 3: Fine-tuning dyskryminacyjny
 
-Narzędzie, które tworzy grupy parametrów z szybkością uczenia się charakterystyczną dla danego etapu.
+Funkcja pomocnicza, która buduje grupy parametrów z learning rate'ami specyficznymi dla etapu.
 
 ```python
 def discriminative_param_groups(model, base_lr=1e-3, decay=0.3):
@@ -185,11 +185,11 @@ for g in groups:
     print(f"{g['name']:>10s}  lr={g['lr']:.2e}  params={sum(p.numel() for p in g['params']):>8,}")
 ```
 
-`decay=0.3` oznacza, że każdy etap jest trenowany z szybkością 30% szybkości następnego. `fc` pobiera `base_lr`, `layer4` pobiera `0.3 * base_lr`, `conv1` pobiera `0.3^5 * base_lr ≈ 0.00243 * base_lr`. Ekstremalne brzmienie; empirycznie to działa.
+`decay=0.3` oznacza, że każdy etap trenuje się z 30% szybkości kolejnego etapu. `fc` otrzymuje `base_lr`, `layer4` otrzymuje `0.3 * base_lr`, `conv1` otrzymuje `0.3^5 * base_lr ≈ 0.00243 * base_lr`. Brzmi ekstremalnie; empirycznie działa.
 
 ### Krok 4: Obsługa BatchNorm
 
-Pomocnik do zamrożenia statystyk biegu BN bez zamrażania jego ciężarów.
+Funkcja pomocnicza zamrażająca statystyki bieżące BN bez zamrażania jego wag.
 
 ```python
 def freeze_bn_stats(model):
@@ -201,9 +201,9 @@ def freeze_bn_stats(model):
     return model
 ```
 
-Wywołaj to po ustawieniu `model.train()` na początku każdej epoki. `model.train()` przełącza wszystko do trybu uczenia; odwraca to sytuację tylko dla warstw BN.
+Wywołaj ją po ustawieniu `model.train()` na początku każdej epoki. `model.train()` przełącza wszystko w tryb treningowy; ta funkcja odwraca to tylko dla warstw BN.
 
-### Krok 5: Minimalna, kompleksowa pętla dostrajająca
+### Krok 5: Minimalna pętla fine-tuningu end-to-end
 
 ```python
 from torch.optim import SGD
@@ -247,11 +247,11 @@ def fine_tune(model, train_loader, val_loader, device, epochs=5, base_lr=1e-3, f
     return model
 ```
 
-Pięć epok z powyższą recepturą na CIFAR-10 zapewnia `ResNet18-IMAGENET1K_V1` od ~70% dokładności sondy liniowej z zerowym strzałem do ~93% dokładności precyzyjnie dostrojonej. Sama głowa ustabilizuje się na poziomie około 86%, nie dotykając w ogóle kręgosłupa.
+Pięć epok z powyższym przepisem na CIFAR-10 przeprowadza `ResNet18-IMAGENET1K_V1` z ~70% dokładności zero-shot linear-probe do ~93% dokładności po fine-tuningu. Sama głowica zatrzymałaby się na poziomie ~86% bez dotykania backbone'u.
 
-### Krok 6: Stopniowe odmrażanie
+### Krok 6: Progresywne odmrażanie
 
-Harmonogram, który odmraża jeden etap w epoce od końca do początku. Łagodzi dryf funkcji kosztem kilku dodatkowych epok.
+Harmonogram, który odmraża jeden etap na epokę, od końca w stronę początku. Łagodzi dryf cech kosztem kilku dodatkowych epok.
 
 ```python
 def progressive_unfreeze_schedule(model):
@@ -277,11 +277,11 @@ def progressive_unfreeze_schedule(model):
     return start, unfreeze
 ```
 
-Wywołaj `start()` raz przed pierwszą epoką. Wywołaj `unfreeze(epoch)` na początku każdej epoki. Odbuduj optymalizator za każdym razem, gdy zmieni się zestaw możliwych do wyszkolenia parametrów, w przeciwnym razie zamrożone parametry nadal przechowują buforowane momenty, które je mylą.
+Wywołaj `start()` raz przed pierwszą epoką. Wywołuj `unfreeze(epoch)` na początku każdej epoki. Przebuduj optymalizator każdorazowo, gdy zmienia się zbiór trenowalnych parametrów, w przeciwnym razie zamrożone parametry wciąż przechowują zbuforowane momenty, które wprowadzają go w błąd.
 
-## Użyj tego
+## Wykorzystaj to
 
-W przypadku większości rzeczywistych zadań wystarczą `torchvision.models` + trzy linie. Cięższe maszyny powyżej mają znaczenie, gdy napotkasz problemy, których domyślne biblioteki nie mogą rozwiązać.
+Dla większości realnych zadań `torchvision.models` + trzy linie wystarczą. Powyższe, cięższe mechanizmy mają znaczenie, gdy napotkasz problemy, których domyślne ustawienia biblioteki nie naprawią.
 
 ```python
 from torchvision.models import resnet50, ResNet50_Weights
@@ -291,40 +291,40 @@ model.fc = nn.Linear(model.fc.in_features, num_classes)
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-4)
 ```
 
-Dwa inne ustawienia domyślne klasy produkcyjnej:
+Dwa inne domyślne podejścia klasy produkcyjnej:
 
-- `timm` dostarcza około 800 wstępnie przeszkolonych szkieletów wizyjnych ze spójnym interfejsem API (`timm.create_model("resnet50", pretrained=True, num_classes=10)`). Jest to standard w przypadku każdego dostrojenia wykraczającego poza zoo Torchvision.
-- W przypadku transformatorów `transformers.AutoModelForImageClassification.from_pretrained(name, num_labels=N)` zapewnia ViT / BEiT / DeiT z taką samą semantyką ładowania jak modele tekstowe.
+- `timm` udostępnia ~800 pretrenowanych backbone'ów wizyjnych z konsekwentnym API (`timm.create_model("resnet50", pretrained=True, num_classes=10)`). Dla każdego fine-tune'u wykraczającego poza zoo torchvision jest to standard.
+- Dla transformerów `transformers.AutoModelForImageClassification.from_pretrained(name, num_labels=N)` daje ci ViT / BEiT / DeiT z taką samą semantyką wczytywania jak modele tekstowe.
 
-## Wyślij to
+## Wypchnij to
 
-Ta lekcja daje:
+Ta lekcja produkuje:
 
-- `outputs/prompt-fine-tune-planner.md` — monit, który wybiera wyodrębnianie cech, progresywne lub kompleksowe dostrajanie w oparciu o rozmiar zbioru danych, odległość domeny i budżet obliczeniowy.
-- `outputs/skill-freeze-inspector.md` — umiejętność, która w przypadku modelu PyTorch informuje, które parametry można wytrenować, które warstwy BatchNorm są w trybie eval i czy optymalizator faktycznie otrzymuje parametry, które można wytrenować.
+- `outputs/prompt-fine-tune-planner.md` — prompt, który wybiera między feature extraction, progresywnym a end-to-end fine-tuningiem na podstawie rozmiaru zbioru danych, odległości domenowej i budżetu obliczeniowego.
+- `outputs/skill-freeze-inspector.md` — skill, który dla podanego modelu PyTorch raportuje, które parametry są trenowalne, które warstwy BatchNorm są w trybie eval, i czy optymalizator faktycznie otrzymuje trenowalne parametry.
 
 ## Ćwiczenia
 
-1. **(Łatwe)** Trenuj `ResNet18` jako sondę liniową (szkielet zamrożony) i jako pełne dostrojenie na tym samym syntetycznym zestawie danych CIFAR. Podaj obie dokładności obok siebie. Wyjaśnij, która luka mówi, że funkcje są przenoszone dobrze, a która nie.
-2. **(Średni)** Celowo wprowadź błąd: ustaw `base_lr = 1e-1` na scenie szkieletowej zamiast na głowie. Pokaż eksplozję straty treningowej, a następnie regenerację, stosując pomocnika `discriminative_param_groups`. Zapisz LR, przy którym każdy etap zaczyna się rozchodzić.
-3. **(Trudny)** Weź zestaw danych obrazowania medycznego (np. CheXpert-small, PatchCamelyon lub HAM10000) i porównaj trzy reżimy: (a) zamrożony szkielet wstępnie wyszkolony w ImageNet + głowica liniowa; (b) Wstępnie wyszkolony przez ImageNet kompleksowy dostrojenie; c) trening podstawowy. Raportuj dokładność i obliczaj koszty dla każdego z nich. Przy jakim rozmiarze zbioru danych trening podstawowy staje się konkurencyjny?
+1. **(Łatwe)** Wytrenuj `ResNet18` jako linear probe (backbone zamrożony) oraz jako pełny fine-tuning na tym samym syntetycznym zbiorze CIFAR. Zaraportuj obie dokładności obok siebie. Wyjaśnij, która różnica mówi ci, że cechy przenoszą się dobrze, a która że nie.
+2. **(Średnie)** Wprowadź błąd celowo: ustaw `base_lr = 1e-1` na etapie backbone'u zamiast na głowicy. Pokaż, jak strata treningowa eksploduje, a następnie napraw sytuację, stosując funkcję pomocniczą `discriminative_param_groups`. Zapisz LR, przy którym każdy etap zaczyna się rozjeżdżać (divergencja).
+3. **(Trudne)** Weź zbiór danych obrazowania medycznego (np. CheXpert-small, PatchCamelyon lub HAM10000) i porównaj trzy reżimy: (a) zamrożony backbone pretrenowany na ImageNet + liniowa głowica; (b) fine-tuning end-to-end backbone'u pretrenowanego na ImageNet; (c) trening od zera. Zaraportuj dokładność i koszt obliczeniowy dla każdego z nich. Przy jakim rozmiarze zbioru danych trening od zera staje się konkurencyjny?
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Ekstrakcja cech | „Zamroź i trenuj głowę” | Parametry szkieletu zamrożone, tylko nowa głowa klasyfikatora otrzymuje gradient |
-| Dostrajanie | „Przekwalifikuj się od początku do końca” | Wszystkie parametry można trenować, zwykle przy znacznie mniejszym LR niż w przypadku treningu podstawowego |
-| Dyskryminacyjny LR | „Mniejszy LR dla wczesnych warstw” | Grupy parametrów optymalizatora, w których LR na wczesnym etapie stanowi ułamek LR na późnym etapie |
-| Warstwowy rozpad LR | „Gładki gradient LR” | LR na warstwę pomnożony przez rozpad^(L - k); powszechne w dostrojeniach transformatorów |
-| Katastrofalne zapomnienie | „Modelka straciła ImageNet” | Zbyt wysoki LR nadpisuje wstępnie wytrenowane funkcje przed nauczeniem się nowego sygnału zadania |
-| Dryft statystyk BN | „Średnia biegania jest zła” | BatchNorm running_mean/var obliczono dla innej dystrybucji niż bieżące zadanie, po cichu pogarszając dokładność |
-| Sonda liniowa | „Zamrożony kręgosłup + głowica liniowa” | Ocena wstępnie wytrenowanych cech — dokładność najlepszego klasyfikatora liniowego na wierzchu zamrożonej reprezentacji |
-| Katastrofalny upadek | „Wszystko przepowiada jedną klasę” | Dzieje się tak podczas dostrajania z LR wystarczająco wysokim, aby zniszczyć cechy, zanim gradienty z głowy ustabilizują się |
+| Feature extraction | "Zamroź i trenuj głowicę" | Parametry backbone'u zamrożone, gradient otrzymuje tylko nowa głowica klasyfikacyjna |
+| Fine-tuning | "Dotrenuj end-to-end" | Wszystkie parametry trenowalne, zwykle z dużo mniejszym LR niż trening od zera |
+| Dyskryminacyjny LR | "Mniejszy LR dla wczesnych warstw" | Grupy parametrów optymalizatora, w których LR wczesnego etapu jest ułamkiem LR późnego etapu |
+| Layer-wise LR decay | "Gładki gradient LR" | LR dla każdej warstwy pomnożony przez decay^(L - k); powszechne w fine-tune'ach transformerów |
+| Catastrophic forgetting (katastroficzne zapominanie) | "Model zgubił ImageNet" | Za wysoki LR nadpisuje pretrenowane cechy zanim zostanie nauczony sygnał z nowego zadania |
+| Dryf statystyk BN | "Running mean jest błędny" | running_mean/var BatchNorm obliczone na innym rozkładzie niż bieżące zadanie, co po cichu szkodzi dokładności |
+| Linear probe | "Zamrożony backbone + liniowa głowica" | Ewaluacja pretrenowanych cech — dokładność najlepszego klasyfikatora liniowego na zamrożonej reprezentacji |
+| Catastrophic collapse (katastroficzne zapadnięcie) | "Wszystko przewiduje jedną klasę" | Pojawia się, gdy fine-tuning odbywa się z LR wystarczająco wysokim, aby zniszczyć cechy, zanim gradienty z głowicy zdążą się ustabilizować |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-- [Jak możliwe jest przenoszenie funkcji w głębokich sieciach neuronowych? (Yosinski et al., 2014)](https://arxiv.org/abs/1411.1792) — artykuł, w którym określono ilościowo możliwość przenoszenia cech między warstwami
-- [Dostrajanie modelu języka uniwersalnego (ULMFiT, Howard & Ruder, 2018)](https://arxiv.org/abs/1801.06146) — oryginalny przepis na dyskryminacyjny LR / progresywne odmrażanie; pomysły przenoszą się bezpośrednio na wizję
-– [dokumentacja Timma](https://huggingface.co/docs/timm) — odniesienie do współczesnych szkieletów wzroku i dokładnych ustawień domyślnych, z którymi zostali przeszkoleni
-- [A Simple Framework for Linear-Probe Evaluation (Kornblith et al., 2019)](https://arxiv.org/abs/1805.08974) — dlaczego dokładność sondy liniowej ma znaczenie i jak ją poprawnie raportować
+- [How transferable are features in deep neural networks? (Yosinski et al., 2014)](https://arxiv.org/abs/1411.1792) — praca, która skwantyfikowała przenoszalność cech między warstwami
+- [Universal Language Model Fine-tuning (ULMFiT, Howard & Ruder, 2018)](https://arxiv.org/abs/1801.06146) — oryginalny przepis na dyskryminacyjny LR / progresywne odmrażanie; idee przenoszą się bezpośrednio na wizję
+- [timm documentation](https://huggingface.co/docs/timm) — punkt odniesienia dla nowoczesnych backbone'ów wizyjnych i dokładnych domyślnych ustawień fine-tuningu, z którymi zostały wytrenowane
+- [A Simple Framework for Linear-Probe Evaluation (Kornblith et al., 2019)](https://arxiv.org/abs/1805.08974) — czemu dokładność linear-probe ma znaczenie i jak ją prawidłowo raportować
