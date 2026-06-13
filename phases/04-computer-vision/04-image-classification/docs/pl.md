@@ -1,26 +1,26 @@
-# Klasyfikacja obrazu
+# Klasyfikacja obrazów
 
-> Klasyfikator jest funkcją od pikseli do rozkładu prawdopodobieństwa w klasach. Cała reszta to hydraulika.
+> Klasyfikator to funkcja z pikseli do rozkładu prawdopodobieństwa nad klasami. Wszystko inne to instalacja wodno-kanalizacyjna.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
-**Wymagania wstępne:** Faza 2, lekcja 09 (ocena modelu), faza 3, lekcja 10 (Mini Framework), faza 4, lekcja 03 (CNN)
+**Wymagania wstępne:** Faza 2 Lekcja 09 (Ewaluacja modeli), Faza 3 Lekcja 10 (Mini Framework), Faza 4 Lekcja 03 (CNN)
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zbuduj kompleksowy potok klasyfikacji obrazów w CIFAR-10: zbiór danych, powiększanie, model, pętla szkoleniowa, ocena
-- Wyjaśnij rolę każdego komponentu (ładowanie danych, utrata, optymalizator, planista, rozszerzenie) i przewiduj, jak uszkodzenie któregokolwiek z nich przejawia się na krzywej strat
-- Wprowadź od podstaw miksowanie, wycinanie i wygładzanie etykiet i uzasadnij, kiedy warto dodać każdy z nich
-- Przeczytaj matrycę zamieszania i tabelę precyzji/przypominania dla poszczególnych klas, aby zdiagnozować awarie zbioru danych i modelu wykraczające poza zagregowaną dokładność
+- Zbudowanie kompletnego potoku klasyfikacji obrazów na CIFAR-10: zbiór danych, augmentacja, model, pętla treningowa, ewaluacja
+- Wyjaśnienie roli każdego komponentu (dataloader, funkcja straty, optymalizator, scheduler, augmentacja) i przewidzenie, jak zepsucie któregokolwiek z nich objawia się na krzywej straty
+- Implementacja mixup, cutout i label smoothing od zera oraz uzasadnienie, kiedy warto je dodać
+- Czytanie macierzy konfuzji oraz tabeli precyzji/czułości per klasa, aby diagnozować problemy zbioru danych i modelu poza zagregowaną dokładnością
 
 ## Problem
 
-Każde zadanie związane z wizją sprowadza się na pewnym poziomie do klasyfikacji obrazu. Wykrywanie klasyfikuje regiony. Segmentacja klasyfikuje piksele. Odzyskiwanie klasyfikuje się według podobieństwa do centroidów klas. Właściwa klasyfikacja – pętla zbioru danych, polityka powiększania, utrata, ocena – to umiejętność, która przekłada się na każde inne zadanie na tym etapie.
+Każde zadanie wizyjne, które trafia do produkcji, sprowadza się na pewnym poziomie do klasyfikacji obrazów. Detekcja klasyfikuje regiony. Segmentacja klasyfikuje piksele. Wyszukiwanie (retrieval) rankinguje na podstawie podobieństwa do centroidów klas. Zrobienie klasyfikacji dobrze — pętla danych, polityka augmentacji, funkcja straty, ewaluacja — to umiejętność, która przenosi się na każde inne zadanie w tej fazie.
 
-Większość błędów klasyfikacji nie występuje w modelu. Żyją w przygotowaniu: przerwana normalizacja, niezmieszany zbiór treningowy, wzmocnienie zniekształcające etykiety, podział walidacji zanieczyszczony danymi szkoleniowymi, tempo uczenia się, które po 30. epoce dyskretnie odbiega od normy. CNN, która przy prawidłowej konfiguracji osiągnęłaby 93% na CIFAR-10, zwykle osiąga 70–75% przy zepsutej, a krzywa strat przez cały czas wygląda wiarygodnie.
+Większość błędów w klasyfikacji nie leży w modelu. Żyją w potoku danych: zepsuta normalizacja, nieprzemieszany (unshuffled) zbiór treningowy, augmentacja, która zniekształca etykiety, podział walidacyjny zanieczyszczony danymi treningowymi, learning rate, który po cichu rozjeżdża się po epoce 30. CNN, który z poprawną konfiguracją uzyskałby 93% na CIFAR-10, z zepsutą konfiguracją zwykle uzyskuje 70-75%, a krzywa straty cały czas wygląda wiarygodnie.
 
-W tej lekcji cały rurociąg jest łączony ręcznie, dzięki czemu każdą część można sprawdzić. Nie będziesz używać niczego z `torchvision.datasets`, które mogłoby ukryć błąd.
+Ta lekcja okabluje cały potok ręcznie, tak aby każda część była możliwa do zbadania. Nie użyjesz niczego z `torchvision.datasets`, co mogłoby ukryć błąd.
 
 ## Koncepcja
 
@@ -46,28 +46,28 @@ flowchart LR
     style H fill:#dcfce7,stroke:#16a34a
 ```
 
-Każda linia w tej pętli jest miejscem, w którym może zamieszkać błąd. Entropia krzyżowa pobiera surowe logity, a nie dane wyjściowe softmax, więc każdy `model(x).softmax()` przed stratą po cichu oblicza niewłaściwy gradient. Ulepszenia dotyczą tylko danych wejściowych, a nie etykiet — z wyjątkiem miksowania, które łączy oba elementy. `optimizer.zero_grad()` musi nastąpić raz na krok; pominięcie go powoduje akumulację gradientów i wygląda na szalenie niestabilne tempo uczenia się. Każdy z tych błędów spłaszcza krzywą uczenia się bez powodowania błędu.
+Każda linia w tej pętli to miejsce, w którym może żyć błąd. Cross-entropy przyjmuje surowe logity, nie wyniki softmax, więc jakiekolwiek `model(x).softmax()` przed obliczeniem straty po cichu liczy niewłaściwy gradient. Augmentacje stosuje się tylko do wejść, nie do etykiet — z wyjątkiem mixup, który miesza obie rzeczy. `optimizer.zero_grad()` musi się wykonać raz na krok; pominięcie go akumuluje gradienty i wygląda jak dziko niestabilny learning rate. Każdy z tych błędów wypłaszcza krzywą uczenia bez wyrzucenia żadnego błędu (error).
 
-### Entropia krzyżowa, logity i softmax
+### Cross-entropy, logity i softmax
 
-Klasyfikator generuje `C` liczby na obraz zwane logitami. Zastosowanie softmax przekształca je w rozkład prawdopodobieństwa:
+Klasyfikator produkuje `C` liczb na obraz, zwanych logitami. Zastosowanie softmax przekształca je w rozkład prawdopodobieństwa:
 
 ```
 softmax(z)_i = exp(z_i) / sum_j exp(z_j)
 ```
 
-Entropia krzyżowa mierzy logarytm ujemny prawdopodobieństwa właściwej klasy:
+Cross-entropy mierzy ujemny logarytm prawdopodobieństwa poprawnej klasy:
 
 ```
 CE(z, y) = -log( softmax(z)_y )
         = -z_y + log( sum_j exp(z_j) )
 ```
 
-Postać prawostronna jest postacią stabilną numerycznie (log-sum-exp). `nn.CrossEntropyLoss` PyTorch łączy softmax + NLL w jednej operacji i bezpośrednio pobiera surowe logity. Samodzielne zastosowanie softmaxu prawie zawsze jest błędem — obliczasz log(softmax(softmax(z))), bezsensowną wielkość.
+Forma po prawej stronie jest numerycznie stabilna (log-sum-exp). `nn.CrossEntropyLoss` w PyTorchu łączy softmax i NLL w jednej operacji i przyjmuje surowe logity bezpośrednio. Samodzielne zastosowanie softmax przed tym jest prawie zawsze błędem — obliczasz log(softmax(softmax(z))), wielkość bez sensu.
 
-### Dlaczego powiększanie działa
+### Dlaczego augmentacja działa
 
-CNN ma indukcyjne nastawienie do tłumaczenia (od podziału wagi), ale nie ma wbudowanej niezmienności w przypadku kadrowania, odwracania, drgań kolorów lub okluzji. Jedynym sposobem nauczenia go tych niezmienności jest pokazanie pikseli, które je ćwiczą. Każda losowa transformacja podczas uczenia jest sposobem na powiedzenie: „te dwa obrazy mają tę samą etykietę; poznaj cechy, które ignorują różnicę”.
+CNN ma indukcyjny bias dla translacji (z dzielenia wag), ale nie ma wbudowanej niezmienniczości względem kadrowania, odbić, jittera kolorów czy okluzji. Jedynym sposobem nauczenia go tych niezmienniczości jest pokazanie mu pikseli, które te niezmienniczości wymuszają. Każda losowa transformacja podczas treningu jest sposobem powiedzenia: "te dwa obrazy mają tę samą etykietę; nauczcie się cech, które ignorują tę różnicę."
 
 ```
 Original crop:  "dog facing left"
@@ -77,11 +77,11 @@ Colour jitter:  "dog in warmer light"
 RandomErasing:  "dog with patch missing"
 ```
 
-Zasada: powiększanie musi zachować etykietę. Wycięcie i obrót cyfry może zamienić „6” w „9”; w przypadku tego zbioru danych używasz mniejszych zakresów rotacji i wybierasz rozszerzenia, które uwzględniają niezmienność specyficzną dla cyfr.
+Zasada: augmentacja musi zachowywać etykietę. Cutout i rotacja na cyfrze mogą zmienić "6" w "9"; dla takiego zbioru danych używa się mniejszych zakresów rotacji i wybiera augmentacje respektujące niezmienniczości specyficzne dla cyfr.
 
-### Miksowanie i wycinanie miksów
+### Mixup i cutmix
 
-Zwykłe powiększanie przekształca piksele, ale utrzymuje wysoką temperaturę etykiet. **Mixup** i **cutmix** rozbijają to, interpolując oba.
+Zwykła augmentacja przekształca piksele, ale zachowuje etykiety jako one-hot. **Mixup** i **cutmix** łamią tę zasadę, interpolując obie rzeczy.
 
 ```
 Mixup:
@@ -94,31 +94,32 @@ Cutmix:
   y = area-weighted mix of y_i and y_j
 ```
 
-Dlaczego to pomaga: model przestaje zapamiętywać kolczaste, jedno-gorące cele i uczy się interpolować między klasami. Rosną straty w treningu, rośnie dokładność testów. Jest to najtańsze i najtańsze ulepszenie niezawodności dla dowolnego klasyfikatora.
+Dlaczego to pomaga: model przestaje zapamiętywać szpiczaste cele one-hot i uczy się interpolować między klasami. Strata treningowa rośnie, dokładność testowa rośnie. To jednorazowo najtańsza poprawa odporności (robustness), jaką można zastosować do każdego klasyfikatora.
 
-### Wygładzanie etykiet
+### Label smoothing
 
-Kuzyn pomieszania. Zamiast trenować z `[0, 0, 1, 0, 0]`, trenuj z `[eps/C, eps/C, 1-eps, eps/C, eps/C]` przez mały `eps`, np. 0,1. Powstrzymuje model przed wytwarzaniem dowolnie ostrych logitów i poprawia kalibrację niemal bez żadnych kosztów. Wbudowane w `nn.CrossEntropyLoss(label_smoothing=0.1)` od wersji PyTorch 1.10.
+Kuzyn mixup. Zamiast trenować względem `[0, 0, 1, 0, 0]`, trenujesz względem `[eps/C, eps/C, 1-eps, eps/C, eps/C]` dla małego `eps`, np. 0.1. Powstrzymuje model przed produkowaniem dowolnie ostrych logitów i poprawia kalibrację praktycznie bezkosztowo. Wbudowane w `nn.CrossEntropyLoss(label_smoothing=0.1)` od PyTorch 1.10.
 
-### Ocena wykraczająca poza dokładność
+### Ewaluacja poza dokładnością
 
-Łączna dokładność ukrywa brak równowagi. Klasyfikator binarny 90-10, który zawsze przewiduje klasę większościową, uzyskuje wynik 90%. Narzędzia, które faktycznie powiedzą Ci, co się dzieje:
+Zagregowana dokładność maskuje niezbalansowanie. Binarny klasyfikator 90-10, który zawsze przewiduje klasę większościową, uzyskuje 90%. Narzędzia, które faktycznie mówią, co się dzieje:
 
-- **Dokładność na klasę** — jedna liczba na klasę; natychmiast wyłaniają się kategorie o słabszych wynikach.
-- **Macierz zamieszania** — siatka C x C z wierszem i kolumna j = liczba prawdziwej klasy i przewidywanej jako klasa j; przekątna jest prawidłowa, poza przekątną znajdują się miejsca, w których mieszka model.
-- **Top-1 / Top-5** — czy właściwa klasa znajduje się w pierwszej 1, czy w pierwszej 5 prognoz; Pięć najważniejszych ma znaczenie dla ImageNet, ponieważ klasy takie jak „Norwich terrier” czy „Norfolk terrier” są naprawdę niejednoznaczne.
-- **Kalibracja (ECE)** — czy przewidywana pewność na poziomie 0,8 zapewnia poprawność w 80% przypadków? Nowoczesne sieci są systematycznie nadmiernie pewne siebie; napraw za pomocą skalowania temperatury lub wygładzania etykiet.
+- **Dokładność per klasa** — jedna liczba na klasę; natychmiast ujawnia słabo działające kategorie.
+- **Macierz konfuzji** — siatka C x C, gdzie wiersz i, kolumna j = liczba przykładów prawdziwej klasy i przewidzianych jako klasa j; przekątna to poprawne predykcje, elementy poza przekątną to miejsca, gdzie żyje twój model.
+- **Top-1 / Top-5** — czy poprawna klasa jest w 1 lub 5 najlepszych predykcjach; Top-5 ma znaczenie dla ImageNet, bo klasy takie jak "Norwich terrier" vs "Norfolk terrier" są naprawdę niejednoznaczne.
+- **Kalibracja (ECE)** — czy predykcja z pewnością 0.8 jest poprawna w 80% przypadków? Współczesne sieci są systematycznie nadmiernie pewne (over-confident); fix poprzez temperature scaling lub label smoothing.
 
 ## Zbuduj to
 
 ### Krok 1: Deterministyczny syntetyczny zbiór danych
 
-CIFAR-10 żyje na dysku. Aby uczynić tę lekcję powtarzalną i szybką, budujemy syntetyczny zbiór danych, który wygląda jak CIFAR — obrazy RGB 32x32 ze strukturą specyficzną dla klasy, której model musi się nauczyć. Dokładnie ten sam rurociąg działa bez zmian na prawdziwym CIFAR-10.
+CIFAR-10 leży na dysku. Aby ta lekcja była powtarzalna i szybka, budujemy syntetyczny zbiór danych, który wygląda jak CIFAR — obrazy RGB 32x32 ze strukturą specyficzną dla klasy, którą model musi się nauczyć. Dokładnie ten sam potok działa bez zmian na prawdziwym CIFAR-10.
 
 ```python
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+
 
 def synthetic_cifar(num_per_class=1000, num_classes=10, seed=0):
     rng = np.random.default_rng(seed)
@@ -142,6 +143,7 @@ def synthetic_cifar(num_per_class=1000, num_classes=10, seed=0):
     idx = rng.permutation(len(X))
     return X[idx], Y[idx]
 
+
 class ArrayDataset(Dataset):
     def __init__(self, X, Y, transform=None):
         self.X = X
@@ -159,11 +161,11 @@ class ArrayDataset(Dataset):
         return img, int(self.Y[i])
 ```
 
-Każda klasa otrzymuje własną paletę kolorów i wzór częstotliwości, a także szum Gaussa, aby zmusić model do uczenia się sygnału, a nie zapamiętywania pikseli. Dziesięć klas, po tysiąc obrazów każda, permutowanych.
+Każda klasa ma własną paletę kolorów i wzorzec częstotliwości, plus szum gaussowski, aby zmusić model do nauczenia się sygnału, a nie zapamiętywania pikseli. Dziesięć klas, tysiąc obrazów każda, przemieszane (permuted).
 
-### Krok 2: Normalizacja i wzmacnianie
+### Krok 2: Normalizacja i augmentacja
 
-Te dwie transformacje są dostępne w każdym rurociągu wizyjnym.
+Dwie transformacje, które ma każdy potok wizyjny.
 
 ```python
 def standardize(mean, std):
@@ -173,12 +175,14 @@ def standardize(mean, std):
         return (img - mean) / std
     return _fn
 
+
 def random_hflip(p=0.5):
     def _fn(img):
         if np.random.random() < p:
             return img[:, ::-1, :].copy()
         return img
     return _fn
+
 
 def random_crop(pad=4):
     def _fn(img):
@@ -189,6 +193,7 @@ def random_crop(pad=4):
         return padded[y:y + h, x:x + w, :]
     return _fn
 
+
 def compose(*fns):
     def _fn(img):
         for fn in fns:
@@ -197,11 +202,11 @@ def compose(*fns):
     return _fn
 ```
 
-Podkładka refleksyjna przed przycięciem, a nie podkładka zerowa, ponieważ czarne obramowania to sygnał, który model nauczyłby się ignorować w nieprzydatny sposób.
+Padding przez odbicie (reflect) przed kadrowaniem, nie padding zerami, bo czarne ramki są sygnałem, który model nauczyłby się ignorować w nieprzydatny sposób.
 
-### Krok 3: Mieszanie
+### Krok 3: Mixup
 
-Łączy dwa obrazy i dwie etykiety na etapie uczenia. Zaimplementowano jako transformację wsadową, więc znajduje się obok przebiegu w przód, a nie wewnątrz zbioru danych.
+Miesza dwa obrazy i dwie etykiety wewnątrz kroku treningowego. Zaimplementowane jako transformacja na batchu, więc żyje przy przejściu w przód (forward pass), a nie w zbiorze danych.
 
 ```python
 def mixup_batch(x, y, num_classes, alpha=0.2):
@@ -214,16 +219,17 @@ def mixup_batch(x, y, num_classes, alpha=0.2):
     y_mixed = lam * y_onehot + (1 - lam) * y_onehot[idx]
     return x_mixed, y_mixed
 
+
 def soft_cross_entropy(logits, soft_targets):
     log_probs = torch.log_softmax(logits, dim=-1)
     return -(soft_targets * log_probs).sum(dim=-1).mean()
 ```
 
-`soft_cross_entropy` to entropia krzyżowa względem dystrybucji z miękką etykietą. Sprowadza się to do zwykłego przypadku z jedną gorącą temperaturą, gdy cel jest dokładnie o jedną gorącą.
+`soft_cross_entropy` to cross-entropy względem rozkładu miękkich etykiet (soft-label). Sprowadza się do zwykłego przypadku one-hot, gdy cel jest dokładnie one-hot.
 
 ### Krok 4: Pętla treningowa
 
-Kompletny przepis: jedno przejście danych, gradienty raz na partię, krok planujący raz na epokę.
+Kompletna receptura: jedno przejście po danych, gradienty raz na batch, scheduler wykonywany raz na epokę.
 
 ```python
 import torch
@@ -257,6 +263,7 @@ def train_one_epoch(model, loader, optimizer, device, num_classes, use_mixup=Tru
             correct += (pred == y).sum().item()
     return loss_sum / total, correct / total
 
+
 @torch.no_grad()
 def evaluate(model, loader, device, num_classes):
     model.eval()
@@ -276,17 +283,17 @@ def evaluate(model, loader, device, num_classes):
     return loss_sum / total, correct / total, cm
 ```
 
-Pięć niezmienników, które sprawdzasz za każdym razem, gdy piszesz pętlę treningową:
+Pięć inwariantów, które sprawdzasz każdym razem, gdy piszesz pętlę treningową:
 
-1. `model.train()` przed szkoleniem, `model.eval()` przed oceną — odwraca zachowanie typu dropout i normalność wsadowa.
+1. `model.train()` przed treningiem, `model.eval()` przed ewaluacją — odwraca zachowanie dropout i batchnorm.
 2. `.zero_grad()` przed `.backward()`.
-3. `.item()` podczas gromadzenia metryk, tak aby nic nie utrzymywało wykresu obliczeń przy życiu.
-4. `@torch.no_grad()` podczas oceny — oszczędza pamięć i czas, zapobiega subtelnym wypadkom.
-5. Argmax w porównaniu z surowymi logitami, a nie softmax — ten sam wynik, o jedną operację mniej.
+3. `.item()` przy akumulowaniu metryk, żeby nic nie przetrzymywało grafu obliczeń.
+4. `@torch.no_grad()` podczas ewaluacji — oszczędza pamięć i czas, zapobiega subtelnym wypadkom.
+5. Argmax na surowych logitach, nie na softmax — ten sam wynik, jedna operacja mniej.
 
 ### Krok 5: Złóż to w całość
 
-Skorzystaj z `TinyResNet` z poprzedniej lekcji, trenuj przez kilka epok, oceniaj.
+Użyj `TinyResNet` z poprzedniej lekcji, treniuj kilka epok, oceń.
 
 ```python
 from main import synthetic_cifar, ArrayDataset
@@ -326,11 +333,11 @@ for epoch in range(10):
           f"train {tr_loss:.3f}/{tr_acc:.3f}  val {va_loss:.3f}/{va_acc:.3f}")
 ```
 
-W przypadku syntetycznego zbioru danych dokładność walidacji w ciągu pięciu epok jest niemal idealna i o to właśnie chodzi: potok jest prawidłowy, model może się nauczyć tego, czego można się nauczyć. Zamień zestaw danych na prawdziwy CIFAR-10 i te same pociągi pętlowe do ~ 90% bez zmian.
+Na syntetycznym zbiorze danych pozwala to osiągnąć prawie idealną dokładność walidacyjną w ciągu pięciu epok, co jest tu istotne: potok jest poprawny, model może nauczyć się tego, czego da się nauczyć. Zamień zbiór danych na prawdziwy CIFAR-10 i ta sama pętla wytrenuje się do ~90% bez zmian.
 
-### Krok 6: Przeczytaj matrycę zamieszania
+### Krok 6: Czytanie macierzy konfuzji
 
-Sama dokładność nigdy nie powie Ci, gdzie model zawodzi. Matryca zamieszania tak.
+Sama dokładność nigdy nie mówi, gdzie model zawodzi. Macierz konfuzji mówi.
 
 ```python
 def print_confusion(cm, labels=None):
@@ -354,11 +361,11 @@ _, _, cm = evaluate(model, val_loader, device, 10)
 print_confusion(cm)
 ```
 
-Wiersze to prawdziwe klasy, kolumny to przewidywania. Klaster zliczeń niediagonalnych pomiędzy klasami 3 i 5 oznacza, że ​​model myli te dwie wartości i daje punkt wyjścia do ukierunkowanego gromadzenia danych lub wzmacniania specyficznego dla klasy.
+Wiersze to prawdziwe klasy, kolumny to predykcje. Klaster liczności poza przekątną między klasami 3 i 5 oznacza, że model myli te dwie klasy, co daje punkt wyjścia do ukierunkowanego zbierania danych albo augmentacji specyficznej dla danej klasy.
 
-## Użyj tego
+## Wykorzystaj to
 
-`torchvision` pakuje wszystko powyżej w komponenty idiomatyczne. W przypadku prawdziwego CIFAR-10 pełny rurociąg składa się z czterech linii plus pętla treningowa.
+`torchvision` opakowuje wszystko powyżej w idiomatyczne komponenty. Dla prawdziwego CIFAR-10 cały potok to cztery linie plus pętla treningowa.
 
 ```python
 from torchvision.datasets import CIFAR10
@@ -378,37 +385,37 @@ train_ds = CIFAR10(root="./data", train=True,  download=True, transform=train_tf
 val_ds   = CIFAR10(root="./data", train=False, download=True, transform=eval_tf)
 ```
 
-Warto zwrócić uwagę na dwie rzeczy: średnia/standard jest **specyficzna dla zbioru danych** — obliczona na zestawie szkoleniowym CIFAR-10, a nie na ImageNet — a podkładka odzwierciedlająca jest domyślną polityką przycinania społeczności. Kopiowanie i wklejanie statystyk ImageNet to ~1% wyciek dokładności, którego nikt nie wyłapie, dopóki ktoś nie sprofiluje modelu.
+Dwie rzeczy do zauważenia: średnia/odchylenie standardowe są **specyficzne dla zbioru danych** — obliczone na zbiorze treningowym CIFAR-10, nie ImageNet — a padding przez odbicie jest domyślną polityką kadrowania przyjętą przez społeczność. Skopiowanie tutaj statystyk z ImageNet to wyciek dokładności o ~1%, którego nikt nie wychwyci, aż ktoś zaprofiluje model.
 
-## Wyślij to
+## Wypchnij to (Ship It)
 
-Ta lekcja daje:
+Ta lekcja produkuje:
 
-- `outputs/prompt-classifier-pipeline-auditor.md` — monit, który sprawdza skrypt szkoleniowy pod kątem pięciu powyższych niezmienników i ujawnia pierwsze naruszenie.
-- `outputs/skill-classification-diagnostics.md` — umiejętność, która, biorąc pod uwagę matrycę zamieszania i listę nazw klas, podsumowuje błędy w poszczególnych klasach i proponuje pojedynczą najskuteczniejszą poprawkę.
+- `outputs/prompt-classifier-pipeline-auditor.md` — prompt, który audytuje skrypt treningowy pod kątem pięciu inwariantów powyżej i wskazuje pierwsze naruszenie.
+- `outputs/skill-classification-diagnostics.md` — skill, który, mając macierz konfuzji i listę nazw klas, podsumowuje błędy per klasa i proponuje jedną najbardziej wpływową poprawkę.
 
 ## Ćwiczenia
 
-1. **(Łatwy)** Trenuj ten sam model z mieszaniem i bez niego przez pięć epok na syntetycznym zbiorze danych. Wykres utraty pociągu i wartości dla obu. Wyjaśnij, dlaczego utrata pociągu w wyniku pomieszania jest większa, a dokładność wartości jest podobna lub lepsza.
-2. **(Średni)** Zastosuj wycięcie — wyzeruj losowy kwadrat 8x8 na każdym obrazie treningowym — i wykonaj ablację lub brak wzmacniania, hflip+crop, hflip+crop+cutout, hflip+crop+mixup. Zgłoś dokładność wartości dla każdego.
-3. **(Trudny)** Zbuduj potok CIFAR-100 (100 klas, ten sam rozmiar danych wejściowych) i odtwórz przebieg szkoleniowy ResNet-34 z dokładnością do 1% opublikowanej dokładności. Dodatki: przejrzyj trzy szybkości uczenia się i dwa zaniki masy, zaloguj się do lokalnego pliku CSV, utwórz ostateczną tabelę macierzy zamieszania z najważniejszymi pomyłkami.
+1. **(Łatwe)** Wytreniuj ten sam model z mixup i bez mixup na pięć epok na syntetycznym zbiorze danych. Wykreśl stratę treningową i walidacyjną dla obu. Wyjaśnij, dlaczego strata treningowa z mixup jest wyższa, a dokładność walidacyjna jest podobna lub lepsza.
+2. **(Średnie)** Zaimplementuj Cutout — wyzeruj losowy kwadrat 8x8 w każdym obrazie treningowym — i przeprowadź ablację dla: bez augmentacji, hflip+crop, hflip+crop+cutout, hflip+crop+mixup. Zaraportuj dokładność walidacyjną dla każdej konfiguracji.
+3. **(Trudne)** Zbuduj potok dla CIFAR-100 (100 klas, ten sam rozmiar wejścia) i odtwórz przebieg treningowy ResNet-34 z dokładnością do 1% od publikowanych wyników. Dodatkowo: przeskanuj trzy learning rate'y i dwa weight decay, loguj do lokalnego CSV, wyprodukuj finalną tabelę najważniejszych konfuzji z macierzy konfuzji.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Term | Co się mówi | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Logity | „Surowe wyniki” | Wektor liczb C na obraz sprzed softmax; entropia krzyżowa oczekuje tych, a nie wartości softmax |
-| Entropia krzyżowa | „Strata” | Ujemne log-prawdopodobieństwo właściwej klasy; łączy log-softmax i NLL w jedną stabilną operację |
-| Moduł ładowania danych | „Dozownik” | Opakowuje zestaw danych za pomocą tasowania, przetwarzania wsadowego i (opcjonalnie) ładowania przez wielu pracowników; zostaje obwiniony za połowę błędów szkoleniowych |
-| Zwiększenie | „Losowe transformacje” | Dowolna transformacja na poziomie piksela w czasie szkolenia, która zachowuje etykietę; uczy niezmienności, których CNN nie ma natywnie |
-| Mixup / Cutmix | „Połącz dwa obrazy” | Połącz zarówno dane wejściowe, jak i etykiety, aby klasyfikator nauczył się płynnych interpolacji zamiast twardych granic
-| Wygładzanie etykiet | „Miękkie cele” | Zamień jeden gorący na (1-eps, eps/(C-1), ...); poprawia kalibrację i nieznacznie zwiększa dokładność |
-| Dokładność najwyższej k | „Top-5” | Prawidłowa klasa znajduje się w k przewidywań o najwyższym prawdopodobieństwie; używane w zbiorach danych z rzeczywiście niejednoznacznymi klasami |
-| Matryca zamieszania | „Gdzie żyją błędy” | Tabela C x C, w której wpis (i, j) zlicza obrazy prawdziwej klasy i przewidywanej jako j; przekątna jest właściwa, przekątna mówi ci, co poprawić |
+| Logity (Logits) | "Surowe wyjścia" | Wektor C liczb na obraz przed softmax; cross-entropy oczekuje ich, nie wartości po softmax |
+| Cross-entropy | "Funkcja straty" | Ujemny logarytm prawdopodobieństwa poprawnej klasy; łączy log-softmax i NLL w jednej stabilnej operacji |
+| DataLoader | "Ten, co robi batche" | Opakowuje zbiór danych z przemieszaniem (shuffling), batchowaniem i (opcjonalnym) ładowaniem wieloprocesowym; obwiniany za połowę błędów treningowych |
+| Augmentacja | "Losowe transformacje" | Każda transformacja na poziomie pikseli podczas treningu, która zachowuje etykietę; uczy niezmienniczości, których CNN nie ma natywnie |
+| Mixup / Cutmix | "Zmiksuj dwa obrazy" | Mieszaj zarówno wejścia, jak i etykiety, aby klasyfikator nauczył się gładkich interpolacji zamiast ostrych granic |
+| Label smoothing | "Mniej ostre cele" | Zastąp one-hot przez (1-eps, eps/(C-1), ...); poprawia kalibrację i nieznacznie zwiększa dokładność |
+| Top-k accuracy | "Top-5" | Poprawna klasa znajduje się w k predykcjach o najwyższym prawdopodobieństwie; używane w zbiorach danych z naprawdę niejednoznacznymi klasami |
+| Macierz konfuzji | "Gdzie żyją błędy" | Tabela C x C, gdzie wpis (i, j) liczy obrazy prawdziwej klasy i przewidziane jako j; przekątna jest poprawna, elementy poza przekątną mówią, co naprawić |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-— [CS231n: Szkolenie sieci neuronowych](https://cs231n.github.io/neural-networks-3/) — wciąż najbardziej przejrzysty przegląd procesu uczenia na jednej stronie
-– [Zestaw sztuczek do klasyfikacji obrazów (He et al., 2019)](https://arxiv.org/abs/1812.01187) — każda mała sztuczka, która razem dodaje 3–4% dokładności ResNet w ImageNet
-- [miks: Beyond Empirical Risk Minimization (Zhang et al., 2017)](https://arxiv.org/abs/1710.09412) — oryginalny dokument dotyczący pomieszania; trzy strony teorii plus przekonujące eksperymenty
-- [Dlaczego skalowanie temperatury ma znaczenie (Guo et al., 2017)](https://arxiv.org/abs/1706.04599) — artykuł, w którym udowodniono, że współczesne sieci są źle skalibrowane i naprawiono to za pomocą jednego parametru skalarnego
+- [CS231n: Training Neural Networks](https://cs231n.github.io/neural-networks-3/) — wciąż najjaśniejszy przegląd potoku treningowego na jednej stronie
+- [Bag of Tricks for Image Classification (He et al., 2019)](https://arxiv.org/abs/1812.01187) — każdy mały trik, który razem dodaje 3-4% do dokładności ResNet na ImageNet
+- [mixup: Beyond Empirical Risk Minimization (Zhang et al., 2017)](https://arxiv.org/abs/1710.09412) — oryginalny artykuł o mixup; trzy strony teorii plus przekonujące eksperymenty
+- [Why temperature scaling matters (Guo et al., 2017)](https://arxiv.org/abs/1706.04599) — artykuł, który udowodnił, że współczesne sieci są źle skalibrowane i naprawił to jednym parametrem skalarnym
