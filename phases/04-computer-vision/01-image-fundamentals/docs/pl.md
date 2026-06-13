@@ -1,32 +1,32 @@
-# Podstawy obrazu — piksele, kanały, przestrzenie kolorów
+# Podstawy obrazów — piksele, kanały, przestrzenie kolorów
 
-> Obraz jest tensorem próbek światła. Każdy model widzenia, jakiego kiedykolwiek będziesz używać, zaczyna się od tego jednego faktu.
+> Obraz to tensor próbek światła. Każdy model wizyjny, z którego kiedykolwiek skorzystasz, zaczyna się od tego jednego faktu.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
-**Wymagania wstępne:** Faza 1, lekcja 12 (Operacje tensorowe), Faza 3, lekcja 11 (Wprowadzenie do PyTorch)
+**Wymagania wstępne:** Faza 1 Lekcja 12 (Operacje na tensorach), Faza 3 Lekcja 11 (Wprowadzenie do PyTorch)
 **Czas:** ~45 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Wyjaśnij, w jaki sposób ciągła scena jest dyskretyzowana na piksele i dlaczego decyzje dotyczące próbkowania/kwantyzacji wyznaczają pułap dla każdego dalszego modelu
-- Czytaj, wycinaj i sprawdzaj obrazy jako tablice NumPy i płynnie przełączaj się między układami HWC i CHW
-- Konwertuj pomiędzy RGB, skalą szarości, HSV i YCbCr i uzasadnij, dlaczego istnieje każda przestrzeń kolorów
-- Zastosuj przetwarzanie wstępne na poziomie pikseli (normalizacja, standaryzacja, zmiana rozmiaru, najpierw kanał) dokładnie tak, jak tego oczekuje Torchvision
+- Wyjaśnić, jak ciągła scena zostaje zdyskretyzowana na piksele i czemu decyzje dotyczące próbkowania/kwantyzacji wyznaczają górną granicę możliwości każdego modelu zbudowanego na tych danych
+- Wczytywać, wycinać fragmenty i inspekcjonować obrazy jako tablice NumPy oraz swobodnie przełączać się między układami HWC i CHW
+- Konwertować między RGB, skalą szarości, HSV i YCbCr oraz wyjaśnić, dlaczego każda z tych przestrzeni kolorów istnieje
+- Stosować przetwarzanie wstępne na poziomie pikseli (normalizacja, standaryzacja, zmiana rozmiaru, channel-first) zgodnie z tym, czego oczekuje torchvision
 
 ## Problem
 
-Każdy artykuł, który przeczytasz, każdy wstępnie wytrenowany ciężar, który pobierzesz, każdy interfejs API systemu wizyjnego, do którego zadzwonisz, zakłada określone kodowanie danych wejściowych. Przekaż obraz `uint8` tam, gdzie model chce `float32` i nadal będzie działał — i po cichu będzie generować śmieci. Podaj BGR do sieci wyszkolonej na RGB, a dokładność spadnie o dziesięć punktów. Podaj dane wejściowe modelu „ostatni kanał”, gdy oczekuje, że kanały będą „pierwsze”, a pierwsza warstwa konwersji traktuje wysokość jako kanał fabularny. Nic z tego nie powoduje błędu. To po prostu rujnuje Twoje dane i spędzasz tydzień na polowaniu na błąd związany ze sposobem załadowania pliku.
+Każda praca naukowa, którą przeczytasz, każda wytrenowana waga, którą pobierzesz, każde API wizyjne, które wywołasz, zakłada konkretne kodowanie wejścia. Podaj obraz `uint8`, gdy model oczekuje `float32`, a on i tak zadziała — i po cichu wyprodukuje śmieci. Podaj BGR sieci wytrenowanej na RGB i dokładność spada o dziesięć punktów. Podaj modelowi dane w układzie channels-last, gdy oczekuje channels-first, a pierwsza warstwa konwolucyjna potraktuje wysokość jako kanał cech. Nic z tego nie zgłosi błędu. To po prostu psuje twoje metryki i spędzasz tydzień, szukając błędu, który tkwi w sposobie wczytania pliku.
 
-Splot nie jest skomplikowany, jeśli wiesz, po czym się przesuwa. Najtrudniejsze jest to, że „obraz” oznacza co innego niż kamera, dekoder JPEG, PIL, OpenCV, torchvision i jądro CUDA. Każdy stos ma swoją własną kolejność osi, zakres bajtów i konwencję kanałów. Inżynier wizjoner, który nie potrafi utrzymać uszkodzonych rurociągów na prostych statkach.
+Splot (convolution) nie jest skomplikowany, gdy już wiesz, po czym się przesuwa. Trudność polega na tym, że „obraz" oznacza coś innego dla kamery, dekodera JPEG, PIL, OpenCV, torchvision i jądra CUDA. Każdy z tych stosów ma własną kolejność osi, zakres bajtów i konwencję kanałów. Inżynier wizyjny, który nie odróżnia tych konwencji od siebie, wypuszcza zepsute pipeline'y.
 
-Ta lekcja stanowi podstawę, dzięki czemu można na niej budować resztę fazy. Na koniec będziesz wiedział, czym jest piksel, dlaczego na piksel przypadają trzy liczby zamiast jednej, do czego właściwie służy „normalizacja za pomocą statystyk ImageNet” i jak poruszać się pomiędzy dwoma lub trzema układami, które będą zakładane podczas każdej innej lekcji w tej fazie.
+Ta lekcja ustawia fundament, na którym może się oprzeć reszta fazy. Na końcu będziesz wiedzieć, czym jest piksel, czemu na piksel przypadają trzy liczby, a nie jedna, co naprawdę robi „normalizacja ze statystykami ImageNet" i jak przechodzić między dwoma lub trzema układami, które przyjmuje za pewnik każda inna lekcja w tej fazie.
 
 ## Koncepcja
 
-### Pełny potok przetwarzania wstępnego w skrócie
+### Cały pipeline przetwarzania wstępnego w skrócie
 
-Każdy system wizji produkcji to ta sama sekwencja odwracalnych transformacji. Zrób jeden krok źle, a model zobaczy inne dane wejściowe niż ten, na którym był trenowany.
+Każdy produkcyjny system wizyjny to ta sama sekwencja odwracalnych transformacji. Pomyl jeden krok i model widzi inne dane wejściowe niż te, na których był trenowany.
 
 ```mermaid
 flowchart LR
@@ -46,11 +46,11 @@ flowchart LR
     style H fill:#bfdbfe,stroke:#2563eb
 ```
 
-W dwóch czerwonych i niebieskich polach znajduje się 80% cichych awarii: brak standaryzacji i niewłaściwy układ.
+Dwa czerwone i niebieskie pola to miejsca, w których kryje się 80% niemych błędów: brak standaryzacji i niewłaściwy układ osi.
 
-### Piksel to próbka, a nie kwadrat
+### Piksel to próbka, nie kwadrat
 
-Czujnik kamery zlicza fotony, które lądują na siatce maleńkich detektorów. Każdy detektor integruje światło przez ułamek sekundy i emituje napięcie proporcjonalne do liczby trafionych fotonów. Następnie czujnik dyskretyzuje to napięcie na liczbę całkowitą. Jeden detektor staje się jednym pikselem.
+Sensor kamery zlicza fotony padające na siatkę maleńkich detektorów. Każdy detektor zbiera światło przez fragment sekundy i emituje napięcie proporcjonalne do liczby trafiających w niego fotonów. Sensor następnie dyskretyzuje to napięcie do liczby całkowitej. Jeden detektor staje się jednym pikselem.
 
 ```
 Continuous scene                 Sensor grid                     Digital image
@@ -63,16 +63,16 @@ Continuous scene                 Sensor grid                     Digital image
                                  +--+--+--+--+--+                 188 180 165 145 108
 ```
 
-Na tym etapie mają miejsce dwie możliwości i wiążą się one z mocowaniem sufitu na całej długości strumienia:
+Na tym etapie zapadają dwie decyzje, które wyznaczają górną granicę dla wszystkiego, co następuje:
 
-- **Próbkowanie przestrzenne** decyduje o liczbie detektorów na stopień sceny. Za mało i krawędzie stają się postrzępione (aliasing). Za dużo, a pamięć i obliczenia eksplodują.
-- **Kwantyzacja intensywności** decyduje o tym, jak dokładnie podzielone jest napięcie. 8 bitów daje 256 poziomów i jest standardem do wyświetlania. 10, 12, 16 bitów zapewnia gładsze gradienty i materię w obrazowaniu medycznym, HDR i surowych rurociągach czujników.
+- **Próbkowanie przestrzenne** decyduje, ile detektorów przypada na stopień kąta widzenia scenny. Za mało, i krawędzie stają się postrzępione (aliasing). Za wiele, i eksplodują wymagania pamięciowe i obliczeniowe.
+- **Kwantyzacja intensywności** decyduje, jak drobno dzielone jest napięcie na przedziały. 8 bitów daje 256 poziomów i jest standardem dla wyświetlaczy. 10, 12, 16 bitów dają gładsze gradienty i mają znaczenie w obrazowaniu medycznym, HDR i pipeline'ach surowych danych z sensora (raw).
 
-Piksel nie jest kolorowym kwadratem z polem. Jest to pojedynczy pomiar. Zmiana rozmiaru lub obracanie powoduje ponowne próbkowanie siatki pomiarowej.
+Piksel nie jest kolorowym kwadratem o powierzchni. To pojedynczy pomiar. Kiedy zmieniasz rozmiar obrazu lub go obracasz, ponownie próbkujesz tę siatkę pomiarów.
 
-### Dlaczego trzy kanały
+### Czemu trzy kanały
 
-Jeden detektor zlicza fotony w całym widmie widzialnym, czyli w skali szarości. Aby uzyskać kolor, czujnik pokrywa siatkę mozaiką filtrów czerwonego, zielonego i niebieskiego. Po demozaice każda lokalizacja przestrzenna ma trzy liczby całkowite: odpowiedź detektora z filtrem czerwonym, filtrowana na zielono i pobliski filtr z filtrem niebieskim. Te trzy liczby całkowite to trójka RGB piksela.
+Jeden detektor zlicza fotony z całego widzialnego spektrum — to skala szarości. Aby uzyskać kolor, sensor pokrywa siatkę mozaiką filtrów czerwonych, zielonych i niebieskich. Po demozaikowaniu każde miejsce przestrzenne ma trzy liczby całkowite: odpowiedź pobliskiego detektora z filtrem czerwonym, zielonym i niebieskim. Te trzy liczby to trójka RGB piksela.
 
 ```
 One pixel in memory:
@@ -85,11 +85,11 @@ An H x W RGB image:
                                     each in [0, 255] for uint8
 ```
 
-Trójka to nie magia. Kamery głębi dodają kanał Z. Satelity dodają pasma podczerwieni i ultrafioletu. Skany medyczne często mają jeden kanał (rentgen, tomografia komputerowa) lub wiele (hiperspektralny). Liczba kanałów to ostatnia oś; warstwy konw. uczą się w nich mieszać.
+Trzy to nie jest magiczna liczba. Kamery głębi dodają kanał Z. Satelity dodają pasma w podczerwieni i ultrafiolecie. Skany medyczne często mają jeden kanał (rentgen, CT) lub wiele (hiperspektralne). Liczba kanałów to ostatnia osia; warstwy konwolucyjne uczą się mieszać dane wzdłuż niej.
 
 ### Dwie konwencje układu: HWC i CHW
 
-Ten sam tensor, dwa porządki. Każda biblioteka wybiera jedną.
+Ten sam tensor, dwa porządki. Każda biblioteka wybiera jeden.
 
 ```
 HWC (height, width, channels)           CHW (channels, height, width)
@@ -107,16 +107,16 @@ v |R G B|R G B|R G B|                   v |G G G G G G|
    almost every image file on disk       frameworks, cuDNN kernels
 ```
 
-CHW istnieje, ponieważ jądra splotu przesuwają się w poprzek H i W. Utrzymanie osi kanału na pierwszym miejscu oznacza, że każde jądro widzi ciągłą płaszczyznę 2D na kanał, co zapewnia czystą wektoryzację. Formaty dysków zachowują HWC, ponieważ odpowiada to sposobowi, w jaki linie skanowania wychodzą z czujnika.
+CHW istnieje, ponieważ jądra splotu przesuwają się po osiach H i W. Trzymanie osi kanałów na początku oznacza, że każde jądro widzi spójną płaszczyznę 2D na kanał, co dobrze wektoryzuje obliczenia. Formaty na dysku zachowują HWC, bo to odpowiada sposobowi, w jaki linie skanowania wychodzą z sensora.
 
-Konwersja jednowierszowa, którą wpiszesz tysiąc razy:
+Konwersja jednolinijkowa, którą napiszesz tysiąc razy:
 
 ```
 img_chw = img_hwc.transpose(2, 0, 1)      # NumPy
 img_chw = img_hwc.permute(2, 0, 1)        # PyTorch tensor
 ```
 
-Układ pamięci, wizualizowany:
+Układ pamięci, zwizualizowany:
 
 ```mermaid
 flowchart TB
@@ -134,21 +134,21 @@ flowchart TB
     CHW -->|"transpose(1, 2, 0)"| HWC
 ```
 
-### Zakresy bajtów i typ
+### Zakresy bajtów i typ danych
 
 Dominują trzy konwencje:
 
-| Konwencja | typ | Zakres | Gdzie to widzisz |
-|------------|-------|------|--------------------------------|
-| Surowe | `uint8` | [0, 255] | Pliki na dysku, PIL, wyjście OpenCV |
-| Znormalizowany | `float32` | [0,0, 1,0] | Po `img.astype('float32') / 255` |
-| standaryzowane | `float32` | mniej więcej [-2, +2] | Po odjęciu średniej i podzieleniu przez std |
+| Konwencja | dtype | Zakres | Gdzie ją spotkasz |
+|------------|-------|-------|------------------|
+| Surowa (Raw) | `uint8` | [0, 255] | Pliki na dysku, PIL, wyjście OpenCV |
+| Znormalizowana | `float32` | [0.0, 1.0] | Po `img.astype('float32') / 255` |
+| Standaryzowana | `float32` | w przybliżeniu [-2, +2] | Po odjęciu średniej i podzieleniu przez odchylenie standardowe |
 
-Sieci splotowe trenowano na standardowych danych wejściowych. Statystyki ImageNet `mean=[0.485, 0.456, 0.406]`, `std=[0.229, 0.224, 0.225]` to średnia arytmetyczna i odchylenie standardowe trzech kanałów w pełnym zestawie szkoleniowym ImageNet, obliczone dla [0, 1] znormalizowanych pikseli. Wprowadzanie surowego `uint8` do modelu, który oczekuje standardowego pływania, jest najczęstszą cichą awarią w wizji stosowanej.
+Sieci konwolucyjne były trenowane na danych standaryzowanych. Statystyki ImageNet `mean=[0.485, 0.456, 0.406]`, `std=[0.229, 0.224, 0.225]` to arytmetyczna średnia i odchylenie standardowe trzech kanałów obliczone na całym zbiorze treningowym ImageNet, na pikselach znormalizowanych do [0, 1]. Podanie surowego `uint8` do modelu, który oczekuje standaryzowanego float, to najczęstszy niemy błąd w praktycznej wizji komputerowej.
 
 ### Przestrzenie kolorów i dlaczego istnieją
 
-RGB to format przechwytywania, ale nie zawsze jest to najbardziej użyteczna reprezentacja modelu.
+RGB to format przechwytywania, ale nie zawsze jest najużyteczniejszą reprezentacją dla modelu.
 
 ```
  RGB               HSV                       YCbCr / YUV
@@ -165,27 +165,27 @@ RGB to format przechwytywania, ale nie zawsze jest to najbardziej użyteczna rep
                                              to chroma detail than to Y.
 ```
 
-W przypadku większości nowoczesnych CNN zasilasz RGB. Spotykasz inne przestrzenie, gdy:
+Dla większości nowoczesnych CNN podajesz RGB. Inne przestrzenie napotkasz przy:
 
 - **HSV** — klasyczny kod CV, segmentacja na podstawie kolorów, balans bieli.
-- **YCbCr** — odczyt plików wewnętrznych JPEG, potoków wideo, modeli o super rozdzielczości, które działają tylko na Y.
-- **Skala szarości** — OCR, modele dokumentów, wszędzie tam, gdzie kolor jest uciążliwą zmienną, a nie sygnałem.
+- **YCbCr** — odczyt wewnętrznej struktury JPEG, pipeline'y wideo, modele super-resolution operujące tylko na kanale Y.
+- **Skala szarości** — OCR, modele dokumentów, każdy przypadek, gdzie kolor jest zmienną zakłócającą, a nie sygnałem.
 
-Skala szarości z RGB to suma ważona, a nie średnia, ponieważ ludzkie oko jest bardziej wrażliwe na zieleń niż na czerwień czy błękit:
+Skala szarości z RGB to ważona suma, nie średnia, bo ludzkie oko jest bardziej czułe na zieleń niż na czerwień lub niebieski:
 
 ```
 Y = 0.299 R + 0.587 G + 0.114 B       (ITU-R BT.601, the classic weights)
 ```
 
-### Proporcje, zmiana rozmiaru i interpolacja
+### Współczynnik proporcji, zmiana rozmiaru i interpolacja
 
-Każdy model ma stały rozmiar wejściowy (224x224 dla większości klasyfikatorów ImageNet, 384x384 lub 512x512 dla nowoczesnych detektorów). Twoje obrazy rzadko do siebie pasują. Trzy opcje zmiany rozmiaru, które mają znaczenie:
+Każdy model ma stały rozmiar wejścia (224x224 dla większości klasyfikatorów ImageNet, 384x384 lub 512x512 dla nowoczesnych detektorów). Twoje obrazy rzadko mu odpowiadają. Trzy istotne wybory dotyczące zmiany rozmiaru:
 
-- **Zmień rozmiar krótszego boku, a następnie wyśrodkuj** — standardowy przepis ImageNet. Zachowuje proporcje, wyrzuca pasek pikseli krawędziowych.
-- **Zmień rozmiar i uzupełnij** — zachowuje proporcje i każdy piksel, dodaje czarne paski. Standard wykrywania i OCR.
-- **Zmień rozmiar bezpośrednio do celu** — rozciąga obraz. Tani, zniekształca geometrię, odpowiedni do wielu zadań klasyfikacyjnych.
+- **Zmiana rozmiaru krótszej strony, potem przycięcie centralne** — standardowa receptura ImageNet. Zachowuje współczynnik proporcji, odrzuca pas pikseli na krawędzi.
+- **Zmiana rozmiaru z dopełnieniem (pad)** — zachowuje współczynnik proporcji i każdy piksel, dodaje czarne pasy. Standard dla detekcji i OCR.
+- **Zmiana rozmiaru wprost do celu** — rozciąga obraz. Niskim kosztem, zniekształca geometrię, dla wielu zadań klasyfikacji jest to wystarczające.
 
-Metoda interpolacji decyduje o sposobie obliczania pikseli pośrednich, gdy nowa siatka nie pokrywa się ze starą:
+Metoda interpolacji decyduje, jak są obliczane piksele pośrednie, gdy nowa siatka nie pokrywa się ze starą:
 
 ```
 Nearest neighbour     fastest, blocky, only choice for masks/labels
@@ -194,13 +194,13 @@ Bicubic               slower, sharper on upscaling
 Lanczos               slowest, best quality, used for final display
 ```
 
-Ogólna zasada: dwuliniowy do treningu, dwusześcienny lub lanczos do zasobów, na które będziesz patrzeć, najbliższy dla wszystkiego, co zawiera identyfikatory klas całkowitych.
+Praktyczna zasada: bilinear do treningu, bicubic lub lanczos dla materiałów, na które będziesz patrzeć, nearest dla wszystkiego zawierającego całkowite identyfikatory klas.
 
 ## Zbuduj to
 
-### Krok 1: Załaduj obraz i sprawdź jego kształt
+### Krok 1: Wczytaj obraz i zbadaj jego shape
 
-Użyj Pillow, aby załadować dowolny plik JPEG lub PNG, przekonwertować na NumPy i wydrukować to, co masz. Aby uzyskać deterministyczny przykład działający w trybie offline, zsyntetyzuj jeden.
+Użyj Pillow, aby wczytać dowolny JPEG lub PNG, przekonwertować na NumPy i wypisać, co otrzymałeś. Dla deterministycznego przykładu działającego offline, wygeneruj go syntetycznie.
 
 ```python
 import numpy as np
@@ -227,11 +227,11 @@ print(f"max:    {arr.max()}")
 print(f"pixel at (0, 0): {arr[0, 0]}")
 ```
 
-Oczekiwany wynik: `shape: (H, W, 3)`, `dtype: uint8`, zakres `[0, 255]`. Jest to kanoniczna reprezentacja na dysku, niezależnie od tego, czy bajty pochodzą z kamery, dekodera JPEG, czy generatora syntetycznego.
+Oczekiwany wynik: `shape: (H, W, 3)`, `dtype: uint8`, zakres `[0, 255]`. To kanoniczna reprezentacja na dysku, niezależnie od tego, czy bajty pochodzą z kamery, dekodera JPEG czy generatora syntetycznego.
 
-### Krok 2: Podziel kanały i zmień układ
+### Krok 2: Rozdziel kanały i zmień układ osi
 
-Wyciągnij osobno R, G, B, a następnie przekonwertuj z HWC na CHW dla PyTorch.
+Wyodrębnij R, G, B osobno, a następnie przekonwertuj z HWC na CHW dla PyTorch.
 
 ```python
 R = arr[:, :, 0]
@@ -246,11 +246,11 @@ print(f"\nHWC shape: {arr.shape}")
 print(f"CHW shape: {arr_chw.shape}")
 ```
 
-Trzy płaszczyzny skali szarości, po jednej na kanał. CHW po prostu zmienia kolejność osi; kopiowanie danych nie jest ściśle wymagane, jeśli pozwala na to układ pamięci.
+Trzy płaszczyzny w skali szarości, jedna na kanał. CHW po prostu zmienia porządek osi; kopiowanie danych nie jest ściśle wymagane, gdy układ pamięci to umożliwia.
 
-### Krok 3: Konwersja skali szarości i HSV
+### Krok 3: Konwersje do skali szarości i HSV
 
-Skala szarości z sumą ważoną, a następnie ręczna zmiana RGB na HSV.
+Skala szarości jako suma ważona, a następnie ręczna konwersja RGB-do-HSV.
 
 ```python
 def rgb_to_grayscale(rgb):
@@ -287,11 +287,11 @@ print(f"sat range: [{hsv[..., 1].min():.2f}, {hsv[..., 1].max():.2f}]")
 print(f"val range: [{hsv[..., 2].min():.2f}, {hsv[..., 2].max():.2f}]")
 ```
 
-Odcień jest podawany w stopniach, nasyceniu i wartości w [0, 1]. Jest to zgodne z konwencją OpenCV `hsv_full`.
+Hue wychodzi w stopniach, saturation i value w [0, 1]. To odpowiada konwencji OpenCV `hsv_full`.
 
-### Krok 4: Normalizuj, standaryzuj i odwróć to
+### Krok 4: Normalizacja, standaryzacja i odwrócenie operacji
 
-Przejdź od surowych bajtów do dokładnego tensora, jakiego oczekuje wstępnie wytrenowany model ImageNet, a następnie z powrotem.
+Przejdź od surowych bajtów do dokładnego tensora, jakiego oczekuje wytrenowany model ImageNet, a następnie z powrotem.
 
 ```python
 mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -320,11 +320,11 @@ max_diff = np.abs(roundtrip.astype(int) - arr.astype(int)).max()
 print(f"roundtrip max pixel diff: {max_diff}    # should be 0 or 1")
 ```
 
-Średnia na kanał powinna być bliska zeru, standardowo bliska jedności. Para preprocess/deprocess jest dokładnie tym, co pod maską robi każde wywołanie Torchvision `transforms.Normalize`.
+Średnia dla każdego kanału powinna być bliska zeru, odchylenie standardowe bliskie jedności. Para preprocess/deprocess to dokładnie to, co robi pod maską każde wywołanie `transforms.Normalize` z torchvision.
 
-### Krok 5: Zmień rozmiar za pomocą trzech metod interpolacji
+### Krok 5: Zmiana rozmiaru za pomocą trzech metod interpolacji
 
-Porównaj najbliższe, dwuliniowe i dwusześcienne w wyższej skali, aby różnica była widoczna.
+Porównaj nearest, bilinear i bicubic na powiększeniu, aby różnica była widoczna.
 
 ```python
 target = (arr.shape[0] * 3, arr.shape[1] * 3)
@@ -342,11 +342,11 @@ for name, out in [("nearest", nearest), ("bilinear", bilinear), ("bicubic", bicu
     print(f"{name:>8}  shape={out.shape}  roughness={local_roughness(out):6.2f}")
 ```
 
-Nearest osiąga najwyższe wyniki w zakresie chropowatości, ponieważ utrzymuje twarde krawędzie. Dwuliniowy jest najpłynniejszy. Bicubic znajduje się pomiędzy, zachowując postrzeganą ostrość bez artefaktów na schodach.
+Nearest osiąga najwyższy wynik chropowatości, bo zachowuje ostre krawędzie. Bilinear jest najgładszy. Bicubic znajduje się pomiędzy, zachowując odczuwaną ostrość bez schodkowych artefaktów.
 
-## Użyj tego
+## Wykorzystaj to
 
-`torchvision.transforms` łączy wszystko powyżej w jeden możliwy do komponowania potok. Poniższy kod dokładnie odtwarza to, co robi `preprocess_imagenet`, a także zmienia rozmiar i przycina.
+`torchvision.transforms` zbiera wszystko powyższe w jeden składalny pipeline. Poniższy kod reprodukuje dokładnie to, co robi `preprocess_imagenet`, plus zmianę rozmiaru i przycięcie.
 
 ```python
 import torch
@@ -373,37 +373,37 @@ batch = x.unsqueeze(0)
 print(f"\nbatched shape: {tuple(batch.shape)}   # (N, C, H, W) — ready for a model")
 ```
 
-Cztery kroki, w dokładnie tej kolejności: `Resize(256)` skaluje krótszy bok do 256; `CenterCrop(224)` pobiera łatkę o wymiarach 224x224 od środka; `ToTensor()` dzieli przez 255 i zamienia HWC na CHW; `Normalize` odejmuje średnią ImageNet i dzieli przez std. Odwrócenie tej kolejności powoduje cichą zmianę tego, co dociera do modelu.
+Cztery kroki, w tej dokładnej kolejności: `Resize(256)` skaluje krótszą stronę do 256; `CenterCrop(224)` wycina fragment 224x224 ze środka; `ToTensor()` dzieli przez 255 i zamienia HWC na CHW; `Normalize` odejmuje średnią ImageNet i dzieli przez odchylenie standardowe. Odwrócenie tej kolejności po cichu zmienia to, co trafia do modelu.
 
-## Wyślij to
+## Wypchnij to
 
-Ta lekcja daje:
+Ta lekcja tworzy:
 
-- `outputs/prompt-vision-preprocessing-audit.md` — podpowiedź, która zamienia dowolną kartę modelu lub kartę zbioru danych w listę kontrolną dokładnych niezmienników przetwarzania wstępnego, których zespół musi przestrzegać.
-- `outputs/skill-image-tensor-inspector.md` — umiejętność, która, biorąc pod uwagę dowolny tensor lub tablicę w kształcie obrazu, raportuje typ, układ, zakres oraz to, czy wygląda surowo, znormalizowany czy ustandaryzowany.
+- `outputs/prompt-vision-preprocessing-audit.md` — prompt, który zamienia kartę modelu lub kartę zbioru danych w listę kontrolną dokładnych inwariantów przetwarzania wstępnego, których musi przestrzegać zespół.
+- `outputs/skill-image-tensor-inspector.md` — skill, który dla dowolnego tensora lub tablicy w kształcie obrazu zgłasza dtype, układ osi, zakres oraz to, czy dane wyglądają na surowe, znormalizowane czy standaryzowane.
 
-## Ćwiczenia
+## Zadania
 
-1. **(Łatwy)** Załaduj plik JPEG za pomocą OpenCV (`cv2.imread`) i Pillow. Wydrukuj oba kształty i piksel w miejscu `(0, 0)`. Wyjaśnij różnicę w kolejności kanałów, a następnie napisz jednowierszową konwersję, która sprawi, że tablica OpenCV będzie identyczna z tablicą Pillow.
-2. **(Medium)** Napisz `standardize(img, mean, std)` i jego odwrotność, które razem przejdą test `roundtrip_max_diff <= 1` na dowolnym obrazie uint8. Twoje funkcje muszą działać na pojedynczym obrazie w HWC i na partii w NCHW z tym samym wywołaniem.
-3. **(Trudny)** Weź 3-kanałowy tensor standaryzowany przez ImageNet i przeprowadź go przez konwersję 1x1, która uczy się ważonej mieszanki RGB w pojedynczym kanale skali szarości. Zainicjuj wagi do `[0.299, 0.587, 0.114]`, zamroź je i sprawdź, czy dane wyjściowe odpowiadają instrukcji `rgb_to_grayscale` z dokładnością do błędu zmiennoprzecinkowego. Jakie inne klasyczne transformacje przestrzeni kolorów można zapisać jako sploty 1x1?
+1. **(Łatwe)** Wczytaj plik JPEG za pomocą OpenCV (`cv2.imread`) i za pomocą Pillow. Wypisz oba shape oraz piksel w `(0, 0)`. Wyjaśnij różnicę w kolejności kanałów, a następnie napisz jednolinijkową konwersję, która sprawi, że tablica z OpenCV będzie identyczna z tablicą z Pillow.
+2. **(Średnie)** Napisz `standardize(img, mean, std)` i jej odwrotność, które razem przechodzą test `roundtrip_max_diff <= 1` na dowolnym obrazie uint8. Twoje funkcje muszą działać na pojedynczym obrazie w układzie HWC oraz na batchu w układzie NCHW przy tym samym wywołaniu.
+3. **(Trudne)** Weź trzykanałowy tensor standaryzowany według ImageNet i przepuść go przez splot 1x1, który uczy się ważonej mieszanki RGB do jednego kanału skali szarości. Zainicjalizuj wagi jako `[0.299, 0.587, 0.114]`, zamroź je i zweryfikuj, że wynik zgadza się z twoją ręczną funkcją `rgb_to_grayscale` z dokładnością do błędu zmiennoprzecinkowego. Jakie inne klasyczne transformacje przestrzeni kolorów można zapisać jako splot 1x1?
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to naprawdę znaczy |
 |------|----------------|----------------------|
-| Piksel | „Kolorowy kwadrat” | Jedna próbka natężenia światła w jednym miejscu siatki — trzy liczby dla koloru, jedna dla skali szarości |
-| Kanał | „Kolor” | Jedna z równoległych siatek przestrzennych ułożonych w tensor obrazu; ostatnia oś w HWC, pierwsza w CHW |
-| HWC / CHW | „Kształt” | Porządkowanie osi tensora obrazu; dysk i PIL używają HWC, PyTorch i cuDNN używają CHW |
-| Normalizuj | „Skaluj obraz” | Podziel przez 255, aby piksele znajdowały się w [0, 1] — konieczne, ale niewystarczające |
-| Standaryzacja | „Zero-centrum” | Odejmij średnią i podziel przez std na kanał, tak aby rozkład wejściowy odpowiadał temu, na czym uczono model |
-| Konwersja skali szarości | „Uśrednij kanały” | Suma ważona o współczynnikach 0,299/0,587/0,114, która odpowiada ludzkiemu postrzeganiu luminancji |
-| Interpolacja | „Jak zmiana rozmiaru wybiera piksele” | Reguła decydująca o wartościach wyjściowych, gdy nowa siatka nie pokrywa się ze starą — najbliższa dla etykiet, dwuliniowa dla uczenia, dwusześcienna dla wyświetlania |
-| Proporcje | „Szerokość nad wysokością” | Współczynnik odróżniający „zmianę rozmiaru i uzupełnienie” od „zmiany rozmiaru i rozciągnięcie” |
+| Piksel (Pixel) | „Kolorowy kwadrat" | Jedna próbka intensywności światła w jednym punkcie siatki — trzy liczby dla koloru, jedna dla skali szarości |
+| Kanał (Channel) | „Kolor" | Jedna z równoległych siatek przestrzennych ułożonych w tensor obrazu; ostatnia osia w HWC, pierwsza w CHW |
+| HWC / CHW | „Shape" | Porządki osi dla tensora obrazu; dysk i PIL używają HWC, PyTorch i cuDNN używają CHW |
+| Normalizacja (Normalize) | „Przeskaluj obraz" | Podzielenie przez 255, aby piksele znalazły się w [0, 1] — konieczne, ale niewystarczające |
+| Standaryzacja (Standardize) | „Wycentruj na zero" | Odjęcie średniej i podzielenie przez odchylenie standardowe dla każdego kanału, tak aby rozkład danych wejściowych odpowiadał temu, na czym trenowano model |
+| Konwersja do skali szarości | „Uśrednij kanały" | Suma ważona o współczynnikach 0.299/0.587/0.114, odpowiadająca ludzkiej percepcji luminancji |
+| Interpolacja | „Jak resize wybiera piksele" | Reguła decydująca o wartościach wyjściowych, gdy nowa siatka nie pokrywa się ze starą — nearest dla etykiet, bilinear do treningu, bicubic do wyświetlania |
+| Współczynnik proporcji (Aspect ratio) | „Szerokość przez wysokość" | Stosunek odróżniający „resize i pad" od „resize i rozciągnięcie" |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-– [Charles Poynton — wycieczka z przewodnikiem po przestrzeni kolorów](https://poynton.ca/PDFs/Guided_tour.pdf) — najbardziej przejrzyste techniczne wyjaśnienie, dlaczego istnieje tak wiele przestrzeni kolorów i kiedy każda z nich ma znaczenie
-– [Dokumentacja PyTorch Vision Transforms](https://pytorch.org/vision/stable/transforms.html) — pełny zestaw transformacji, które faktycznie skomponujesz w środowisku produkcyjnym
-– [How JPEG Works (Colt McAnlis)](https://www.youtube.com/watch?v=F1kYBnY6mwg) – wyraźna wizualna prezentacja podpróbkowania chrominancji, DCT i tego, dlaczego JPEG koduje YCbCr zamiast RGB
-– [Konwencje przetwarzania wstępnego ImageNet (modele Torchvision)](https://pytorch.org/vision/stable/models.html) — źródło prawdy o `mean=[0.485, 0.456, 0.406]` i dlaczego każdy model w zoo tego oczekuje
+- [Charles Poynton — A Guided Tour of Color Space](https://poynton.ca/PDFs/Guided_tour.pdf) — najprzejrzystsze techniczne opracowanie tego, czemu istnieje tak wiele przestrzeni kolorów i kiedy każda z nich ma znaczenie
+- [PyTorch Vision Transforms Docs](https://pytorch.org/vision/stable/transforms.html) — pełny pipeline transformacji, które będziesz faktycznie składać w produkcji
+- [How JPEG Works (Colt McAnlis)](https://www.youtube.com/watch?v=F1kYBnY6mwg) — przenikliwy wizualny przegląd subsamplingu chrominancji, DCT i tego, czemu JPEG koduje YCbCr, a nie RGB
+- [ImageNet Preprocessing Conventions (torchvision models)](https://pytorch.org/vision/stable/models.html) — źródło prawdy dla `mean=[0.485, 0.456, 0.406]` i tego, czemu każdy model w zoo tego oczekuje
