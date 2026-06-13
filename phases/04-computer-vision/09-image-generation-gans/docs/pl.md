@@ -1,26 +1,26 @@
-# Generowanie obrazu — sieci GAN
+# Generowanie obrazów — GAN-y
 
-> GAN to dwie sieci neuronowe w ustalonej grze. Jeden rysuje, drugi krytykuje. Razem stają się lepsi, dopóki rysunki nie zmylą krytyka.
+> GAN to dwie sieci neuronowe rozgrywające ustaloną grę. Jedna rysuje, druga ocenia. Razem stają się coraz lepsze, aż rysunki zaczynają oszukiwać krytyka.
 
-**Typ:** Kompilacja
+**Typ:** Implementacja
 **Języki:** Python
-**Wymagania wstępne:** Faza 4, lekcja 03 (CNN), faza 3, lekcja 06 (optymalizatory), faza 3, lekcja 07 (regularyzacja)
+**Wymagania wstępne:** Faza 4 Lekcja 03 (CNN-y), Faza 3 Lekcja 06 (Optymalizatory), Faza 3 Lekcja 07 (Regularyzacja)
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Wyjaśnij grę minimaksową pomiędzy generatorem a dyskryminatorem i dlaczego równowaga odpowiada p_model = p_data
-- Zaimplementuj DCGAN w PyTorch i poproś go o wygenerowanie spójnych syntetycznych obrazów 32x32 w mniej niż 60 liniach
-- Stabilizuj trening GAN za pomocą trzech standardowych trików: straty nienasycającej, normy widmowej, TTUR (reguła aktualizacji w dwóch skalach czasowych)
-- Przeczytaj krzywe treningowe, które odróżniają zdrową konwergencję od załamania modów, oscylacji i dyskryminatora-całkowitego zwycięstwa
+- Wyjaśnić grę typu minimax między generatorem i dyskryminatorem oraz powód, dla którego równowaga odpowiada p_model = p_data
+- Zaimplementować DCGAN w PyTorchu i uzyskać generowanie spójnych syntetycznych obrazów 32x32 w mniej niż 60 liniach kodu
+- Ustabilizować trenowanie GAN-a za pomocą trzech standardowych trików: funkcji straty bez saturacji (non-saturating loss), normalizacji spektralnej (spectral norm) oraz TTUR (reguły aktualizacji o dwóch skalach czasowych)
+- Czytać krzywe treningowe rozróżniające zdrową konwergencję od mode collapse, oscylacji i całkowitego zwycięstwa dyskryminatora
 
 ## Problem
 
-Klasyfikacja uczy sieć mapowania obrazów na etykiety. Generacja odwraca problem: wypróbuj nowe obrazy, które wyglądają, jakby pochodziły z tej samej dystrybucji. Nie ma „poprawnego” wyniku, z którym można porównać; istnieje tylko dystrybucja, którą chcesz naśladować.
+Klasyfikacja uczy sieć mapowania obrazów na etykiety. Generowanie odwraca ten problem: próbkujemy nowe obrazy, które wyglądają jak pochodzące z tego samego rozkładu. Nie istnieje „poprawny" wynik, z którym można porównać wyjście — istnieje tylko rozkład, który chcemy imitować.
 
-Standardowe funkcje straty (MSE, entropia krzyżowa) nie są w stanie zmierzyć „czy ta próbka pochodzi z rozkładu rzeczywistego”. Minimalizowanie błędu na piksel daje rozmyte średnie, a nie realistyczne próbki. Przełomem było nauczenie się straty: wytrenowanie drugiej sieci, której zadaniem jest odróżnianie rzeczywistości od fałszerstwa i wykorzystanie jej oceny do uruchomienia generatora.
+Standardowe funkcje straty (MSE, entropia skrośna) nie mierzą tego, „czy ta próbka pochodzi z rzeczywistego rozkładu". Minimalizacja błędu na poziomie pikseli prowadzi do rozmytych uśrednień, a nie realistycznych próbek. Przełomem było nauczenie się samej funkcji straty: wytrenowanie drugiej sieci, której zadaniem jest odróżnianie prawdziwych obrazów od fałszywych, i wykorzystanie jej ocen do popychania generatora w odpowiednim kierunku.
 
-Sieci GAN (Goodfellow i in., 2014) zdefiniowały te ramy. Do 2018 roku StyleGAN produkował twarze o wymiarach 1024x1024, których nie można było odróżnić od fotografii. Od tego czasu tron ​​w kwestii jakości i sterowalności przejęły modele dyfuzji, ale każdy trik, który czyni dyfuzję praktyczną – wybory normalizacji, przestrzenie ukryte, straty cech – został po raz pierwszy zrozumiany w sieciach GAN.
+GAN-y (Goodfellow i in., 2014) zdefiniowały ten framework. Do 2018 roku StyleGAN generował twarze 1024x1024 nieodróżnialne od fotografii. Modele dyfuzyjne od tamtej pory przejęły tron pod względem jakości i kontrolowalności, ale każdy trik, który czyni dyfuzję praktyczną — wybory dotyczące normalizacji, przestrzenie ukryte, straty oparte na cechach — został najpierw zrozumiany na przykładzie GAN-ów.
 
 ## Koncepcja
 
@@ -28,9 +28,9 @@ Sieci GAN (Goodfellow i in., 2014) zdefiniowały te ramy. Do 2018 roku StyleGAN 
 
 ```mermaid
 flowchart LR
-    Z["z ~ N(0, I)<br/>noise"] --> G["Generator<br/>transposed convs"]
-    G --> FAKE["Fake image"]
-    REAL["Real image"] --> D["Discriminator<br/>conv classifier"]
+    Z["z ~ N(0, I)<br/>szum"] --> G["Generator<br/>transponowane konwolucje"]
+    G --> FAKE["Fałszywy obraz"]
+    REAL["Prawdziwy obraz"] --> D["Dyskryminator<br/>klasyfikator konwolucyjny"]
     FAKE --> D
     D --> OUT["P(real)"]
 
@@ -39,76 +39,76 @@ flowchart LR
     style OUT fill:#dcfce7,stroke:#16a34a
 ```
 
-**Generator** G pobiera wektor szumu `z` i generuje obraz. **dyskryminator** D pobiera obraz i generuje pojedynczy skalar: prawdopodobieństwo, że obraz jest prawdziwy.
+**Generator** G przyjmuje wektor szumu `z` i generuje obraz. **Dyskryminator** D przyjmuje obraz i wypisuje pojedynczy skalar: prawdopodobieństwo, że obraz jest prawdziwy.
 
 ### Gra
 
-G chce, żeby D się mylił. D chce mieć rację. Formalnie:
+G chce, aby D się pomylił. D chce mieć rację. Formalnie:
 
 ```
 min_G max_D  E_x[log D(x)] + E_z[log(1 - D(G(z)))]
 ```
 
-Czytaj od prawej do lewej: D maksymalizuje dokładność prawdziwych (`log D(real)`) i fałszywych (`log (1 - D(fake))`) obrazów. G minimalizuje dokładność D w przypadku podróbek — chce, aby wartość `D(G(z))` była wysoka.
+Czytaj od prawej do lewej: D maksymalizuje dokładność na prawdziwych (`log D(real)`) i fałszywych (`log (1 - D(fake))`) obrazach. G minimalizuje dokładność D na fałszywkach — chce, aby `D(G(z))` było wysokie.
 
-Goodfellow udowodnił, że ten minimax ma globalną równowagę, gdzie `p_G = p_data`, D wszędzie daje wynik 0,5, a rozbieżność Jensena-Shannona między rozkładami wygenerowanymi i rzeczywistymi wynosi zero. Najtrudniejsza część to dotarcie tam.
+Goodfellow udowodnił, że ten minimax ma globalną równowagę, w której `p_G = p_data`, D wszędzie wypisuje 0.5, a dywergencja Jensena-Shannona między rozkładem generowanym i rzeczywistym jest równa zero. Trudność leży w jej osiągnięciu.
 
-### Strata nienasycająca
+### Funkcja straty bez saturacji (non-saturating loss)
 
-Powyższy formularz jest numerycznie niestabilny. Na początku szkolenia wartość `D(G(z))` jest bliska zeru dla każdej fałszywej wartości, więc `log(1 - D(G(z)))` ma zanikające gradienty względem G. Poprawka: odwróć stratę G.
+Powyższa postać jest numerycznie niestabilna. Na początku treningu `D(G(z))` jest bliskie zeru dla każdej fałszywki, więc `log(1 - D(G(z)))` ma zanikające gradienty względem G. Rozwiązanie: odwrócić funkcję straty G.
 
 ```
 L_D = -E_x[log D(x)] - E_z[log(1 - D(G(z)))]
-L_G = -E_z[log D(G(z))]                          # non-saturating
+L_G = -E_z[log D(G(z))]                          # bez saturacji (non-saturating)
 ```
 
-Teraz, gdy `D(G(z))` jest bliski zeru, strata G jest duża, a jej gradient ma charakter informacyjny. Każdy nowoczesny GAN trenuje z tym wariantem.
+Teraz, gdy `D(G(z))` jest bliskie zeru, strata G jest duża, a jej gradient niesie informację. Każdy współczesny GAN trenuje się z użyciem tego wariantu.
 
 ### Reguły architektury DCGAN
 
-Radford, Metz, Chintala (2015) zebrali lata nieudanych eksperymentów w pięć zasad, które zapewniają stabilność treningu GAN:
+Radford, Metz, Chintala (2015) skondensowali lata nieudanych eksperymentów w pięć reguł, które czynią trenowanie GAN-ów stabilnym:
 
-1. Zamień łączenie na konwersje krokowe (obie sieci).
-2. Użyj normy wsadowej zarówno w generatorze, jak i dyskryminatorze, z wyjątkiem wyjścia G i wejścia D.
-3. Usuń w pełni połączone warstwy z głębszych architektur.
-4. G używa ReLU na wszystkich warstwach z wyjątkiem wyjścia (tanh dla wyjścia w [-1, 1]).
-5. D używa LeakyReLU (nachylenie ujemne=0,2) na wszystkich warstwach.
+1. Zastąp pooling konwolucjami z krokiem (stride) — w obu sieciach.
+2. Użyj batch norm w generatorze i dyskryminatorze, z wyjątkiem wyjścia G i wejścia D.
+3. Usuń warstwy w pełni połączone w głębszych architekturach.
+4. G używa ReLU na wszystkich warstwach poza wyjściem (tanh dla wyjścia w [-1, 1]).
+5. D używa LeakyReLU (negative_slope=0.2) na wszystkich warstwach.
 
-Każdy nowoczesny GAN oparty na konwulsjach (StyleGAN, BigGAN, GigaGAN) nadal zaczyna od tych zasad i wymienia elementy pojedynczo.
+Każdy współczesny GAN bazujący na konwolucjach (StyleGAN, BigGAN, GigaGAN) wciąż zaczyna od tych reguł i wymienia poszczególne elementy po jednym na raz.
 
 ### Tryby awarii i ich sygnatury
 
 ```mermaid
 flowchart LR
-    M1["Mode collapse<br/>G produces a narrow<br/>set of outputs"] --> S1["D loss low,<br/>G loss oscillating,<br/>sample variety drops"]
-    M2["Vanishing gradients<br/>D wins completely"] --> S2["D accuracy ~100%,<br/>G loss huge and static"]
-    M3["Oscillation<br/>G and D keep trading<br/>wins forever"] --> S3["Both losses swing<br/>wildly with no downward trend"]
+    M1["Mode collapse<br/>G generuje wąski<br/>zbiór wyjść"] --> S1["Strata D niska,<br/>strata G oscyluje,<br/>różnorodność próbek spada"]
+    M2["Zanikające gradienty<br/>D wygrywa całkowicie"] --> S2["Dokładność D ~100%,<br/>strata G ogromna i statyczna"]
+    M3["Oscylacja<br/>G i D wymieniają się<br/>zwycięstwami bez końca"] --> S3["Obie straty wahają się<br/>gwałtownie bez trendu spadkowego"]
 
     style M1 fill:#fecaca,stroke:#dc2626
     style M2 fill:#fecaca,stroke:#dc2626
     style M3 fill:#fecaca,stroke:#dc2626
 ```
 
-- **Załamanie trybu**: G znajduje jeden obraz, który oszukuje D i generuje tylko ten obraz. Poprawka: dodaj rozróżnienie minipartii, normę widmową lub warunkowanie etykiety.
-- **Rozróżniacz wygrywa**: D staje się zbyt silny zbyt szybko, gradienty G znikają. Poprawka: mniejsze D, niższa szybkość uczenia się D lub zastosuj wygładzanie etykiet na prawdziwych etykietach.
-- **Oscylacja**: handel dwiema sieciami wygrywa, nigdy nie osiągając równowagi. Poprawka: TTUR (D uczy się szybciej niż G 2-4 razy) lub przejdź na stratę Wassersteina.
+- **Mode collapse**: G znajduje jeden obraz, który oszukuje D, i produkuje tylko jego. Rozwiązanie: dodaj minibatch discrimination, normalizację spektralną lub warunkowanie etykietą (label-conditioning).
+- **Dyskryminator wygrywa**: D staje się za silny za szybko, a gradienty G zanikają. Rozwiązanie: mniejszy D, niższy learning rate D lub label smoothing na prawdziwych etykietach.
+- **Oscylacja**: dwie sieci wymieniają się zwycięstwami, nigdy nie zbliżając się do równowagi. Rozwiązanie: TTUR (D uczy się szybciej niż G o czynnik 2-4) lub przejście na stratę Wasserstein.
 
-### Ocena
+### Ewaluacja
 
-Sieci GAN nie mają żadnych podstaw, więc skąd wiesz, że działają?
+GAN-y nie mają wzorca prawdy (ground truth), więc jak sprawdzić, że działają?
 
-- **Kontrola próbek** — wystarczy spojrzeć na 64 próbki na koniec każdej epoki. Nie podlega negocjacjom.
-- **FID (Fréchet Inception Distance)** — odległość pomiędzy rozkładami cech Inception-v3 zbiorów rzeczywistych i generowanych. Niżej jest lepiej. Norma wspólnotowa.
-- **Inception Score** — starszy, bardziej łamliwy; wolę FID-a.
-- **Precyzja/wycofanie dla modeli generatywnych** — mierzy oddzielnie jakość (precyzję) i zasięg (wycofanie). Więcej informacji niż sam FID.
+- **Inspekcja próbek** — wystarczy spojrzeć na 64 próbki na końcu każdej epoki. Niepodlegające negocjacjom.
+- **FID (Fréchet Inception Distance)** — odległość między rozkładami cech Inception-v3 dla zbiorów prawdziwych i generowanych. Mniej = lepiej. Standard w środowisku.
+- **Inception Score** — starsza, bardziej niestabilna metryka; preferuj FID.
+- **Precision/Recall dla modeli generatywnych** — mierzy jakość (precision) i pokrycie (recall) osobno. Bardziej informatywne niż samo FID.
 
-W przypadku małej serii danych syntetycznych wystarczy kontrola próbki.
+Dla małego przebiegu na syntetycznych danych inspekcja próbek jest wystarczająca.
 
 ## Zbuduj to
 
 ### Krok 1: Generator
 
-Mały generator DCGAN, który pobiera 64-przyciemniony szum i tworzy obraz 32x32.
+Mały generator DCGAN, który przyjmuje 64-wymiarowy szum i generuje obraz 32x32.
 
 ```python
 import torch
@@ -135,11 +135,11 @@ class Generator(nn.Module):
         return self.net(z.view(z.size(0), -1, 1, 1))
 ```
 
-Cztery transponowane konwersje, każda z `kernel_size=4, stride=2, padding=1`, dzięki czemu podwajają rozmiar przestrzenny. Aktywacja wyjścia w [-1, 1] poprzez tanh.
+Cztery transponowane konwolucje, każda z `kernel_size=4, stride=2, padding=1`, tak aby czysto podwajały rozmiar przestrzenny. Aktywacje wyjściowe w zakresie [-1, 1] za pomocą tanh.
 
 ### Krok 2: Dyskryminator
 
-Lustro generatora. LeakyReLU, konwersje krokowe, kończą się logitem skalarnym.
+Odbicie generatora. LeakyReLU, konwolucje z krokiem, zakończone skalarnym logitem.
 
 ```python
 class Discriminator(nn.Module):
@@ -161,11 +161,11 @@ class Discriminator(nn.Module):
         return self.net(x).view(-1)
 ```
 
-Ostatnia konwersja redukuje `4x4` mapę funkcji do `1x1`. Dane wyjściowe to pojedynczy skalar na obraz; zastosuj sigmoidę tylko podczas obliczania strat.
+Ostatnia konwolucja redukuje mapę cech `4x4` do `1x1`. Wyjściem jest pojedynczy skalar dla każdego obrazu; sigmoid stosujemy tylko podczas obliczania straty.
 
-### Krok 3: Krok szkolenia
+### Krok 3: Krok treningowy
 
-Alternatywnie: zaktualizuj D raz, następnie G raz, w każdej partii.
+Alternuj: zaktualizuj D raz, potem G raz, dla każdego batcha.
 
 ```python
 import torch.nn.functional as F
@@ -174,7 +174,7 @@ def train_step(G, D, real, z, opt_g, opt_d, device):
     real = real.to(device)
     bs = real.size(0)
 
-    # D step
+    # krok D
     opt_d.zero_grad()
     d_real = D(real)
     d_fake = D(G(z).detach())
@@ -183,7 +183,7 @@ def train_step(G, D, real, z, opt_g, opt_d, device):
     loss_d.backward()
     opt_d.step()
 
-    # G step
+    # krok G
     opt_g.zero_grad()
     d_fake = D(G(z))
     loss_g = F.binary_cross_entropy_with_logits(d_fake, torch.ones_like(d_fake))
@@ -193,9 +193,9 @@ def train_step(G, D, real, z, opt_g, opt_d, device):
     return loss_d.item(), loss_g.item()
 ```
 
-`G(z).detach()` w kroku D jest krytyczny: nie chcemy, aby gradienty wpływały do G podczas jego aktualizacji. Zapominanie o tym jest klasycznym błędem początkujących.
+`G(z).detach()` w kroku D jest kluczowe: nie chcemy, aby gradienty przepływały do G podczas aktualizacji D. Zapomnienie o tym jest klasycznym błędem początkujących.
 
-### Krok 4: Pełna pętla treningowa na kształtach syntetycznych
+### Krok 4: Pełna pętla treningowa na syntetycznych kształtach
 
 ```python
 from torch.utils.data import DataLoader, TensorDataset
@@ -230,7 +230,7 @@ for epoch in range(10):
     print(f"epoch {epoch}  D {ld:.3f}  G {lg:.3f}")
 ```
 
-Wartość domyślna DCGAN to `Adam(lr=2e-4, betas=(0.5, 0.999))` — niska wartość beta1 sprawia, że okres dynamiki nie stabilizuje zbytnio gry kontradyktoryjnej.
+`Adam(lr=2e-4, betas=(0.5, 0.999))` to domyślne ustawienie DCGAN — niski beta1 zapobiega temu, by człon momentum nadmiernie stabilizował grę adwersarialną.
 
 ### Krok 5: Próbkowanie
 
@@ -244,11 +244,11 @@ def sample(G, n=16, z_dim=64, device="cpu"):
     return imgs.clamp(0, 1)
 ```
 
-Przed próbkowaniem należy zawsze przełączyć się na tryb eval. W przypadku DCGAN ma to znaczenie, ponieważ zamiast statystyk partii używane są statystyki działania normy wsadowej.
+Zawsze przełącz się w tryb eval przed próbkowaniem. Dla DCGAN jest to istotne, ponieważ używane są statystyki bieżące batch norm, a nie statystyki danego batcha.
 
-### Krok 6: Normalizacja widmowa
+### Krok 6: Normalizacja spektralna
 
-Zamiennikiem BN w dyskryminatorze gwarantującym, że sieć to 1-Lipschitz. Naprawia większość błędów typu „D wygrywa zbyt mocno”.
+Bezpośredni zamiennik BN w dyskryminatorze, który gwarantuje, że sieć jest 1-Lipschitzowska. Naprawia większość awarii typu „D wygrywa za mocno".
 
 ```python
 from torch.nn.utils import spectral_norm
@@ -265,46 +265,46 @@ def build_sn_discriminator(img_channels=3, feat=64):
     )
 ```
 
-Zamień `Discriminator` na `build_sn_discriminator()`, a często nie będziesz potrzebować sztuczki TTUR. Norma widmowa to najłatwiejsze pojedyncze ulepszenie odporności, jakie możesz zastosować.
+Zamień `Discriminator` na `build_sn_discriminator()` i często nie potrzebujesz już triku TTUR. Normalizacja spektralna jest najprostszym pojedynczym usprawnieniem zwiększającym stabilność, jakie można zastosować.
 
-## Użyj tego
+## Zastosuj to
 
-W przypadku poważnego generowania użyj wstępnie wytrenowanych ciężarów lub przejdź na dyfuzję. Dwie standardowe biblioteki:
+Dla poważnego generowania używaj wytrenowanych wag lub przejdź na dyfuzję. Dwie standardowe biblioteki:
 
-- `torch_fidelity` oblicza FID/IS na twoim generatorze bez pisania niestandardowego kodu ewaluacyjnego.
-- `pytorch-gan-zoo` (starsza wersja) i `StudioGAN` przetestowane na statku implementacje DCGAN, WGAN-GP, SN-GAN, StyleGAN i BigGAN.
+- `torch_fidelity` oblicza FID / IS dla twojego generatora bez konieczności pisania własnego kodu ewaluacji.
+- `pytorch-gan-zoo` (przestarzała) i `StudioGAN` udostępniają przetestowane implementacje DCGAN, WGAN-GP, SN-GAN, StyleGAN i BigGAN.
 
-W 2026 roku sieci GAN będą nadal najlepszym wyborem do: generowania obrazu w czasie rzeczywistym (opóźnienie <10 ms), transferu stylu, translacji obrazu na obraz z precyzyjną kontrolą (Pix2Pix, CycleGAN). Dyfuzja wygrywa z fotorealizmem i warunkowaniem tekstu.
+W 2026 roku GAN-y wciąż są najlepszym wyborem do: generowania obrazów w czasie rzeczywistym (latencja <10 ms), transferu stylu, tłumaczenia obrazu na obraz z precyzyjną kontrolą (Pix2Pix, CycleGAN). Dyfuzja wygrywa pod względem fotorealizmu i warunkowania tekstem.
 
-## Wyślij to
+## Wdroż to
 
-Ta lekcja daje:
+Ta lekcja produkuje:
 
-- `outputs/prompt-gan-training-triage.md` — zachęta, która odczytuje opis krzywej szkoleniowej i wybiera tryb awarii (załamanie trybu, wygrane D, oscylacja) oraz pojedynczą zalecaną naprawę.
-- `outputs/skill-dcgan-scaffold.md` — umiejętność pisania szkieletu DCGAN z `z_dim`, celu `image_size` i `num_channels`, w tym pętla treningowa i oszczędzanie próbek.
+- `outputs/prompt-gan-training-triage.md` — prompt, który odczytuje opis krzywej treningowej i wskazuje tryb awarii (mode collapse, D-wygrywa, oscylacja) wraz z jedną zalecaną poprawką.
+- `outputs/skill-dcgan-scaffold.md` — skill, który pisze szkielet DCGAN na podstawie `z_dim`, docelowego `image_size` i `num_channels`, wraz z pętlą treningową i zapisywaniem próbek.
 
 ## Ćwiczenia
 
-1. **(Łatwe)** Wytrenuj powyższy DCGAN na zbiorze danych syntetycznego okręgu i zapisz siatkę 16 próbek na końcu każdej epoki. W której epoce wygenerowane koła stają się wyraźnie okrągłe?
-2. **(Średni)** Zastąp normę wsadową dyskryminatora normą widmową. Trenuj obie wersje obok siebie. Który zbiega się szybciej? Który z nich ma niższą wariancję w trzech nasionach?
-3. **(Trudne)** Zaimplementuj warunkowy DCGAN: wprowadź etykietę klasy do obu G i D (połącz jeden z szumem w G, połącz kanał osadzania klasy w D). Trenuj na syntetycznym zestawie danych „koła kontra kwadraty” z lekcji 7 i pokaż, że warunkowanie klas działa poprzez próbkowanie z określonymi etykietami.
+1. **(Łatwe)** Wytrenuj powyższy DCGAN na syntetycznym zbiorze danych z okręgami i zapisuj siatkę 16 próbek na końcu każdej epoki. W której epoce generowane okręgi staną się wyraźnie kołowe?
+2. **(Średnie)** Zamień batch norm dyskryminatora na normalizację spektralną. Wytrenuj obie wersje równolegle. Która zbiega szybciej? Która ma niższą wariancję przy trzech ziarnach (seeds)?
+3. **(Trudne)** Zaimplementuj warunkowy DCGAN: podaj etykietę klasy na wejście G i D (połącz one-hot z szumem w G, połącz kanał embeddingu klasy w D). Wytrenuj na syntetycznym zbiorze danych „okręgi vs kwadraty" z lekcji 7 i wykaż, że warunkowanie klasą działa, próbkując z konkretnymi etykietami.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie oznacza |
 |------|----------------|----------------------|
-| Generator (G) | „Sieć do losowania” | Mapuje szum na obrazy; przeszkolony, aby oszukać dyskryminatora |
-| Dyskryminator (D) | „Krytyk” | Klasyfikator binarny; przeszkolony w odróżnianiu obrazów rzeczywistych od generowanych |
-| Minimaks | „Gra” | min nad G, max nad D w przypadku przegranej przeciwnej; równowaga wynosi p_G = p_data |
-| Strata nienasycająca | „Wersja rozsądna liczbowo” | Strata G wynosi -log(D(G(z))) zamiast log(1 - D(G(z))), aby uniknąć zanikania gradientów na początku treningu |
-| Załamanie trybu | „Generator robi jedno” | G tworzy tylko mały podzbiór rozkładu danych; napraw za pomocą SN, rozróżnienia minipartii lub większej partii |
-| TTUR | „Dwa tempo uczenia się” | D uczy się szybciej niż G, zazwyczaj 2-4 razy; stabilizuje trening |
-| Norma widmowa | „Warstwa 1-Lipschitza” | Normalizacja wagi, która ogranicza stałą Lipschitza każdej warstwy; powstrzymuje D przed arbitralną stromością |
-| FID | „Odległość początkowa Frécheta” | Odległość pomiędzy rozkładami funkcji Inception-v3 zbiorów rzeczywistych i generowanych; standardowy miernik oceny |
+| Generator (G) | „Sieć, która rysuje" | Mapuje szum na obrazy; trenowany, aby oszukać dyskryminator |
+| Dyskryminator (D) | „Krytyk" | Klasyfikator binarny; trenowany, aby odróżniać obrazy prawdziwe od generowanych |
+| Minimax | „Gra" | min po G, max po D funkcji straty adwersarialnej; równowaga to p_G = p_data |
+| Funkcja straty bez saturacji (non-saturating loss) | „Numerycznie rozsądna wersja" | Strata G to -log(D(G(z))) zamiast log(1 - D(G(z))), aby uniknąć zanikających gradientów na początku treningu |
+| Mode collapse | „Generator tworzy jedną rzecz" | G generuje tylko mały podzbiór rozkładu danych; rozwiązanie to SN, minibatch discrimination lub większy batch |
+| TTUR | „Dwa learning rate'y" | D uczy się szybciej niż G, typowo o czynnik 2-4; stabilizuje trening |
+| Normalizacja spektralna | „Warstwa 1-Lipschitzowska" | Normalizacja wag, która ogranicza stałą Lipschitza każdej warstwy; zapobiega temu, by D stał się arbitralnie „ostry" |
+| FID | „Fréchet Inception Distance" | Odległość między rozkładami cech Inception-v3 zbiorów prawdziwego i generowanego; standardowa metryka ewaluacji |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-– [Generative Adversarial Networks (Goodfellow et al., 2014)](https://arxiv.org/abs/1406.2661) – artykuł, od którego wszystko się zaczęło
-- [DCGAN (Radford, Metz, Chintala, 2015)](https://arxiv.org/abs/1511.06434) — reguły architektury, dzięki którym sieci GAN można trenować
-- [Spectral Normalization for GAN (Miyato et al., 2018)](https://arxiv.org/abs/1802.05957) — najbardziej przydatna sztuczka stabilizacyjna
-- [StyleGAN3 (Karras i in., 2021)](https://arxiv.org/abs/2106.12423) — SOTA GAN; czyta się jak album z największymi hitami i wszystkimi trikami ostatniej dekady
+- [Generative Adversarial Networks (Goodfellow i in., 2014)](https://arxiv.org/abs/1406.2661) — praca, która zaczęła wszystko
+- [DCGAN (Radford, Metz, Chintala, 2015)](https://arxiv.org/abs/1511.06434) — reguły architektury, które uczyniły GAN-y trenowalnymi
+- [Spectral Normalization for GANs (Miyato i in., 2018)](https://arxiv.org/abs/1802.05957) — najbardziej przydatny pojedynczy trik stabilizacyjny
+- [StyleGAN3 (Karras i in., 2021)](https://arxiv.org/abs/2106.12423) — GAN o najwyższej jakości (SOTA); czyta się jak album z największymi hitami z ostatniej dekady
