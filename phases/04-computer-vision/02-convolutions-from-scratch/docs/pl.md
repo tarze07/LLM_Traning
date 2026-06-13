@@ -1,32 +1,32 @@
-# Sploty od podstaw
+# Konwolucje od podstaw
 
-> Splot to niewielka, gęsta warstwa przesuwana po obrazie, mająca w każdym miejscu tę samą wagę.
+> Konwolucja to maleńka warstwa gęsta, którą przesuwa się po obrazie, dzieląc te same wagi w każdej lokalizacji.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
-**Wymagania wstępne:** Faza 3 (Podstawy głębokiego uczenia się), Faza 4 Lekcja 01 (Podstawy obrazu)
+**Wymagania wstępne:** Faza 3 (Deep Learning Core), Faza 4 Lekcja 01 (Podstawy obrazu)
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zaimplementuj splot 2D od zera, używając tylko NumPy, łącznie z wersją z zagnieżdżoną pętlą i wersją wektorową `im2col`
-- Oblicz wyjściowy rozmiar przestrzenny dla dowolnej kombinacji rozmiaru wejściowego, rozmiaru jądra, dopełnienia i kroku oraz uzasadnij formułę `(H - K + 2P) / S + 1`
-- Ręcznie projektuj jądra (krawędź, rozmycie, wyostrzenie, Sobel) i wyjaśnij, dlaczego każdy z nich generuje taki sam wzór aktywacji
-- Ułóż sploty w ekstraktorze cech i połącz głębokość stosu z rozmiarem pola recepcyjnego
+- Zaimplementuj konwolucję 2D od podstaw przy użyciu wyłącznie NumPy, w tym wersję z zagnieżdżonymi pętlami oraz zwektoryzowaną wersję `im2col`
+- Oblicz rozmiar przestrzenny wyjścia dla każdej kombinacji rozmiaru wejścia, rozmiaru jądra, paddingu i stride'u oraz uzasadnij wzór `(H - K + 2P) / S + 1`
+- Zaprojektuj ręcznie jądra (edge, blur, sharpen, Sobel) i wyjaśnij, dlaczego każde z nich generuje taki wzorzec aktywacji
+- Złóż konwolucje w ekstraktor cech i połącz głębokość stosu z rozmiarem pola recepcyjnego
 
 ## Problem
 
-W pełni połączona warstwa na obrazie RGB o wymiarach 224x224 wymagałaby 224 * 224 * 3 = 150 528 wag wejściowych na neuron. Pojedyncza warstwa ukryta zawierająca 1000 jednostek to już 150 milionów parametrów — zanim nauczysz się czegoś przydatnego. Co gorsza, ta warstwa nie ma pojęcia, że ​​pies w lewym górnym rogu i pies w prawym dolnym rogu to ten sam wzór. Traktuje każdą pozycję piksela jako niezależną, co jest całkowicie błędne w przypadku obrazów: przełożenie kota o trzy piksele nie powinno zmuszać sieci do ponownego nauczenia się tej koncepcji.
+Warstwa w pełni połączona na obrazie RGB 224x224 wymagałaby 224 * 224 * 3 = 150 528 wag wejściowych na neuron. Jedna warstwa skryta z 1000 jednostkami to już 150 milionów parametrów — zanim nauczyłeś się czegokolwiek użytecznego. Co gorsza, taka warstwa nie ma pojęcia, że pies w lewym górnym rogu i pies w prawym dolnym rogu to ten sam wzorzec. Traktuje każdą pozycję pikselową jako niezależną, co jest zupełnie błędne dla obrazów: przesunięcie kota o trzy piksele nie powinno zmuszać sieci do ponownego nauczenia się tego pojęcia.
 
-Dwie właściwości, których potrzebuje model obrazu, to **równoważność translacji** (wyjście zmienia się wraz z przesunięciem wejścia) i **wspólność parametrów** (wszędzie działa ten sam detektor cech). Gęste warstwy nie dają żadnego efektu. Convolution daje jedno i drugie za darmo.
+Dwie właściwości, których potrzebuje model obrazu, to **ekwiwariancja translacyjna** (wyjście przesuwa się, gdy przesuwa się wejście) oraz **dzielenie parametrów** (ten sam detektor cech działa wszędzie). Warstwy gęste nie dają ani jednej, ani drugiej. Konwolucja daje obie za darmo.
 
-Splot nie został wymyślony do głębokiego uczenia się. Jest to ta sama operacja, która zapewnia kompresję JPEG, rozmycie gaussowskie w Photoshopie, wykrywanie krawędzi w wizji przemysłowej i każdy dostępny na rynku filtr audio. Powodem, dla którego CNN zdominowały ImageNet w latach 2012–2020, jest to, że splot jest właściwym poprzedzaniem danych, w przypadku których pobliskie wartości są powiązane i ten sam wzorzec może pojawić się w dowolnym miejscu.
+Konwolucja nie została wynaleziona dla deep learningu. To ta sama operacja, która stoi za kompresją JPEG, rozmyciem Gaussa w Photoshopie, detekcją krawędzi w wizji przemysłowej i każdym filtrem audio, jaki kiedykolwiek wypuszczono. Powodem, dla którego CNN-y dominowały w ImageNet od 2012 do 2020 roku, jest to, że konwolucja jest prawidłowym priorem dla danych, w których bliskie wartości są ze sobą powiązane, a ten sam wzorzec może pojawić się gdziekolwiek.
 
 ## Koncepcja
 
 ### Jedno jądro, przesuwane
 
-Splot 2D pobiera macierz o małej wadze zwaną jądrem (lub filtrem), przesuwa ją po wejściu i w każdym miejscu oblicza sumę iloczynów elementarnych. Suma ta staje się jednym pikselem wyjściowym.
+Konwolucja 2D bierze małą macierz wag zwaną jądrem (lub filtrem), przesuwa ją po wejściu i w każdej lokalizacji oblicza sumę iloczynów element-po-elemencie. Ta suma staje się jednym pikselem wyjściowym.
 
 ```mermaid
 flowchart LR
@@ -48,7 +48,7 @@ flowchart LR
     style OUT fill:#dcfce7,stroke:#16a34a
 ```
 
-Konkretny przykład 3x3 na wejściu 5x5 (bez dopełnienia, krok 1):
+Konkretny przykład 3x3 na wejściu 5x5 (bez paddingu, stride 1):
 
 ```
 Input X (5 x 5):                Kernel W (3 x 3):
@@ -68,31 +68,31 @@ The kernel slides across every valid 3 x 3 window. Output Y is 3 x 3:
  ... and so on
 ```
 
-Ta jedna formuła — **wspólne wagi, lokalizacja, przesuwane okno** — to cały pomysł. Cała reszta to księgowość.
+Ten jeden wzór — **dzielone wagi, lokalność, okno przesuwne** — to cała idea. Wszystko inne to księgowość.
 
-### Formuła rozmiaru wyjściowego
+### Wzór na rozmiar wyjścia
 
-Biorąc pod uwagę wejściowy rozmiar przestrzenny `H`, rozmiar jądra `K`, dopełnienie `P`, krok `S`:
+Mając rozmiar przestrzenny wejścia `H`, rozmiar jądra `K`, padding `P`, stride `S`:
 
 ```
 H_out = floor( (H - K + 2P) / S ) + 1
 ```
 
-Zapamiętaj to. Obliczysz to dziesiątki razy dla każdej architektury.
+Zapamiętaj to. Będziesz to obliczać dziesiątki razy w każdej architekturze.
 
-| Scenariusz | H. | K | P | S | H_out |
-|---------|---|---|---|---|-------|
-| Prawidłowa konwersja, bez dopełnienia | 32 | 3 | 0 | 1 | 30 |
-| Ta sama konw. (zachowuje rozmiar) | 32 | 3 | 1 | 1 | 32 |
-| Zmniejsz próbkę o 2 | 32 | 3 | 1 | 2 | 16 |
-| Basen 2x2 | 32 | 2 | 0 | 2 | 16 |
+| Scenariusz | H | K | P | S | H_out |
+|----------|---|---|---|---|-------|
+| Konwolucja valid, brak paddingu | 32 | 3 | 0 | 1 | 30 |
+| Konwolucja same (zachowuje rozmiar) | 32 | 3 | 1 | 1 | 32 |
+| Downsampling o 2 | 32 | 3 | 1 | 2 | 16 |
+| Pooling 2x2 | 32 | 2 | 0 | 2 | 16 |
 | Duże pole recepcyjne | 32 | 7 | 3 | 2 | 16 |
 
-„To samo wypełnienie” oznacza wybranie P tak, że H_out == H, gdy S == 1. Dla nieparzystego K, czyli P = (K - 1) / 2. Dlatego dominują jądra 3x3 — są najmniejszym nieparzystym jądrem, które wciąż ma środek.
+"Same padding" oznacza wybranie P tak, aby H_out == H, gdy S == 1. Dla nieparzystego K to P = (K - 1) / 2. Właśnie dlatego jądra 3x3 dominują — to najmniejsze nieparzyste jądro, które wciąż ma centrum.
 
-### Wyściółka
+### Padding
 
-Bez dopełnienia każdy splot zmniejsza mapę obiektów. Ułóż 20 z nich, a obraz o wymiarach 224 x 224 zmieni się na 184 x 184, co marnuje obliczenia na granicy i komplikuje pozostałe połączenia, które wymagają pasujących kształtów.
+Bez paddingu każda konwolucja zmniejsza mapę cech. Złóż 20 takich warstw, a Twój obraz 224x224 zmieni się w 184x184, co marnuje moc obliczeniową na granicach i komplikuje połączenia rezydualne wymagające zgodnych kształtów.
 
 ```
 Zero padding (P = 1) on a 5 x 5 input:
@@ -106,11 +106,11 @@ Zero padding (P = 1) on a 5 x 5 input:
   0  0  0  0  0  0  0
 ```
 
-Tryby, które spotykasz w praktyce: `zero` (najczęściej), `reflect` (odbicie lustrzane krawędzi, unika twardych krawędzi w modelach generatywnych), `replicate` (skopiuj krawędź), `circular` (zawijanie, używane w problemach toroidalnych).
+Tryby, które napotkasz w praktyce: `zero` (najpopularniejszy), `reflect` (odbicie krawędzi, zapobiega ostrym granicom w modelach generatywnych), `replicate` (kopiowanie krawędzi), `circular` (zawijanie, używane w problemach toroidalnych).
 
-### Krok
+### Stride
 
-Krok to wielkość kroku slajdu. Wartość domyślna to `stride=1`. `stride=2` zmniejsza o połowę wymiary przestrzenne i jest klasycznym sposobem próbkowania w dół w CNN bez oddzielnej warstwy łączenia — każda nowoczesna architektura (ResNet, ConvNeXt, MobileNet) wykorzystuje gdzieś konwersje krokowe zamiast maksymalnej puli.
+Stride to wielkość kroku przesunięcia. `stride=1` to wartość domyślna. `stride=2` zmniejsza wymiary przestrzenne o połowę i jest klasycznym sposobem na downsampling wewnątrz CNN bez osobnej warstwy pooling — każda nowoczesna architektura (ResNet, ConvNeXt, MobileNet) gdzieś używa konwolucji ze stride zamiast max-pool.
 
 ```
 Stride 1 on a 5 x 5 input, 3 x 3 kernel:
@@ -131,7 +131,7 @@ Stride 2 on the same input:
 
 ### Wiele kanałów wejściowych
 
-Prawdziwe obrazy mają trzy kanały. Splot 3x3 na wejściu RGB to w rzeczywistości objętość 3x3x3: jeden plasterek 3x3 na kanał wejściowy. W każdej pozycji przestrzennej mnożysz i sumujesz wszystkie trzy wycinki i dodajesz odchylenie.
+Prawdziwe obrazy mają trzy kanały. Konwolucja 3x3 na wejściu RGB to w rzeczywistości wolumen 3x3x3: jeden plasterek 3x3 na każdy kanał wejściowy. W każdej pozycji przestrzennej mnożysz i sumujesz po wszystkich trzech plasterkach i dodajesz bias.
 
 ```
 Input:   (C_in,  H,  W)        3 x 5 x 5
@@ -146,11 +146,11 @@ Output:  (C_out, H', W')       64 x 3 x 3
 Parameter count: C_out * C_in * K * K + C_out   (the + C_out is biases)
 ```
 
-Ta ostatnia linia jest tą, którą obliczysz podczas planowania modelu. 64-kanałowa konwersja 3x3 na 3-kanałowym wejściu ma parametry `64 * 3 * 3 * 3 + 64 = 1,792`. Tani.
+Ta ostatnia linia jest tą, którą będziesz obliczać podczas planowania modelu. Konwolucja 3x3 o 64 kanałach na wejściu o 3 kanałach ma `64 * 3 * 3 * 3 + 64 = 1 792` parametrów. Tanio.
 
-### Sztuczka z im2colem
+### Trik im2col
 
-Zagnieżdżone pętle są łatwe do odczytania, ale powolne. Procesory graficzne wymagają dużych mnożników macierzy. Sztuczka: spłaszcz każde okno pola recepcyjnego danych wejściowych w jedną kolumnę dużej macierzy, spłaszcz jądro w wiersz, a cały splot stanie się pojedynczym matmulem.
+Zagnieżdżone pętle są łatwe do odczytania, ale wolne. GPU chcą dużych mnożeń macierzowych. Trik: spłaszcz każde okno pola recepcyjnego wejścia do jednej kolumny dużej macierzy, spłaszcz jądro do wiersza, a cała konwolucja staje się jednym matmulem.
 
 ```mermaid
 flowchart LR
@@ -166,11 +166,11 @@ flowchart LR
     style OUT fill:#dcfce7,stroke:#16a34a
 ```
 
-Każda implementacja konwersji produkcyjnej jest pewnym wariantem tego plus sztuczki z kafelkowaniem pamięci podręcznej (konwersja bezpośrednia, konwersja Winograd, konwersja FFT dla dużych jąder). Zrozum im2col, a zrozumiesz rdzeń.
+Każda produkcyjna implementacja konwolucji jest pewną wariacją tego podejścia plus triki cache-tiling (direct conv, Winograd, FFT conv dla dużych jąder). Zrozum im2col i zrozumiesz całą resztę.
 
-### Pole odbiorcze
+### Pole recepcyjne
 
-Pojedyncza konwersja 3x3 uwzględnia 9 pikseli wejściowych. Ułóż dwie konwersje 3x3, a neuron w drugiej warstwie patrzy na piksele wejściowe 5x5. Trzy konwersje 3x3 dają 7x7. Ogólnie:
+Pojedyncza konwolucja 3x3 patrzy na 9 pikseli wejściowych. Złóż dwie konwolucje 3x3, a neuron w drugiej warstwie patrzy na 5x5 pikseli wejściowych. Trzy konwolucje 3x3 dają 7x7. Ogólnie:
 
 ```
 RF after L stacked K x K convs (stride 1) = 1 + L * (K - 1)
@@ -178,13 +178,13 @@ RF after L stacked K x K convs (stride 1) = 1 + L * (K - 1)
 With strides:   RF grows multiplicatively with stride along each layer.
 ```
 
-Jedynym powodem, dla którego opcja „3x3 aż do końca” działa (VGG, ResNet, ConvNeXt), jest to, że dwie konwersje 3x3 widzą ten sam obszar wejściowy co jedna konwersja 5x5, ale z mniejszą liczbą parametrów i dodatkową nieliniowością pomiędzy nimi.
+Cały powód, dla którego "3x3 wszędzie" działa (VGG, ResNet, ConvNeXt), jest taki, że dwie konwolucje 3x3 widzą ten sam obszar wejścia co jedna konwolucja 5x5, ale z mniejszą liczbą parametrów i dodatkową nieliniowością pomiędzy nimi.
 
 ## Zbuduj to
 
-### Krok 1: Uzupełnij tablicę
+### Krok 1: Dopełnij tablicę (padding)
 
-Zacznij od najmniejszego prymitywu: funkcji, która uzupełnia zerami wokół tablicy H x W.
+Zacznij od najmniejszego prymitywu: funkcji, która dopełnia zerami wokół tablicy H x W.
 
 ```python
 import numpy as np
@@ -203,11 +203,11 @@ print()
 print(pad2d(x, 1))
 ```
 
-Sztuczka z osiami końcowymi `x.shape[:-2]` oznacza, że ta sama funkcja działa na `(H, W)`, `(C, H, W)` lub `(N, C, H, W)` bez modyfikacji.
+Trik z osiami końcowymi `x.shape[:-2]` oznacza, że ta sama funkcja działa dla `(H, W)`, `(C, H, W)` lub `(N, C, H, W)` bez żadnych modyfikacji.
 
-### Krok 2: Splot 2D z zagnieżdżonymi pętlami
+### Krok 2: Konwolucja 2D z zagnieżdżonymi pętlami
 
-Implementacja referencyjna — powolna, ale jednoznaczna. Zasadniczo właśnie to robi `torch.nn.functional.conv2d`.
+Implementacja referencyjna — wolna, ale jednoznaczna. To jest właśnie to, co `torch.nn.functional.conv2d` robi w zasadzie.
 
 ```python
 def conv2d_naive(x, w, b=None, stride=1, padding=0):
@@ -232,11 +232,11 @@ def conv2d_naive(x, w, b=None, stride=1, padding=0):
     return out
 ```
 
-Cztery zagnieżdżone pętle (kanał wyjściowy, wiersz, kolumna plus ukryta suma po C_in, kh, kw). To podstawowa prawda, z którą będziesz sprawdzać każdą szybszą implementację.
+Cztery zagnieżdżone pętle (kanał wyjściowy, wiersz, kolumna, plus niejawna suma po C_in, kh, kw). To jest grunt prawdy, względem którego będziesz sprawdzać każdą szybszą implementację.
 
 ### Krok 3: Weryfikacja za pomocą ręcznie zaprojektowanego jądra
 
-Zbuduj pionowe jądro Sobela, zastosuj je do syntetycznego obrazu stopnia i obserwuj, jak rozjaśnia się pionowa krawędź.
+Zbuduj jądro Sobela wertykalnego, zastosuj je na syntetycznym obrazie schodkowym i obserwuj, jak pionowa krawędź się zapala.
 
 ```python
 def synthetic_step_image():
@@ -255,11 +255,11 @@ y = conv2d_naive(x, sobel_x, padding=1)
 print(y[0].round(1))
 ```
 
-Spodziewaj się dużych wartości dodatnich w kolumnie 7 (wzrost jasności od lewej do prawej) i zer wszędzie indziej. Ten pojedynczy odcisk jest dowodem na to, że matematyka jest właściwa.
+Oczekuj dużych wartości pozytywnych w kolumnie 7 (wzrost jasności od lewej do prawej) i zer wszędzie indziej. Ten jeden print to Twój sanity check, że matematyka jest poprawna.
 
 ### Krok 4: im2col
 
-Konwertuj każde okno wielkości jądra na wejściu na kolumnę macierzy. W przypadku `C_in=3, K=3` każda kolumna zawiera 27 liczb.
+Zamień każde okno o rozmiarze jądra w wejściu na kolumnę macierzy. Dla `C_in=3, K=3` każda kolumna to 27 liczb.
 
 ```python
 def im2col(x, kh, kw, stride=1, padding=0):
@@ -280,11 +280,11 @@ def im2col(x, kh, kw, stride=1, padding=0):
     return cols, h_out, w_out
 ```
 
-Nadal jest to pętla w Pythonie, ale teraz głównym zadaniem będzie pojedynczy wektoryzowany matmul.
+To wciąż pętla w Pythonie, ale teraz ciężka praca będzie jednym zwektoryzowanym matmulem.
 
-### Krok 5: Szybka konwersja przez im2col + matmul
+### Krok 5: Szybka konwolucja przez im2col + matmul
 
-Zamień poczwórną pętlę na jedno mnożenie macierzy.
+Zamień poczwórną pętlę na jedno mnożenie macierzowe.
 
 ```python
 def conv2d_im2col(x, w, b=None, stride=1, padding=0):
@@ -297,7 +297,7 @@ def conv2d_im2col(x, w, b=None, stride=1, padding=0):
     return out.reshape(c_out, h_out, w_out)
 ```
 
-Kontrola poprawności: uruchom obie implementacje i porównaj.
+Sprawdzenie poprawności: uruchom obie implementacje i porównaj.
 
 ```python
 rng = np.random.default_rng(0)
@@ -311,11 +311,11 @@ y_im2col = conv2d_im2col(x, w, b, padding=1)
 print(f"max abs diff: {np.max(np.abs(y_naive - y_im2col)):.2e}")
 ```
 
-Wartość `max abs diff` powinna wynosić około `1e-5` — różnica polega na kolejności akumulacji zmiennoprzecinkowej, a nie na błędzie.
+`max abs diff` powinno wynosić około `1e-5` — różnica wynika z kolejności akumulacji zmiennoprzecinkowej, nie z błędu.
 
 ### Krok 6: Bank ręcznie zaprojektowanych jąder
 
-Pięć filtrów, które pokazują, co może wyrazić pojedyncza warstwa konwersji przed jakimkolwiek treningiem.
+Pięć filtrów, które pokazują, co potrafi wyrazić jedna warstwa konwolucyjna przed jakimkolwiek treningiem.
 
 ```python
 KERNELS = {
@@ -332,11 +332,11 @@ def apply_kernel(img2d, kernel):
     return conv2d_im2col(x, w, padding=1)[0]
 ```
 
-Zastosowany do dowolnego obrazu w skali szarości, rozmycie łagodzi, wyostrza krawędzie, Sobel-x oświetla pionowe krawędzie, Sobel-y rozjaśnia poziome krawędzie. To są dokładnie te wzorce, których nauczyła się *pierwsza* przeszkolona warstwa konwersji w AlexNet i VGG — ponieważ dobry model obrazu wymaga detektorów krawędzi i plam, niezależnie od tego, jakie zadanie nastąpi później.
+Zastosowane na dowolnym obrazie w skali szarości: blur wygładza, sharpen wyostrza krawędzie, sobel-x zapala pionowe krawędzie, a sobel-y zapala krawędzie horyzontalne. To dokładnie te wzorce, które *pierwsza* wytrenowana warstwa konwolucyjna w AlexNet i VGG ostatecznie nauczyła się wykrywać — ponieważ dobry model obrazu potrzebuje detektorów krawędzi i blobów niezależnie od tego, jakie zadanie pojawi się później.
 
-## Użyj tego
+## Zastosuj to
 
-`nn.Conv2d` PyTorch obejmuje tę samą operację z autogradem, jądrami CUDA i optymalizacją cuDNN. Semantyka kształtu jest identyczna.
+`nn.Conv2d` z PyTorch otacza tę samą operację autogradem, kernelami CUDA i optymalizacją cuDNN. Semantyka kształtów jest identyczna.
 
 ```python
 import torch
@@ -354,37 +354,37 @@ print(f"\ninput  shape: {tuple(x.shape)}")
 print(f"output shape: {tuple(y.shape)}")
 ```
 
-Zamień `padding=1` na `padding=0`, a rozmiar wyjściowy spadnie do 222x222. Zamień `stride=1` na `stride=2`, a rozmiar spadnie do 112x112. Ta sama formuła, którą zapamiętałeś powyżej.
+Zamień `padding=1` na `padding=0`, a wyjście spadnie do 222x222. Zamień `stride=1` na `stride=2`, a spadnie do 112x112. Ten sam wzór, który zapamiętałeś powyżej.
 
-## Wyślij to
+## Dostarcz to
 
-Ta lekcja daje:
+Ta lekcja produkuje:
 
-- `outputs/prompt-cnn-architect.md` — podpowiedź, która biorąc pod uwagę rozmiar wejściowy, budżet parametrów i docelowe pole recepcyjne, projektuje stos warstw `Conv2d` z właściwymi K/S/P na każdym kroku.
-- `outputs/skill-conv-shape-calculator.md` — umiejętność przeglądania specyfikacji sieci warstwa po warstwie i zwracania kształtu wyjściowego, pola recepcyjnego i liczby parametrów dla każdego bloku.
+- `outputs/prompt-cnn-architect.md` — prompt, który mając rozmiar wejścia, budżet parametrów i docelowe pole recepcyjne, projektuje stos warstw `Conv2d` z odpowiednimi K/S/P na każdym kroku.
+- `outputs/skill-conv-shape-calculator.md` — skill, który przechodzi przez specyfikację sieci warstwa po warstwie i zwraca kształt wyjścia, pole recepcyjne oraz liczbę parametrów dla każdego bloku.
 
 ## Ćwiczenia
 
-1. **(Łatwe)** Biorąc pod uwagę dane wejściowe w skali szarości 128x128 i stos `[Conv3x3(s=1,p=1), Conv3x3(s=2,p=1), Conv3x3(s=1,p=1), Conv3x3(s=2,p=1)]`, ręcznie oblicz wyjściowy rozmiar przestrzenny i pole recepcyjne w każdej warstwie. Zweryfikuj za pomocą PyTorch `nn.Sequential` fikcyjnych konwersji.
-2. **(Średni)** Rozszerz `conv2d_naive` i `conv2d_im2col`, aby zaakceptować argument `groups`. Pokaż, że `groups=C_in=C_out` odtwarza splot wgłębny i że liczba jego parametrów wynosi `C * K * K` zamiast `C * C * K * K`.
-3. **(Trudne)** Zaimplementuj ręcznie przejście wstecz `conv2d_im2col`: biorąc pod uwagę gradient wyjścia, oblicz gradient `x` i `w`. Sprawdź względem `torch.autograd.grad` dla tych samych danych wejściowych i wag. Sztuczka: gradient im2col wynosi `col2im` i musi gromadzić nakładające się okna.
+1. **(Łatwe)** Mając wejście w skali szarości 128x128 oraz stos `[Conv3x3(s=1,p=1), Conv3x3(s=2,p=1), Conv3x3(s=1,p=1), Conv3x3(s=2,p=1)]`, oblicz ręcznie rozmiar przestrzenny wyjścia oraz pole recepcyjne na każdej warstwie. Zweryfikuj za pomocą `nn.Sequential` z atrapowymi konwolucjami w PyTorch.
+2. **(Średnie)** Rozszerz `conv2d_naive` i `conv2d_im2col`, aby przyjmowały argument `groups`. Pokaż, że `groups=C_in=C_out` reprodukuje konwolucję depthwise i że jej liczba parametrów to `C * K * K` zamiast `C * C * K * K`.
+3. **(Trudne)** Zaimplementuj ręcznie wsteczną propagację dla `conv2d_im2col`: mając gradient wyjścia, oblicz gradient `x` i `w`. Zweryfikuj względem `torch.autograd.grad` na tych samych wejściach i wagach. Trik: gradientem im2col jest `col2im`, i musi on akumulować nakładające się okna.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Splot | „Przesuwanie filtra” | Uczący się iloczyn skalarny stosowany w każdym miejscu przestrzennym ze wspólnymi wagami; matematycznie jest to korelacja krzyżowa, ale wszyscy nazywają to splotem |
-| Jądro / filtr | „Detektor cech” | Mały tensor kształtu (C_in, K, K), którego iloczyn skalarny z oknem wejściowym daje jeden piksel wyjściowy |
-| Krok | „Jak daleko skaczesz” | Rozmiar kroku pomiędzy kolejnymi umiejscowieniami jądra; krok 2 połówki każdego wymiaru przestrzennego |
-| Wyściółka | „Zera na krawędziach” | Dodatkowe wartości dodane wokół wejścia, aby jądro mogło wyśrodkować się na pikselach granicznych; `same` dopełnienie utrzymuje rozmiar wyjściowy równy rozmiarowi wejściowemu |
-| Pole recepcyjne | „Ile neuron widzi” | Fragment pierwotnego sygnału wejściowego, od którego zależy aktywacja danego wyjścia, rosnący wraz z głębokością i krokiem |
-| im2col | „Sztuczka GEMM” | Przestawianie każdego okna receptywnego w kolumny, tak aby splot stał się jednym wielkim mnożeniem macierzy — rdzeń każdego jądra szybkiej konwersji |
-| Konw. wgłębna | „Jedno jądro na kanał” | Konwencja z `groups == C_in`, obliczająca każdy kanał wyjściowy tylko na podstawie pasującego kanału wejściowego; szkielet MobileNet i ConvNeXt |
-| Równoważność tłumaczeniowa | „Wsuń, przesuń” | Właściwość polegająca na tym, że przesunięcie wejścia o k pikseli przesuwa wynik o k pikseli; przychodzi za darmo ze wspólnymi ciężarkami |
+| Konwolucja | "Przesuwanie filtru" | Uczony iloczyn skalarny zastosowany w każdej lokalizacji przestrzennej z dzielonymi wagami; matematycznie jest to korelacja wzajemna, ale wszyscy nazywają to konwolucją |
+| Jądro / filtr | "Detektor cech" | Mały tensor wag o kształcie (C_in, K, K), którego iloczyn skalarny z oknem wejścia produkuje jeden piksel wyjściowy |
+| Stride | "Jak duży skok wykonujesz" | Wielkość kroku między kolejnymi umieszczeniami jądra; stride 2 zmniejsza o połowę każdy wymiar przestrzenny |
+| Padding | "Zera na krawędziach" | Dodatkowe wartości dodane wokół wejścia, aby jądro mogło centrować się na pikselach granicznych; padding `same` zachowuje rozmiar wyjścia równy rozmiarowi wejścia |
+| Pole recepcyjne | "Ile widzi neuron" | Fragment oryginalnego wejścia, od którego zależy dana aktywacja wyjściowa, rosnący z głębokością i stride'em |
+| im2col | "Trik GEMM" | Przekształcenie każdego okna pola recepcyjnego w kolumny, tak aby konwolucja stała się jednym dużym mnożeniem macierzowym — jądro każdej szybkiej implementacji konwolucji |
+| Konwolucja depthwise | "Jedno jądro na kanał" | Konwolucja z `groups == C_in`, obliczająca każdy kanał wyjściowy tylko z odpowiadającego mu kanału wejściowego; podstawa MobileNet i ConvNeXt |
+| Ekwiwariancja translacyjna | "Przesunięcie na wejściu, przesunięcie na wyjściu" | Właściwość, że przesunięcie wejścia o k pikseli przesuwa wyjście o k pikseli; pojawia się za darmo wraz z dzielonymi wagami |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-- [Przewodnik po arytmetyce splotów w głębokim uczeniu się (Dumoulin i Visin, 2016)](https://arxiv.org/abs/1603.07285) — ostateczne diagramy dopełniania/kroku/dylatacji, które po cichu kopiuje każdy kurs
-- [CS231n: Konwolucyjne sieci neuronowe do rozpoznawania wizualnego](https://cs231n.github.io/convolutional-networks/) — kanoniczne notatki z wykładów, w tym oryginalne wyjaśnienia im2col
-- [The Annotated ConvNet (fast.ai)](https://nbviewer.org/github/fastai/fastbook/blob/master/13_convolutions.ipynb) — notatnik, który przechodzi od ręcznego splotu do wyszkolonego klasyfikatora cyfr
-– [Arytmetyka pola recepcyjnego dla CNN (Dang Ha The Hien)](https://distill.pub/2019/computing-receptive-fields/) — interaktywne objaśnienie obliczeń pola recepcyjnego o jakości papierowej
+- [A guide to convolution arithmetic for deep learning (Dumoulin & Visin, 2016)](https://arxiv.org/abs/1603.07285) — definitywne diagramy paddingu/stride/dylatacji, które każdy kurs po cichu kopiuje
+- [CS231n: Convolutional Neural Networks for Visual Recognition](https://cs231n.github.io/convolutional-networks/) — kanoniczne notatki z wykładów, w tym oryginalne wyjaśnienie im2col
+- [The Annotated ConvNet (fast.ai)](https://nbviewer.org/github/fastai/fastbook/blob/master/13_convolutions.ipynb) — notebook prowadzący od ręcznej konwolucji do wytrenowanego klasyfikatora cyfr
+- [Receptive Field Arithmetic for CNNs (Dang Ha The Hien)](https://distill.pub/2019/computing-receptive-fields/) — interaktywny wyjaśniacz obliczeń pola recepcyjnego o jakości publikacji naukowej
