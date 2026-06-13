@@ -1,30 +1,30 @@
-# Transformatory wizyjne (ViT)
+# Vision Transformers (ViT)
 
-> Potnij obraz na fragmenty, traktuj każdy fragment jako słowo, uruchom standardowy transformator. Nie oglądaj się za siebie.
+> Pokrój obraz na fragmenty (patche), traktuj każdy fragment jak słowo, uruchom standardowy transformer. Nie patrz za siebie.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
-**Wymagania wstępne:** Faza 7, lekcja 02 (Samouwaga), faza 4, lekcja 04 (klasyfikacja obrazu)
+**Wymagania wstępne:** Faza 7 Lekcja 02 (Self-Attention), Faza 4 Lekcja 04 (Klasyfikacja obrazów)
 **Czas:** ~45 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Zaimplementuj od podstaw osadzanie poprawek, wyuczone osadzanie pozycyjne, token klasy i bloki kodera transformatora od podstaw, aby zbudować minimalny ViT
-- Wyjaśnij, dlaczego uważano, że ViT potrzebuje ogromnych danych przed treningiem, dopóki DeiT i MAE nie udowodniły inaczej
-- Porównaj ViT, Swin i ConvNeXt pod kątem ich wcześniejszych rozwiązań architektonicznych (brak, uwaga lokalnego okna, szkielet konw.)
-- Dostosuj wstępnie wytrenowany ViT na małym zestawie danych, używając `timm` i standardowej sondy liniowej/receptury dostrajania
+- Zaimplementować od zera patch embedding, uczone embeddingi pozycyjne, token klasy (class token) oraz bloki enkodera transformera, aby zbudować minimalny ViT
+- Wyjaśnić, czemu uważano, że ViT wymaga ogromnych ilości danych do pretrenowania, dopóki DeiT i MAE nie udowodniły inaczej
+- Porównać ViT, Swin i ConvNeXt pod kątem ich architektonicznych założeń (brak, lokalna uwaga okienkowa, backbone konwolucyjny)
+- Dostroić (fine-tune) wstępnie wytrenowany ViT na małym zbiorze danych za pomocą `timm` i standardowej receptury linear-probe / fine-tune
 
 ## Problem
 
-Przez dekadę splot był synonimem widzenia komputerowego. CNN miały silne uprzedzenia indukcyjne – lokalność, równoważność tłumaczenia – których nikt nie sądził, że można je zastąpić. Następnie Dosovitskiy i in. (2020) wykazali, że zwykły transformator zastosowany do spłaszczonych fragmentów obrazu, bez żadnej maszynerii splotowej, może dorównać lub pokonać najlepsze CNN na dużą skalę.
+Przez dekadę konwolucja była synonimem widzenia komputerowego. CNN-y miały silne biasy indukcyjne — lokalność, ekwiwariancję translacyjną — o których nikt nie sądził, że da się je zastąpić. Następnie Dosovitskiy i in. (2020) wykazali, że prosty transformer zastosowany do spłaszczonych fragmentów obrazu, bez żadnej maszynerii konwolucyjnej, może dorównać lub przewyższyć najlepsze CNN-y na dużej skali.
 
-Połów był „na dużą skalę”. ViT na ImageNet-1k przegrał z ResNet. ViT przeszkolony w oparciu o ImageNet-21k lub JFT-300M, a następnie dostrojony w ImageNet-1k, pokonał go. Wniosek był taki, że transformatorom brakowało przydatnych priorytetów, ale mogli się ich nauczyć na podstawie wystarczających danych. Późniejsze prace (DeiT, MAE, DINO) wykazały, że przy odpowiednich przepisach treningowych – silnym wzmacnianiu, samonadzorowanym treningu wstępnym, destylacji – ViT również dobrze trenują na małych danych.
+Haczyk tkwił w "na dużej skali". ViT na ImageNet-1k przegrywał z ResNetem. ViT pretrenowany na ImageNet-21k lub JFT-300M, a następnie dostrojony na ImageNet-1k, pokonywał go. Wniosek był taki, że transformery nie mają użytecznych biasów (priorów), ale mogą się ich nauczyć z wystarczającej ilości danych. Późniejsze prace (DeiT, MAE, DINO) pokazały, że z odpowiednimi receptami treningowymi — silną augmentacją, samonadzorowanym pretrenowaniem, dystylacją — ViT-y trenują się dobrze również na małych danych.
 
-Do 2026 r. sieci CNN będą nadal konkurencyjne na urządzeniach brzegowych (ConvNeXt jest najsilniejszy), ale we wszystkim innym dominują transformatory: segmentacja (Mask2Former, SegFormer), detekcja (DETR, RT-DETR), multimodalność (CLIP, SigLIP), wideo (VideoMAE, VJEPA). Należy znać strukturę bloków ViT.
+W 2026 roku czyste CNN-y są wciąż konkurencyjne na urządzeniach edge (ConvNeXt jest najsilniejszy), ale transformery dominują we wszystkim innym: segmentacji (Mask2Former, SegFormer), detekcji (DETR, RT-DETR), multimodalności (CLIP, SigLIP), wideo (VideoMAE, VJEPA). Strukturę bloku ViT trzeba znać.
 
 ## Koncepcja
 
-### Rurociąg
+### Pipeline
 
 ```mermaid
 flowchart LR
@@ -41,11 +41,11 @@ flowchart LR
     style HEAD fill:#dcfce7,stroke:#16a34a
 ```
 
-Siedem kroków. Łatki -> tokeny -> uwaga -> klasyfikator. Każdy wariant (DeiT, Swin, ConvNeXt, MAE przed treningiem) zmienia jeden lub dwa z siedmiu, a resztę pozostawia w spokoju.
+Siedem kroków. Patche -> tokeny -> uwaga (attention) -> klasyfikator. Każdy wariant (DeiT, Swin, ConvNeXt, pretrenowanie MAE) zmienia jeden lub dwa z tych siedmiu kroków, a resztę pozostawia bez zmian.
 
-### Osadzanie poprawek
+### Patch embedding
 
-Sekretem jest pierwsza konwersacja. Rozmiar jądra 16, krok 16, więc obraz 224x224 staje się siatką 14x14 złożoną z 16x16 fragmentów, z których każdy jest wyświetlany z osadzeniem o rozdzielczości 768 przyciemnień. Ta pojedyncza konwersja zarówno łata, jak i projektuje liniowo.
+Pierwsza konwolucja to sekret. Rozmiar kernela 16, stride 16, więc obraz 224x224 staje się siatką 14x14 fragmentów 16x16, każdy zrzutowany na 768-wymiarowy embedding. Ta jedna konwolucja jednocześnie dzieli obraz na patche i wykonuje liniową projekcję.
 
 ```
 Input:  (3, 224, 224)
@@ -54,31 +54,31 @@ Output: (768, 14, 14)
 Flatten spatial: (196, 768)
 ```
 
-196 naszywek = 196 żetonów. Wymiar funkcji każdego tokena wynosi 768 (ViT-B), 1024 (ViT-L) lub 1280 (ViT-H).
+196 fragmentów = 196 tokenów. Wymiar cech każdego tokenu to 768 (ViT-B), 1024 (ViT-L) lub 1280 (ViT-H).
 
-### Żeton klasy
+### Class token
 
-Pojedynczy wyuczony wektor dołączony do sekwencji:
+Pojedynczy uczony wektor dodawany na początku sekwencji:
 
 ```
 tokens = [CLS; patch_1; patch_2; ...; patch_196]   shape (197, 768)
 ```
 
-Po N blokach transformatorów wyjście `[CLS]` jest globalną reprezentacją obrazu. Głowa klasyfikacyjna odczytuje tylko ten jeden wektor.
+Po N blokach transformera wyjście `[CLS]` jest globalną reprezentacją obrazu. Głowa klasyfikacyjna odczytuje tylko ten jeden wektor.
 
-### Osadzanie pozycyjne
+### Positional embedding
 
-Transformatory nie mają wbudowanego pojęcia położenia przestrzennego. Dodaj wyuczony wektor do każdego tokena:
+Transformery nie mają wbudowanego pojęcia pozycji przestrzennej. Dodaj uczony wektor do każdego tokenu:
 
 ```
 tokens = tokens + learned_pos_embedding   (also shape (197, 768))
 ```
 
-Osadzanie jest parametrem modelu; szkolenie oparte na gradientach dostosowuje je do struktury obrazu 2D. Istnieją sinusoidalne alternatywy 2D, ale są rzadko stosowane w praktyce.
+Embedding jest parametrem modelu; trening gradientowy dopasowuje go do struktury 2D obrazu. Istnieją alternatywy sinusoidalne 2D, ale rzadko są używane w praktyce.
 
-### Blok enkodera transformatora
+### Blok enkodera transformera
 
-Standardowe. Samouważność wielu głowic, MLP, połączenia resztkowe, pre-LayerNorm.
+Standard. Wielogłowicowa self-attention, MLP, połączenia residualne, pre-LayerNorm.
 
 ```
 x = x + MSA(LN(x))
@@ -87,47 +87,47 @@ x = x + MLP(LN(x))
 MLP is two-layer with GELU: Linear(d -> 4d) -> GELU -> Linear(4d -> d)
 ```
 
-ViT-B/16 składa się z 12 takich bloków, każdy z 12 głowami uwagi, co daje łącznie 86M parametrów.
+ViT-B/16 układa 12 takich bloków, każdy z 12 głowicami uwagi, w sumie 86M parametrów.
 
-### Dlaczego przed LN
+### Dlaczego pre-LN
 
-Wczesne transformatory korzystały z post-LN (`x = LN(x + sublayer(x))`) i miały trudności z trenowaniem przez 6-8 warstw bez rozgrzewki. Pre-LN (`x = x + sublayer(LN(x))`) stabilnie uczy głębsze sieci bez rozgrzewania. Każdy ViT i każdy nowoczesny LLM używa pre-LN.
+Wczesne transformery używały post-LN (`x = LN(x + sublayer(x))`) i miały problemy z trenowaniem powyżej 6-8 warstw bez warmupu. Pre-LN (`x = x + sublayer(LN(x))`) pozwala stabilnie trenować głębsze sieci bez warmupu. Każdy ViT i każdy współczesny LLM używa pre-LN.
 
-### Kompromis dotyczący rozmiaru łaty
+### Trade-off rozmiaru patcha
 
-- 16x16 naszywek -> 196 żetonów, standard.
-- łatki 32x32 -> 49 tokenów, szybsza, ale niższa rozdzielczość.
-- Łaty 8x8 -> 784 tokeny, lepsze, ale koszt uwagi O(n^2) źle się skaluje.
+- Fragmenty 16x16 -> 196 tokenów, standard.
+- Fragmenty 32x32 -> 49 tokenów, szybciej, ale mniejsza rozdzielczość.
+- Fragmenty 8x8 -> 784 tokeny, dokładniej, ale koszt uwagi O(n^2) skaluje się źle.
 
-Większe łaty = mniej tokenów = szybsze, ale mniej szczegółów przestrzennych. SwinV2 wykorzystuje łatki 4x4 w oknach hierarchicznych.
+Większe fragmenty = mniej tokenów = szybciej, ale mniej szczegółów przestrzennych. SwinV2 używa fragmentów 4x4 w hierarchicznych oknach.
 
-### Przepis DeiT na szkolenie ViT na ImageNet-1k
+### Receptura DeiT do trenowania ViT na ImageNet-1k
 
-Oryginalny ViT potrzebował JFT-300M, aby pokonać CNN. DeiT (Touvron i in., 2020) wyszkolił ViT-B do 81,8% pierwszej pozycji w samym ImageNet-1k z czterema zmianami:
+Oryginalny ViT potrzebował JFT-300M, aby pokonać CNN-y. DeiT (Touvron i in., 2020) wytrenował ViT-B do 81,8% top-1 na samym ImageNet-1k dzięki czterem zmianom:
 
-1. Ciężkie wzmocnienie: RandAugment, Mixup, CutMix, Random Erasing.
-2. Głębokość stochastyczna (upuszczaj losowo całe bloki podczas treningu).
-3. Powtarzana augmentacja (ten sam obraz pobrany 3 razy w partii).
-4. Destylacja od nauczyciela CNN (opcjonalnie, jeszcze bardziej podnosi dokładność).
+1. Mocna augmentacja: RandAugment, Mixup, CutMix, Random Erasing.
+2. Stochastic depth (losowe odrzucanie całych bloków podczas treningu).
+3. Powtarzana augmentacja (ten sam obraz próbkowany 3 razy w batchu).
+4. Dystylacja od nauczyciela CNN (opcjonalnie, dodatkowo podnosi dokładność).
 
-Każdy nowoczesny przepis na trening ViT wywodzi się z DeiT.
+Każda współczesna receptura treningowa ViT pochodzi od DeiT.
 
-### Swin kontra ConvNeXt
+### Swin vs ConvNeXt
 
-- **Swin** (Liu i in., 2021) — uwaga oparta na oknie. Każdy blok uczestniczy w lokalnym oknie; naprzemienne bloki przesuwają okno, aby wymieszać informacje w oknach. Przywraca lokalizację przypominającą CNN, jednocześnie utrzymując uwagę operatora.
-- **ConvNeXt** (Liu i in., 2022) — przeprojektowany CNN, który odpowiada wyborom architektury Swin (konwersje wgłębne, LayerNorm, GELU, odwrócone wąskie gardło). Pokazał, że różnicą nie jest „uwaga kontra splot”, ale „nowoczesny przepis na trening + architektura”.
+- **Swin** (Liu i in., 2021) — uwaga oparta na oknach. Każdy blok wykonuje uwagę wewnątrz lokalnego okna; przeplatające się bloki przesuwają okno, aby mieszać informacje między oknami. Przywraca bias lokalności podobny do CNN, zachowując operator uwagi.
+- **ConvNeXt** (Liu i in., 2022) — przeprojektowany CNN, który dopasowuje wybory architektoniczne Swina (konwolucje depthwise, LayerNorm, GELU, odwrócony bottleneck). Wykazał, że różnica nie polega na "uwadze vs konwolucji", lecz na "modernej recepturze treningowej + architekturze".
 
-W roku 2026 ConvNeXt-V2 i Swin-V2 będą dostępne w wersji produkcyjnej; właściwy wybór zależy od stosu wnioskowań (ConvNeXt lepiej kompiluje się na krawędzi) i korpusu przedtreningowego.
+W 2026 roku ConvNeXt-V2 i Swin-V2 są obie gotowe do produkcji; właściwy wybór zależy od stosu inferencyjnego (ConvNeXt lepiej kompiluje się na edge) i korpusu pretrenowania.
 
-### Trening wstępny MAE
+### Pretrenowanie MAE
 
-Masked Autoencoder (He et al., 2022): losowe maskowanie 75% fragmentów, wytrenowanie kodera tak, aby przetwarzał tylko widoczne 25%, wytrenowanie małego dekodera w celu zrekonstruowania zamaskowanych fragmentów z sygnału wyjściowego kodera. Po wstępnym szkoleniu wyrzuć dekoder i dostrój koder.
+Masked Autoencoder (He i in., 2022): maskuje losowo 75% fragmentów, trenuje enkoder do przetwarzania jedynie widocznych 25%, trenuje mały dekoder do odtworzenia zamaskowanych fragmentów na podstawie wyjścia enkodera. Po pretrenowaniu dekoder jest odrzucany, a enkoder dostrajany.
 
-MAE umożliwia szkolenie ViT wyłącznie w ImageNet-1k, trafia do SOTA i jest bieżącym domyślnym przepisem samonadzorowanym.
+MAE umożliwia trenowanie ViT na samym ImageNet-1k, osiąga SOTA i jest obecnie domyślną receptą samonadzorowanego pretrenowania.
 
 ## Zbuduj to
 
-### Krok 1: Osadzanie poprawki
+### Krok 1: Patch embedding
 
 ```python
 import torch
@@ -146,11 +146,11 @@ class PatchEmbedding(nn.Module):
         return x.flatten(2).transpose(1, 2)
 ```
 
-Jedna konwersja, jedna spłaszczenie, jedna transpozycja. To jest cały etap przekształcania obrazu w tokeny.
+Jedna konwolucja, jedno spłaszczenie, jedna transpozycja. To cały krok zamiany obrazu na tokeny.
 
-### Krok 2: Blok transformatora
+### Krok 2: Blok transformera
 
-Pre-LN, wielogłowicowa samouwaga, MLP z GELU, połączenia resztkowe.
+Pre-LN, wielogłowicowa self-attention, MLP z GELU, połączenia residualne.
 
 ```python
 class Block(nn.Module):
@@ -174,7 +174,7 @@ class Block(nn.Module):
         return x
 ```
 
-`nn.MultiheadAttention` obsługuje dzielenie na głowy, skalowany iloczyn skalarny i rzutowanie wyjściowe. `batch_first=True`, więc kształty to `(N, seq, dim)`.
+`nn.MultiheadAttention` obsługuje podział na głowice, skalowany dot-product oraz projekcję wyjściową. `batch_first=True`, więc kształty są `(N, seq, dim)`.
 
 ### Krok 3: ViT
 
@@ -211,9 +211,9 @@ print(f"output: {vit(x).shape}")
 print(f"params: {sum(p.numel() for p in vit.parameters()):,}")
 ```
 
-Około 2,8 mln parametrów — mały ViT możliwy do obsługi na procesorze. Prawdziwe ViT-B to 86M; ta sama definicja klasy z `dim=768, depth=12, num_heads=12`.
+Około 2,8M parametrów — mały ViT, który da się przetworzyć na CPU. Prawdziwy ViT-B ma 86M; ta sama definicja klasy z `dim=768, depth=12, num_heads=12`.
 
-### Krok 4: Kontrola poprawności — wnioskowanie o pojedynczym obrazie
+### Krok 4: Sanity check — inferencja na pojedynczym obrazie
 
 ```python
 logits = vit(torch.randn(1, 3, 64, 64))
@@ -221,11 +221,11 @@ print(f"logits: {logits}")
 print(f"probs:  {logits.softmax(-1)}")
 ```
 
-Powinien działać bez błędów. Prawdopodobieństwa sumują się do 1.
+Powinno zadziałać bez błędu. Prawdopodobieństwa sumują się do 1.
 
 ## Użyj tego
 
-`timm` każdy wariant ViT jest dostarczany z wstępnie wytrenowanymi wagami ImageNet. Jedna linia:
+`timm` zawiera każdy wariant ViT z wagami pretrenowanymi na ImageNet. Jedna linia:
 
 ```python
 import timm
@@ -233,39 +233,39 @@ import timm
 model = timm.create_model("vit_base_patch16_224", pretrained=True, num_classes=10)
 ```
 
-`timm` to domyślne ustawienie produkcyjne transformatorów wizyjnych w roku 2026. Obsługuje ViT, DeiT, Swin, Swin-V2, ConvNeXt, ConvNeXt-V2, MaxViT, MViT, EfficientFormer i dziesiątki innych w ramach tego samego API.
+`timm` jest produkcyjnym standardem dla vision transformerów w 2026 roku. Wspiera ViT, DeiT, Swin, Swin-V2, ConvNeXt, ConvNeXt-V2, MaxViT, MViT, EfficientFormer i dziesiątki innych pod tym samym API.
 
-Do pracy multimodalnej (obraz + tekst) `transformers` dostarcza CLIP, SigLIP, BLIP-2, LLaVA. Koder obrazu we wszystkich jest wariantem ViT.
+Do prac multimodalnych (obraz + tekst) `transformers` zawiera CLIP, SigLIP, BLIP-2, LLaVA. Enkoder obrazu we wszystkich tych modelach jest wariantem ViT.
 
-## Wyślij to
+## Wypchnij to
 
-Ta lekcja daje:
+Ta lekcja produkuje:
 
-- `outputs/prompt-vit-vs-cnn-picker.md` — zachęta, która wybiera pomiędzy ViT, ConvNeXt lub Swin na podstawie rozmiaru zestawu danych, obliczeń i stosu wnioskowań.
-- `outputs/skill-vit-patch-and-pos-embed-inspector.md` — umiejętność sprawdzająca, czy kształty osadzania łatek i osadzania pozycyjnego ViT odpowiadają oczekiwanej długości sekwencji modelu, wychwytując najczęstsze błędy związane z przenoszeniem.
+- `outputs/prompt-vit-vs-cnn-picker.md` — prompt, który wybiera między ViT, ConvNeXt lub Swin na podstawie rozmiaru zbioru danych, dostępnych zasobów obliczeniowych i stosu inferencyjnego.
+- `outputs/skill-vit-patch-and-pos-embed-inspector.md` — skill, który weryfikuje, czy kształty patch embeddingu i positional embeddingu ViT-a odpowiadają oczekiwanej długości sekwencji modelu, wychwytując najczęstsze błędy przy portowaniu.
 
 ## Ćwiczenia
 
-1. **(Łatwe)** Wydrukuj kształty każdego tensora pośredniego dla przejścia do przodu przez mały ViT powyżej. Potwierdź: wejście `(N, 3, 64, 64)` -> poprawki `(N, 16, 192)` -> z CLS `(N, 17, 192)` -> wejście klasyfikatora `(N, 192)` -> wyjście `(N, num_classes)`.
-2. **(Średni)** Dostosuj wstępnie wytrenowany `timm` ViT-S/16 na zbiorze danych syntetycznych CIFAR z lekcji 4. Porównaj z dostrajaniem ResNet-18 na tych samych danych. Raportuj czas szkolenia i końcową dokładność.
-3. **(Trudne)** Zaimplementuj wstępne szkolenie MAE dla małego ViT: zamaskuj 75% poprawek, wytrenuj koder + mały dekoder, aby zrekonstruować zamaskowane poprawki. Oceń dokładność sondy liniowej na danych syntetycznych przed i po treningu wstępnym.
+1. **(Łatwe)** Wypisz kształty wszystkich pośrednich tensorów dla przejścia w przód przez mały ViT powyżej. Potwierdź: wejście `(N, 3, 64, 64)` -> fragmenty `(N, 16, 192)` -> z CLS `(N, 17, 192)` -> wejście klasyfikatora `(N, 192)` -> wyjście `(N, num_classes)`.
+2. **(Średnie)** Dostrój wstępnie wytrenowany `timm` ViT-S/16 na zbiorze syntetycznym-CIFAR z Lekcji 4. Porównaj z dostrajaniem ResNet-18 na tych samych danych. Podaj czas treningu i końcową dokładność.
+3. **(Trudne)** Zaimplementuj pretrenowanie MAE dla małego ViT: zamaskuj 75% fragmentów, wytrenuj enkoder + mały dekoder do odtworzenia zamaskowanych fragmentów. Oceń dokładność linear-probe na danych syntetycznych przed i po pretrenowaniu.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Osadzanie poprawek | „Pierwsza konwersacja” | Konwencja z rozmiarem jądra = krok = rozmiar poprawki; zamienia obraz w siatkę osadzonych żetonów |
-| Żeton klasy | „[CLS]” | Wyuczony wektor dołączony do sekwencji tokenów; jego ostatecznym wynikiem jest globalna reprezentacja obrazu |
-| Osadzenie pozycyjne | „Nauczony poz” | Wyuczony wektor dodany do każdego żetonu, dzięki czemu transformator wie, skąd pochodzi każda łata |
-| Przed LN | „LayerNorm przed podwarstwą” | Stabilny wariant transformatora: `x + sublayer(LN(x))` zamiast `LN(x + sublayer(x))` |
-| Uwaga wielogłowa | „Uwaga równoległa” | Uwaga transformatora standardowego podzielona na niezależne podprzestrzenie num_heads, następnie połączona |
-| ViT-B/16 | „Baza, łatka 16” | Rozmiar kanoniczny: dim=768, głębokość=12, głowice=12, patch_size=16, image=224; ~86M parametrów |
-| DeiT | „VIT efektywnie wykorzystujący dane” | ViT trenował sam na ImageNet-1k z silnym wzmocnieniem; udowodniono, że duże zbiory danych przedtreningowych nie są ściśle wymagane |
-| MAE | „Zamaskowany autokoder” | Samodzielny trening wstępny: maskowanie 75% płatów, rekonstrukcja; dominujący przepis na przedtreningówkę ViT |
+| Patch embedding | "Pierwsza konwolucja" | Konwolucja, w której rozmiar kernela = stride = rozmiar patcha; przekształca obraz w siatkę embeddingów tokenów |
+| Class token | "[CLS]" | Uczony wektor dodawany na początku sekwencji tokenów; jego końcowe wyjście jest globalną reprezentacją obrazu |
+| Positional embedding | "Uczona pozycja" | Uczony wektor dodawany do każdego tokenu, dzięki czemu transformer wie, skąd pochodzi każdy fragment |
+| Pre-LN | "LayerNorm przed sublayerem" | Stabilny wariant transformera: `x + sublayer(LN(x))` zamiast `LN(x + sublayer(x))` |
+| Multi-head attention | "Równoległa uwaga" | Standardowa uwaga transformera podzielona na num_heads niezależnych podprzestrzeni, później złączonych |
+| ViT-B/16 | "Base, patch 16" | Kanoniczny rozmiar: dim=768, depth=12, heads=12, patch_size=16, image=224; ~86M parametrów |
+| DeiT | "Data-efficient ViT" | ViT trenowany na samym ImageNet-1k z silną augmentacją; udowodnił, że duże zbiory pretrenowania nie są bezwzględnie wymagane |
+| MAE | "Masked autoencoder" | Samonadzorowane pretrenowanie: zamaskuj 75% fragmentów, odtwórz; dominująca receptura pretrenowania ViT |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-– [Obraz jest wart 16 x 16 słów (Dosovitskiy et al., 2020)](https://arxiv.org/abs/2010.11929) – artykuł ViT
-- [DeiT: Data-efektywne transformatory obrazu (Touvron et al., 2020)](https://arxiv.org/abs/2012.12877) — jak trenować ViT w samym ImageNet-1k
-- [Zamaskowane autoenkodery są skalowalnymi uczniami zajmującymi się wizją (He et al., 2022)](https://arxiv.org/abs/2111.06377) — szkolenie wstępne MAE
-- [dokumentacja Timma](https://huggingface.co/docs/timm) — dokumentacja każdego transformatora wizyjnego, którego będziesz używać w produkcji
+- [An Image is Worth 16x16 Words (Dosovitskiy et al., 2020)](https://arxiv.org/abs/2010.11929) — artykuł o ViT
+- [DeiT: Data-efficient Image Transformers (Touvron et al., 2020)](https://arxiv.org/abs/2012.12877) — jak trenować ViT na samym ImageNet-1k
+- [Masked Autoencoders are Scalable Vision Learners (He et al., 2022)](https://arxiv.org/abs/2111.06377) — pretrenowanie MAE
+- [timm documentation](https://huggingface.co/docs/timm) — punkt odniesienia dla każdego vision transformera, który wykorzystasz w produkcji
