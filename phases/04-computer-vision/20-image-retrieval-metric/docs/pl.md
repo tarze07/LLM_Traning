@@ -1,30 +1,30 @@
-# Pobieranie obrazu i nauka metryk
+# Wyszukiwanie obrazów i uczenie metryczne (Image Retrieval & Metric Learning)
 
-> System wyszukiwania klasyfikuje kandydatów według odległości w przestrzeni osadzania. Uczenie się metryczne to dyscyplina kształtowania tej przestrzeni, tak aby odległości oznaczały to, czego chcesz.
+> System wyszukiwania (retrieval) porządkuje kandydatów według odległości w przestrzeni embeddingów. Uczenie metryczne (metric learning) to dyscyplina kształtowania tej przestrzeni tak, aby odległości znaczyły to, czego oczekujemy.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
-**Wymagania wstępne:** Faza 4 Lekcja 14 (ViT), Faza 4 Lekcja 18 (CLIP)
+**Wymagania wstępne:** Faza 4, Lekcja 14 (ViT), Faza 4, Lekcja 18 (CLIP)
 **Czas:** ~45 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Wyjaśnij straty w uczeniu się metryk tripletowych, kontrastowych i zastępczych oraz wybierz właściwą dla danego zbioru danych
-- Poprawnie zaimplementuj normalizację L2 i podobieństwo cosinusa i sprawdź różnicę między pobieraniem „tego samego elementu” i „tej samej klasy”
-- Zbuduj indeks FAISS, przeprowadź zapytanie za pomocą tekstu i obrazu oraz zgłoś wycofanie@K dla wstrzymanego zestawu zapytań
-- Używaj DINOv2, CLIP i SigLIP jako gotowych szkieletów osadzania i wiedz, kiedy każdy wygrywa
+- Wyjaśnić funkcje straty triplet, contrastive i proxy-based w uczeniu metrycznym oraz wybrać właściwą dla danego zbioru danych
+- Poprawnie zaimplementować normalizację L2 i podobieństwo kosinusowe oraz zrozumieć różnicę między wyszukiwaniem „tego samego obiektu” a „tej samej klasy”
+- Zbudować indeks FAISS, przeszukiwać go tekstem i obrazem oraz raportować recall@K dla zbioru zapytań testowych
+- Wykorzystać DINOv2, CLIP i SigLIP jako gotowe (off-the-shelf) szkielety embeddingów i wiedzieć, kiedy każdy z nich wygrywa
 
 ## Problem
 
-Wyszukiwanie występuje wszędzie w wizji produkcji: wykrywanie duplikatów, wyszukiwanie odwrotnego obrazu, wyszukiwanie wizualne („znajdź podobne produkty”), ponowna identyfikacja twarzy, ponowna identyfikacja osoby na potrzeby nadzoru, dopasowywanie na poziomie instancji dla handlu elektronicznego. Pytanie dotyczące produktu jest zawsze takie samo: „biorąc pod uwagę ten obraz zapytania, oceń mój katalog”.
+Wyszukiwanie (retrieval) jest wszechobecne w produkcyjnych systemach wizyjnych: wykrywanie duplikatów, odwrotne wyszukiwanie obrazów, wyszukiwanie wizualne ("znajdź podobne produkty"), reidentyfikacja twarzy, re-ID osób w nadzorze wideo, dopasowywanie na poziomie instancji w e-commerce. Pytanie produktowe jest zawsze takie samo: "mając ten obraz zapytania, uszereguj mój katalog".
 
-Dwie decyzje projektowe kształtują cały system. Osadzanie — jaki model wytwarza wektory. Indeks — jak znaleźć najbliższych sąsiadów na dużą skalę. Obydwa będą dostępne na rynku w 2026 r. (DINOv2 do osadzania, FAISS do indeksu), co podnosi poprzeczkę: najtrudniejsza część polega na zdefiniowaniu *tego, co liczy się jako podobne* w Twojej aplikacji, a następnie ukształtowaniu przestrzeni do osadzania tak, aby odległości były zgodne.
+Dwie decyzje projektowe kształtują cały system. Embedding — jaki model produkuje wektory. Indeks — jak znaleźć najbliższych sąsiadów na dużą skalę. Obie kwestie są w 2026 roku elementami standardowymi (DINOv2 dla embeddingu, FAISS dla indeksu), co podnosi poprzeczkę: trudną częścią jest zdefiniowanie *co liczy się jako podobne* dla danej aplikacji, a następnie ukształtowanie przestrzeni embeddingów tak, aby odległości to odzwierciedlały.
 
-To kształtowanie to uczenie się metryczne. Jest to dyscyplina niewielka, ale o dużym wpływie.
+To kształtowanie to właśnie uczenie metryczne. Jest to mała, ale bardzo dochodowa (high-leverage) dyscyplina.
 
 ## Koncepcja
 
-### Odzyskiwanie w skrócie
+### Wyszukiwanie w skrócie
 
 ```mermaid
 flowchart LR
@@ -41,70 +41,70 @@ flowchart LR
     style OUT fill:#dcfce7,stroke:#16a34a
 ```
 
-### Cztery rodziny stratne
+### Cztery rodziny funkcji straty
 
-| Strata | Wymaga | Plusy | Wady |
-|------|--------------|------|------|
-| **Kontrastowy** | (kotwica, pozytyw) + negatywy | Proste, działa z dowolną etykietą pary | Wolno się zbiegać, bez wielu negatywów |
-| **Trójka** | (kotwica, dodatnia, ujemna) | Intuicyjny; bezpośrednia kontrola marży | Wydobywanie twardych trójek jest drogie |
-| **NT-Xent / InfoNCE** | Pary + negatywy wydobywane wsadowo | Wagi do dużych partii | Potrzebuje dużej partii lub kolejki pędu |
-| **Oparte na serwerze proxy (ProxyNCA)** | Tylko etykiety klas | Szybki, stabilny, bez wydobycia | Może nadmiernie dopasować się do serwerów proxy w małych zestawach danych |
+| Loss | Requires | Pros | Cons |
+|------|----------|------|------|
+| **Contrastive** | (anchor, positive) + negatywy | Proste, działa z każdym etykietowaniem par | Wolna zbieżność bez wielu negatywów |
+| **Triplet** | (anchor, positive, negative) | Intuicyjne; bezpośrednia kontrola marginesu | Mining trudnych trójek (hard-triplet mining) jest kosztowny |
+| **NT-Xent / InfoNCE** | Pary + negatywy wybierane w batchu | Skaluje się do dużych batchy | Wymaga dużego batcha lub kolejki momentum |
+| **Proxy-based (ProxyNCA)** | Tylko etykiety klas | Szybkie, stabilne, bez miningu | Może przeuczać się na proxy przy małych zbiorach danych |
 
-W przypadku większości przypadków użycia produkcyjnego zacznij od wstępnie wyszkolonego szkieletu i dodawaj dostrajanie oparte na uczeniu się metryk tylko wtedy, gdy gotowe osadzenia są słabsze w zestawie testowym.
+W większości przypadków produkcyjnych zacznij od wytrenowanego wcześniej szkieletu (pretrained backbone) i dodaj fine-tuning metryczny tylko wtedy, gdy gotowe embeddingi nie dają wystarczających wyników na Twoim zbiorze testowym.
 
-### Formalna strata potrójna
+### Triplet loss formalnie
 
 ```
 L = max(0, ||f(a) - f(p)||^2 - ||f(a) - f(n)||^2 + margin)
 ```
 
-Pociągnij kotwicę `a` blisko dodatniej `p`, odsuń ją od ujemnej `n`, z `margin` zapewniającym przerwę. Struktura trzech obrazów uogólnia dowolny porządek podobieństwa.
+Przyciągnij anchor `a` blisko do positive `p`, odpychaj go od negative `n`, z `margin` zapewniającym odstęp. Ta trójobrazowa struktura generalizuje się do każdego uporządkowania podobieństwa.
 
-Wydobycie ma znaczenie: łatwe trójki (`n` już daleko od `a`) nie powodują żadnych strat; tylko twarde trójki uczą sieć. Wydobywanie półtwarde (`n` dalej niż `p`, ale w granicach marginesu) to przepis FaceNet z 2016 r., który nadal dominuje.
+Mining ma znaczenie: łatwe trójki (`n` już daleko od `a`) wnoszą zerową stratę; tylko trudne trójki uczą sieć. Semi-hard mining (`n` dalej niż `p`, ale w obrębie marginesu) to przepis z FaceNet z 2016 roku i wciąż dominuje.
 
-### Cosinus podobieństwa vs L2
+### Podobieństwo kosinusowe vs L2
 
 Dwie metryki, dwie konwencje:
 
-- **Cosinus**: kąt między wektorami. Wymaga osadzania znormalizowanego L2.
-- **L2**: Odległość euklidesowa. Działa na surowych lub znormalizowanych osadzaniach, ale zwykle jest łączony z L2-normalizowanym + kwadratowym L2.
+- **Cosine**: kąt między wektorami. Wymaga embeddingów znormalizowanych L2.
+- **L2**: odległość euklidesowa. Działa na surowych lub znormalizowanych embeddingach, ale zazwyczaj jest łączona ze znormalizowanymi L2 + kwadratem odległości L2.
 
-W większości nowoczesnych sieci oba są równoważne: `||a - b||^2 = 2 - 2 cos(a, b)` gdy `||a|| = ||b|| = 1`. Wybierz konwencję pasującą do Twojego szkolenia w zakresie osadzania; mieszanie ich po cichu zmienia znaczenie słowa „najbliższy”.
+Dla większości współczesnych sieci te dwie metryki są równoważne: `||a - b||^2 = 2 - 2 cos(a, b)` gdy `||a|| = ||b|| = 1`. Wybierz konwencję, która odpowiada treningowi Twojego embeddingu; mieszanie ich w sposób niezauważony zmienia znaczenie pojęcia "najbliższy".
 
-### Przypomnij@K
+### Recall@K
 
-Standardowa metryka pobierania:
+Standardowa metryka wyszukiwania:
 
 ```
 recall@K = fraction of queries where at least one correct match is in the top K results
 ```
 
-Raportuj wycofanie @1, @5, @10 obok siebie. Przywołanie @ 10 powyżej 0,95 z przywołaniem @ 1 poniżej 0,5 oznacza, że ​​przestrzeń do osadzania ma właściwą strukturę, ale ranking jest zaszumiony — spróbuj dłużej dostrajać lub wykonać krok ponownego rankingu.
+Raportuj recall@1, @5, @10 razem. Recall@10 powyżej 0.95 z recall@1 poniżej 0.5 oznacza, że przestrzeń embeddingów ma właściwą strukturę, ale ranking jest szumiący — wypróbuj dłuższy fine-tuning lub etap ponownego rankingu (re-ranking).
 
-W przypadku wykrywania duplikatów precyzja @ K ma większe znaczenie, ponieważ każdy fałszywy alarm jest błędem widocznym dla użytkownika. W przypadku wyszukiwania wizualnego, przypomnieć@K jest sygnałem produktu.
+Dla wykrywania duplikatów ważniejsze jest precision@K, ponieważ każdy fałszywy alarm jest błędem widocznym dla użytkownika. Dla wyszukiwania wizualnego recall@K jest sygnałem produktowym.
 
-### FAISS w jednym akapicie
+### FAISS w jednym paragrafie
 
-Wyszukiwanie podobieństw na Facebooku AI. De facto biblioteka do wyszukiwania najbliższego sąsiada. Trzy opcje indeksu:
+Facebook AI Similarity Search. Biblioteka de facto standardowa do wyszukiwania najbliższych sąsiadów. Trzy wybory indeksu:
 
-- `IndexFlatIP` / `IndexFlatL2` — brutalna siła, dokładnie, bez szkolenia. Użyj do ~1M wektorów.
-- `IndexIVFFlat` — podziel na komórki K, przeszukaj tylko kilka najbliższych komórek. Przybliżone, szybkie, wymaga danych szkoleniowych.
-- `IndexHNSW` — oparty na wykresach, najszybszy dla wielu zapytań, duży rozmiar indeksu.
+- `IndexFlatIP` / `IndexFlatL2` — brute force, dokładny, bez treningu. Stosować do ~1M wektorów.
+- `IndexIVFFlat` — podział na K komórek, przeszukiwanie tylko najbliższych kilku komórek. Przybliżony, szybki, wymaga danych treningowych.
+- `IndexHNSW` — oparty na grafie, najszybszy dla wielu zapytań, duży rozmiar indeksu.
 
-W przypadku wektorów o długości 100 tys. prawdopodobnie potrzebujesz `IndexFlatIP` na podobieństwie cosinus. Za 10M chcesz `IndexIVFFlat`. Dla 100M+ w połączeniu z kwantyzacją produktu (`IndexIVFPQ`).
+Dla 100k wektorów prawdopodobnie chcesz `IndexFlatIP` na podobieństwie kosinusowym. Dla 10M chcesz `IndexIVFFlat`. Dla 100M+ w połączeniu z kwantyzacją produktową (`IndexIVFPQ`).
 
-### Pobieranie na poziomie instancji a na poziomie kategorii
+### Wyszukiwanie na poziomie instancji vs na poziomie kategorii
 
 Dwa bardzo różne problemy o tej samej nazwie:
 
-- **Poziom kategorii** — „znajdź koty w moim katalogu”. Podobieństwo klasowo-warunkowe; gotowe osadzania CLIP/DINOv2 działają dobrze.
-- **Poziom instancji** — „znajdź *ten dokładny produkt* w moim katalogu.” Wymaga precyzyjnego rozróżnienia wizualnie podobnych obiektów tej samej klasy; gotowe osadzanie ma słabą wydajność; dostrajanie z nauką metryki ma znaczenie.
+- **Poziom kategorii (category-level)** — "znajdź koty w moim katalogu". Podobieństwo warunkowane klasą; gotowe embeddingi CLIP / DINOv2 działają dobrze.
+- **Poziom instancji (instance-level)** — "znajdź *ten konkretny produkt* w moim katalogu". Wymaga precyzyjnego rozróżniania wizualnie podobnych obiektów tej samej klasy; gotowe embeddingi dają słabe wyniki; ważny jest fine-tuning z uczeniem metrycznym.
 
-Zawsze pytaj, który z nich rozwiązujesz, zanim wybierzesz model.
+Zawsze zapytaj, który problem rozwiązujesz, przed wyborem modelu.
 
 ## Zbuduj to
 
-### Krok 1: Strata trójek
+### Krok 1: Triplet loss
 
 ```python
 import torch
@@ -116,11 +116,11 @@ def triplet_loss(anchor, positive, negative, margin=0.2):
     return F.relu(d_ap - d_an + margin).mean()
 ```
 
-Jedna linia. Działa na osadzaniach znormalizowanych L2 lub surowych.
+Jedna linia. Działa na embeddingach znormalizowanych L2 lub surowych.
 
-### Krok 2: Wydobywanie półtwarde
+### Krok 2: Semi-hard mining
 
-Biorąc pod uwagę partię osadzania i etykiet, znajdź dla każdej kotwicy najtwardszy półtwardy negatyw.
+Mając batch embeddingów i etykiet, znajdź najtrudniejszy semi-hard negatyw dla każdego anchora.
 
 ```python
 def semi_hard_negatives(emb, labels, margin=0.2):
@@ -148,9 +148,9 @@ def semi_hard_negatives(emb, labels, margin=0.2):
     return pos_idx, neg_idx
 ```
 
-Każda kotwica otrzymuje najtwardszy pozytyw w swojej klasie i półtwardy negatyw, który jest dalej niż pozytyw, ale w granicach marginesu.
+Każdy anchor otrzymuje najtrudniejszy positive w obrębie swojej klasy oraz semi-hard negative, który jest dalej niż positive, ale w obrębie marginesu.
 
-### Krok 3: Przywołanie@K
+### Krok 3: Recall@K
 
 ```python
 def recall_at_k(query_emb, gallery_emb, query_labels, gallery_labels, k=1):
@@ -160,9 +160,9 @@ def recall_at_k(query_emb, gallery_emb, query_labels, gallery_labels, k=1):
     return matches.float().mean().item()
 ```
 
-Top-k według iloczynu wewnętrznego na osadzaniach znormalizowanych L2 równa się top-k przez cosinus. Podaj średnią proporcję zapytań z co najmniej jednym poprawnym sąsiadem.
+Top-k według iloczynu skalarnego (inner product) na embeddingach znormalizowanych L2 jest równoważne top-k według podobieństwa kosinusowego. Raportuj średnią proporcję zapytań z przynajmniej jednym poprawnym sąsiadem.
 
-### Krok 4: Składanie tego w całość
+### Krok 4: Złożenie całości
 
 ```python
 import torch
@@ -200,48 +200,48 @@ for step in range(200):
     opt.zero_grad(); loss.backward(); opt.step()
 ```
 
-Po kilkuset krokach klastry osadzające tworzą jeden klaster na klasę.
+Po kilkuset krokach klastry embeddingów formują się w jeden klaster na klasę.
 
-## Użyj tego
+## Zastosowanie
 
 Stosy produkcyjne w 2026 roku:
 
-- **DINOv2 + FAISS** — wyszukiwanie wizualne ogólnego przeznaczenia. Działa od ręki.
+- **DINOv2 + FAISS** — ogólnego przeznaczenia wyszukiwanie wizualne. Działa bez dodatkowego treningu.
 - **CLIP + FAISS** — gdy zapytania są tekstowe.
-- **Dopracowany DINOv2 + FAISS** — pobieranie na poziomie instancji, ponowna identyfikacja twarzy, moda, e-commerce.
-- **Milvus / Weaviate / Qdrant** — zarządzane wektorowe opakowania DB wokół FAISS lub HNSW.
+- **Fine-tuned DINOv2 + FAISS** — wyszukiwanie na poziomie instancji, re-ID twarzy, moda, e-commerce.
+- **Milvus / Weaviate / Qdrant** — zarządzane wrappery baz wektorowych nad FAISS lub HNSW.
 
-W przypadku pobierania instancji SOTA przepis jest następujący: szkielet DINOv2, dodanie głowicy osadzającej, dostrojenie za pomocą trójki lub straty InfoNCE na parach oznaczonych instancjami, indeksowanie w FAISS.
+Dla SOTA wyszukiwania na poziomie instancji przepis jest następujący: szkielet DINOv2, dodanie głowicy embeddingu, fine-tuning z funkcją straty triplet lub InfoNCE na parach etykietowanych na poziomie instancji, indeksowanie w FAISS.
 
-## Wyślij to
+## Dostarczenie (Ship It)
 
-Ta lekcja daje:
+Ta lekcja produkuje:
 
-- `outputs/prompt-retrieval-loss-picker.md` — zachęta, która wybiera triplet / InfoNCE / ProxyNCA dla danego problemu z pobieraniem.
-- `outputs/skill-recall-at-k-runner.md` — umiejętność polegająca na pisaniu czystej wiązki ewaluacyjnej dla odwołania@K z podziałem na pociąg/val/galeria i odpowiednim kontraktem danych.
+- `outputs/prompt-retrieval-loss-picker.md` — prompt, który wybiera triplet / InfoNCE / ProxyNCA dla danego problemu wyszukiwania.
+- `outputs/skill-recall-at-k-runner.md` — skill, który pisze czysty harness ewaluacyjny dla recall@K z podziałami train/val/gallery i właściwym kontraktem danych.
 
 ## Ćwiczenia
 
-1. **(Łatwy)** Uruchom powyższy przykład zabawki. Narysuj osadzenie za pomocą PCA przed i po treningu, aby zobaczyć, jak tworzy się sześć klastrów.
-2. **(Średni)** Dodaj implementację strat ProxyNCA: jeden wyuczony „proxy” na klasę, standardowa entropia krzyżowa na podobieństwie cosinus. Porównaj prędkość konwergencji ze stratą trójek w danych zabawek.
-3. **(Trudne)** Wykonaj 1000 obrazów walidacyjnych ImageNet, osadź w DINOv2 za pośrednictwem HuggingFace, zbuduj płaski indeks FAISS i zgłoś wycofanie@{1, 5, 10} w oparciu o te same obrazy, co zapytania (powinno wynosić 1,0) i w oparciu o ustalony podział z etykietami ImageNet jako podstawową prawdą.
+1. **(Łatwe)** Uruchom powyższy przykład poglądowy. Wykonaj wykres PCA embeddingów przed i po treningu, aby zobaczyć formowanie się sześciu klastrów.
+2. **(Średnie)** Dodaj implementację funkcji straty ProxyNCA: jedno wyuczone "proxy" na klasę, standardowa entropia skrośna (cross-entropy) na podobieństwie kosinusowym. Porównaj tempo zbieżności z triplet loss na danych poglądowych.
+3. **(Trudne)** Weź 1000 obrazów ze zbioru walidacyjnego ImageNet, oblicz embeddingi przy użyciu DINOv2 przez HuggingFace, zbuduj płaski indeks FAISS i raportuj recall@{1, 5, 10} względem tych samych obrazów jako zapytań (powinno wynosić 1.0) oraz względem wydzielonego podziału z etykietami ImageNet jako ground truth.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Term | What people say | What it actually means |
 |------|----------------|----------------------|
-| Uczenie się metryk | „Kształtuj przestrzeń” | Uczenie kodera tak, aby odległości w jego przestrzeni wyjściowej odzwierciedlały podobieństwo celu |
-| Strata potrójna | „Ciągnij i pchnij” | L = max(0, d(a, p) - d(a, n) + margines); kanoniczna strata w uczeniu się metryk |
-| Górnictwo półtwarde | „Przydatne negatywy” | Negatywy dalej od kotwicy niż pozytyw, ale w granicach marginesu; empirycznie najbardziej pouczający |
-| Strata zastępcza | „Prototypy klas” | Jeden wyuczony pełnomocnik na klasę; entropia krzyżowa względem podobieństwa do proxy; brak wydobywania par |
-| Przypomnij @K | „Współczynnik trafień najwyższego K” | Frakcja zapytań z co najmniej jednym poprawnym wynikiem w górnym K |
-| Pobieranie instancji | „Znajdź dokładnie tę rzecz” | Dopasowanie drobnoziarniste; gotowe funkcje zwykle są gorsze od |
-| FAISS | „Biblioteka NN” | Biblioteka najbliższego sąsiada Facebooka; obsługuje indeksy dokładne i przybliżone |
-| HNSW | „Indeks wykresu” | Hierarchiczny, żeglowny mały świat; szybkie przybliżenie NN z małym obciążeniem pamięci |
+| Metric learning | "Shape the space" | Trenowanie encodera tak, aby odległości w jego przestrzeni wyjściowej odzwierciedlały docelowe podobieństwo |
+| Triplet loss | "Pull and push" | L = max(0, d(a, p) - d(a, n) + margin); kanoniczna funkcja straty w uczeniu metrycznym |
+| Semi-hard mining | "Useful negatives" | Negatywy dalej od anchora niż positive, ale w obrębie marginesu; empirycznie najbardziej informatywne |
+| Proxy-based loss | "Class prototypes" | Jedno wyuczone proxy na klasę; entropia skrośna nad podobieństwem do proxy; bez miningu par |
+| Recall@K | "Top-K hit rate" | Ułamek zapytań z przynajmniej jednym poprawnym wynikiem w top K |
+| Instance retrieval | "Find this exact thing" | Precyzyjne dopasowywanie (fine-grained matching); gotowe cechy zwykle dają słabe wyniki |
+| FAISS | "The NN library" | Biblioteka Facebooka do wyszukiwania najbliższych sąsiadów; wspiera indeksy dokładne i przybliżone |
+| HNSW | "Graph index" | Hierarchical navigable small world; szybkie przybliżone NN z małym narzutem pamięciowym |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-- [FaceNet: A Unified Embedding for Face Recognition (Schroff et al., 2015)](https://arxiv.org/abs/1503.03832) — artykuł poświęcony utracie trójek / półtwardemu wydobyciu
-- [W obronie utraty trojaczków w celu ponownej identyfikacji osoby (Hermans et al., 2017)](https://arxiv.org/abs/1703.07737) — praktyczny przewodnik po dostrajaniu trójek
-– [Dokumentacja FAISS](https://github.com/facebookresearch/faiss/wiki) — każdy indeks, każdy kompromis
-- [SMoT: Metric Learning Taxonomy (Kim et al., 2021)](https://arxiv.org/abs/2010.06927) — badanie współczesnych strat i ich powiązań
+- [FaceNet: A Unified Embedding for Face Recognition (Schroff et al., 2015)](https://arxiv.org/abs/1503.03832) — artykuł o triplet loss / semi-hard mining
+- [In Defense of the Triplet Loss for Person Re-Identification (Hermans et al., 2017)](https://arxiv.org/abs/1703.07737) — praktyczny przewodnik po fine-tuningu z triplet loss
+- [FAISS documentation](https://github.com/facebookresearch/faiss/wiki) — każdy indeks, każdy kompromis
+- [SMoT: Metric Learning Taxonomy (Kim et al., 2021)](https://arxiv.org/abs/2010.06927) — przegląd współczesnych funkcji straty i ich powiązań

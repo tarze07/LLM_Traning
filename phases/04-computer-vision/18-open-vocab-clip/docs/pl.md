@@ -1,26 +1,26 @@
-# Wizja otwartego słownictwa — KLIP
+# Otwartosłownikowe widzenie komputerowe — CLIP
 
-> Przetrenuj razem koder obrazu i koder tekstu, tak aby pasujące pary (obraz, podpis) lądowały w tym samym punkcie we współdzielonej przestrzeni. Na tym polega cała sztuczka.
+> Trenuj enkoder obrazu i enkoder tekstu razem, tak aby odpowiadające sobie pary (obraz, podpis) lądowały w tym samym punkcie współdzielonej przestrzeni. To jest cała sztuczka.
 
-**Typ:** Kompiluj + Użyj
+**Typ:** Zbuduj + Użyj
 **Języki:** Python
-**Wymagania wstępne:** Faza 4, lekcja 14 (ViT), faza 4, lekcja 17 (samonadzorowany)
+**Wymagania wstępne:** Faza 4, Lekcja 14 (ViT), Faza 4, Lekcja 17 (Uczenie samonadzorowane)
 **Czas:** ~45 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Wyjaśnij dwuwieżową architekturę CLIP i kontrastowy cel szkolenia
-- Użyj wstępnie przeszkolonego CLIP (lub SigLIP) do klasyfikacji typu zero-shot bez żadnego szkolenia dotyczącego konkretnego zadania
-- Zaimplementuj klasyfikację zerową od zera: zakoduj podpowiedzi klas, oblicz podobieństwo cosinus, weź argmax
-- Rozróżnij modele CLIP, SigLIP, OpenCLIP i LLaVA/LLaMA-vision — do czego każdy z nich służy w 2026 r.
+- Wyjaśnienie dwuwieżowej architektury CLIP i kontrastowego celu treningowego
+- Użycie wytrenowanego modelu CLIP (lub SigLIP) do klasyfikacji zero-shot bez żadnego treningu specyficznego dla zadania
+- Implementacja klasyfikacji zero-shot od podstaw: kodowanie promptów klas, obliczenie podobieństwa kosinusowego, wybór argmax
+- Rozróżnienie modeli CLIP, SigLIP, OpenCLIP i LLaVA/LLaMA-vision — do czego służy każdy z nich w 2026 roku
 
 ## Problem
 
-Tradycyjne klasyfikatory mają charakter zamknięty: model ImageNet klasy 1000 może przewidzieć tylko 1000 etykiet. Każda nowa kategoria wymaga oznaczonych danych i przeszkolonego szefa.
+Tradycyjne klasyfikatory są zamkniętosłownikowe: model ImageNet z 1000 klasami może przewidzieć tylko 1000 etykiet. Każda nowa kategoria wymaga oznakowanych danych i przetrenowania głowicy.
 
-Projekt CLIP (Radford i in., OpenAI 2021) wykazał, że szkolenie na 400 milionach par (obrazek, podpis) pobranych z sieci tworzy model, który na podstawie wniosków można sklasyfikować w dowolny zestaw kategorii opisanych wyłącznie w języku naturalnym. Nadajesz mu nową klasę, pisząc zdanie.
+CLIP (Radford i in., OpenAI 2021) pokazał, że trening na 400 mln par (obraz, podpis) zebranych z internetu daje model, który podczas wnioskowania może klasyfikować dowolny zestaw kategorii, opisanych wyłącznie w języku naturalnym. Nową klasę podajesz, pisząc zdanie.
 
-Ta możliwość — transfer zerowy — jest powodem, dla którego każdy nowoczesny system wizyjny zaczyna się od punktu kontrolnego z rodziny CLIP. Wykrywanie (Grounding DINO, OWL-ViT), segmentacja (CLIPSeg, SAM), odzyskiwanie, moderowanie treści, VLM i generowanie tekstu na obraz opierają się na wspólnym osadzaniu w stylu CLIP.
+Ta zdolność — transfer zero-shot — jest powodem, dla którego każdy nowoczesny system wizyjny zaczyna od checkpointu z rodziny CLIP. Detekcja (Grounding DINO, OWL-ViT), segmentacja (CLIPSeg, SAM), wyszukiwanie, moderacja treści, VLM-y oraz generowanie tekst-na-obraz — wszystkie te zastosowania opierają się na współdzielonych osadzeniach w stylu CLIP.
 
 ## Koncepcja
 
@@ -38,11 +38,11 @@ flowchart LR
     style SIM fill:#dcfce7,stroke:#16a34a
 ```
 
-Oba enkodery kończą się rzutem liniowym na ten sam wymiar osadzania (512 dla CLIP-B/32, 1024 dla CLIP-L/14). L2-normalizacja i obliczenie podobieństwa cosinus.
+Obydwa enkodery kończą się liniową projekcją do tego samego wymiaru osadzenia (512 dla CLIP-B/32, 1024 dla CLIP-L/14). Wykonujemy normalizację L2 i obliczamy podobieństwo kosinusowe.
 
-### Cel
+### Cel treningowy
 
-Biorąc pod uwagę partię N par (obraz, podpis), zbuduj macierz podobieństwa NxN. Trenuj oba kodery tak, aby przekątna (pasujące pary) miała duże podobieństwo, a nieprzekątne (niepasujące) miały niskie podobieństwo.
+Mając batch N par (obraz, podpis), budujemy macierz podobieństwa NxN. Trenujemy oba enkodery tak, aby przekątna (pary dopasowane) miała wysokie podobieństwo, a elementy poza przekątną (pary niedopasowane) — niskie.
 
 ```
 sim_matrix = image_embeddings @ text_embeddings.T / tau
@@ -52,52 +52,53 @@ loss_t2i = cross_entropy(sim_matrix.T,     targets=arange(N))
 loss = (loss_i2t + loss_t2i) / 2
 ```
 
-Symetryczny, ponieważ powinno działać zarówno wyszukiwanie obrazu na tekst, jak i tekstu na obraz. `tau` (temperatura) jest zwykle zapamiętywana jako parametr skalarny, inicjowany na 0,07.
+Symetryczne, ponieważ powinno działać zarówno wyszukiwanie obraz-do-tekstu, jak i tekst-do-obrazu. `tau` (temperatura) jest zwykle uczona jako parametr skalarny, inicjalizowany na 0,07.
 
-### SigLIP: lepsza strata
+### SigLIP: lepsza funkcja straty
 
-SigLIP (Zhai i in., 2023) zastąpił softmax sigmoidem na parę:
+SigLIP (Zhai i in., 2023) zamienił softmax na sigmoid liczony dla każdej pary:
 
 ```
 loss = mean over pairs of log(1 + exp(-y_ij * sim_ij))
 y_ij = +1 if matching, -1 otherwise
 ```
 
-Utrata pary usuwa normalizację na poziomie partii wymaganą przez CLIP. SigLIP lepiej radzi sobie z małymi partiami i dorównuje lub przewyższa CLIP przy takich samych danych.
+Strata liczona per-para usuwa normalizację na poziomie batcha, której wymaga CLIP. SigLIP trenuje się lepiej przy małych rozmiarach batcha i przy tej samej ilości danych dorównuje lub przewyższa CLIP.
 
-### Klasyfikacja zerowego strzału
+### Klasyfikacja zero-shot
 
-Biorąc pod uwagę przeszkolony CLIP:
+Mając wytrenowany model CLIP:
 
-1. Dla każdej klasy utwórz zachętę: „zdjęcie {klasy}”.
-2. Zakoduj wszystkie podpowiedzi klasy za pomocą kodera tekstowego -> kształt `T` (C, d).
-3. Zakoduj obraz testowy -> kształt `I` (1, d).
-4. Podobieństwo = `I @ T.T` kształt (1, C).
-5. Argmax -> przewidywana klasa.
+1. Dla każdej klasy skomponuj prompt: "a photo of a {class}".
+2. Zakoduj wszystkie prompty klas za pomocą enkodera tekstu -> `T` o kształcie (C, d).
+3. Zakoduj obraz testowy -> `I` o kształcie (1, d).
+4. Podobieństwo = `I @ T.T` o kształcie (1, C).
+5. Argmax -> przewidziana klasa.
 
-Szybkie sprawy inżynieryjne. OpenAI opublikowało 80 szablonów podpowiedzi dla ImageNet („zdjęcie {}”, „rozmazane zdjęcie {}”, „szkic {}”,…). Uśrednij osadzenie wszystkich szablonów na klasę, aby uzyskać dodatkowe 1-3% dokładności w pierwszej kolejności.
+Inżynieria promptów ma znaczenie. OpenAI opublikowało 80 szablonów promptów dla ImageNet ("a photo of a {}", "a blurry photo of a {}", "a sketch of a {}", ...). Uśrednienie osadzeń wszystkich szablonów dla danej klasy daje dodatkowe 1-3% trafności top-1.
 
-### Gdzie w 2026 r. będą używane modele w stylu CLIP
+### Gdzie modele w stylu CLIP są używane w 2026 roku
 
-- **Klasyfikacja zerowego** – bezpośrednie użycie.
-- **Pobieranie obrazu** — koduj wszystkie obrazy raz, osadzaj zapytanie po wnioskowaniu.
-- **Detekcja uwarunkowana tekstem** — Uziemienie DINO, OWL-ViT otacza czujkę wieżą tekstową CLIP.
-- **Segmentacja warunkowana tekstem** — CLIPSeg; SAM wykorzystuje polecenia tekstowe za pośrednictwem CLIP.
-- **VLM** — LLaVA, Qwen-VL, InternVL podłączają koder wizyjny z rodziny CLIP do LLM.
-- **Genowanie tekstu na obraz** — Stabilne rozproszenie, warunek DALL-E 3 przy osadzaniu tekstu CLIP.
+- **Klasyfikacja zero-shot** — użycie bezpośrednie.
+- **Wyszukiwanie obrazów** — zakoduj wszystkie obrazy raz, osadź zapytanie podczas wnioskowania.
+- **Detekcja warunkowana tekstem** — Grounding DINO, OWL-ViT owijają wieżę tekstową CLIP wokół detektora.
+- **Segmentacja warunkowana tekstem** — CLIPSeg; SAM korzysta z wejść w postaci promptów tekstowych za pośrednictwem CLIP.
+- **VLM-y** — LLaVA, Qwen-VL, InternVL łączą enkoder wizyjny z rodziny CLIP z LLM.
+- **Generowanie tekst-na-obraz** — Stable Diffusion, DALL-E 3 są warunkowane na osadzeniach tekstowych CLIP.
 
-Kiedy już masz wspólną przestrzeń do osadzania, każde zadanie związane z wizją i językiem staje się obliczaniem odległości.
+Gdy masz już współdzieloną przestrzeń osadzeń, każde zadanie z dziedziny wizja+język staje się obliczeniem odległości.
 
 ## Zbuduj to
 
-### Krok 1: Mały model z dwiema wieżami
+### Krok 1: Mały model dwuwieżowy
 
-Real CLIP to transformator ViT+. W tej lekcji wieże są małymi MLP na wstępnie wyodrębnionych funkcjach, więc sygnał uczący jest widoczny na procesorze.
+Prawdziwy CLIP to ViT + transformer. W tej lekcji wieże to małe MLP nad wcześniej wyekstrahowanymi cechami, dzięki czemu sygnał treningowy jest widoczny na CPU.
 
 ```python
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 
 class TwoTower(nn.Module):
     def __init__(self, img_in=128, txt_in=64, emb=64):
@@ -112,9 +113,9 @@ class TwoTower(nn.Module):
         return i, t, self.logit_scale.exp()
 ```
 
-Dwie projekcje, wspólne przyciemnienie, zaprogramowana temperatura. Taki sam kształt jak prawdziwe API CLIP.
+Dwie projekcje, wspólny wymiar wyjścia, uczona temperatura. Ten sam kształt co prawdziwe API CLIP.
 
-### Krok 2: Kontrastowa strata
+### Krok 2: Strata kontrastowa
 
 ```python
 def clip_loss(image_emb, text_emb, logit_scale):
@@ -126,9 +127,9 @@ def clip_loss(image_emb, text_emb, logit_scale):
     return (l_i + l_t) / 2
 ```
 
-Symetryczny. Wyższa logit_scale = ostrzejszy softmax = większa pewność, ale ryzyko niestabilności.
+Symetryczna. Wyższy logit_scale = ostrzejszy softmax = większa pewność, ale ryzyko niestabilności.
 
-### Krok 3: Klasyfikator zerowy
+### Krok 3: Klasyfikator zero-shot
 
 ```python
 @torch.no_grad()
@@ -144,9 +145,9 @@ def zero_shot_classify(model, image_feats, class_text_feats, class_names):
     return [class_names[p] for p in pred.tolist()]
 ```
 
-Jedna linia na krok. Jest to dokładna procedura zerowego strzału stosowana w produkcyjnym punkcie kontrolnym CLIP.
+Jedna linia na każdy krok. To jest dokładnie ta procedura zero-shot, która jest używana z produkcyjnym checkpointem CLIP.
 
-### Krok 4: Kontrola poprawności
+### Krok 4: Test poprawności
 
 ```python
 torch.manual_seed(0)
@@ -159,11 +160,11 @@ loss = clip_loss(i, t, scale)
 print(f"batch size: {i.size(0)}   loss: {loss.item():.3f}")
 ```
 
-Strata powinna być bliska `log(N) = log(8) = 2.08` dla losowo inicjowanego modelu — symetrycznego docelowego punktu entropii krzyżowej, gdy nie poznano jeszcze żadnej struktury.
+Strata powinna być bliska `log(N) = log(8) = 2.08` dla losowo zainicjalizowanego modelu — symetryczny cel cross-entropy, gdy żadna struktura nie została jeszcze nauczona.
 
 ## Użyj tego
 
-OpenCLIP będzie domyślnym ustawieniem społeczności w 2026 r.:
+OpenCLIP jest domyślnym wyborem społeczności w 2026 roku:
 
 ```python
 import open_clip
@@ -186,37 +187,37 @@ with torch.no_grad():
 print(probs)
 ```
 
-SigLIP jest nowszy, lepiej sprawdza się w małych skalach i jest preferowany do nowych prac: `google/siglip-base-patch16-224`. Hugging Face łączy jedno i drugie.
+SigLIP jest nowszy, lepiej trenuje się na małych skalach i jest preferowany w nowych projektach: `google/siglip-base-patch16-224`. Hugging Face udostępnia oba.
 
-## Wyślij to
+## Dostarcz to
 
-Ta lekcja daje:
+Ta lekcja produkuje:
 
-- `outputs/prompt-zero-shot-class-picker.md` — zachęta projektująca szablony klas dla CLIP typu zero-shot z uwzględnieniem listy klas i domeny.
-- `outputs/skill-image-text-retriever.md` — umiejętność budowania indeksu osadzania obrazu z dowolnym punktem kontrolnym CLIP, obsługuje zapytania po tekście i zapytania po obrazie.
+- `outputs/prompt-zero-shot-class-picker.md` — prompt, który projektuje szablony klas dla zero-shot CLIP na podstawie listy klas i domeny.
+- `outputs/skill-image-text-retriever.md` — skill, który buduje indeks osadzeń obrazów z użyciem dowolnego checkpointu CLIP, wspierający zapytania tekstem i zapytania obrazem.
 
 ## Ćwiczenia
 
-1. **(Łatwy)** Użyj wstępnie przeszkolonego OpenCLIP ViT-B/32 i wykonaj klasyfikację zerową na CIFAR-10 za pomocą zestawu podpowiedzi zawierającego 80 szablonów. Zgłoś najwyższą dokładność; powinno wynosić około 85-90%.
-2. **(Średni)** Porównanie pojedynczego szablonu („zdjęcie {}”) z osadzeniem uśrednionym na 80 szablonach w tym samym zadaniu CIFAR-10. Określ ilościowo lukę i wyjaśnij, dlaczego szablony są pomocne.
-3. **(Trudny)** Zbuduj indeks wyszukiwania obrazów zero-shot: osadź 1000 obrazów za pomocą CLIP, zbuduj indeks FAISS, zapytaj z opisem w języku naturalnym. Raport o odzyskaniu przypomnienia@5 dla 20 wstrzymanych zapytań, które piszesz ręcznie.
+1. **(Łatwe)** Użyj wytrenowanego OpenCLIP ViT-B/32 i wykonaj klasyfikację zero-shot na CIFAR-10 z zestawem 80 szablonów promptów. Podaj trafność top-1; powinna wynosić około 85-90%.
+2. **(Średnie)** Porównaj osadzenia z jednym szablonem ("a photo of a {}") względem uśrednionych osadzeń z 80 szablonów na tym samym zadaniu CIFAR-10. Skwantyfikuj różnicę i wyjaśnij, czemu szablony pomagają.
+3. **(Trudne)** Zbuduj indeks wyszukiwania obrazów zero-shot: osadź 1000 obrazów za pomocą CLIP, zbuduj indeks FAISS, wykonaj zapytanie opisem w języku naturalnym. Podaj recall@5 dla 20 zapytań napisanych ręcznie, na których nie trenowano.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Dwie wieże | „Podwójny koder” | Oddzielne kodery obrazu i tekstu zakończone wspólną głowicą projekcyjną |
-| Zerowy strzał | „Brak szkoleń zadaniowych” | Klasyfikuj na klasy opisane jedynie tekstem przy wnioskowaniu; żadne etykiety nie zostały dotknięte |
-| Temperatura / skala logitowa | "tau" | Nauczony skalar skalujący macierz podobieństwa przed softmax |
-| Szablon podpowiedzi | „Zdjęcie {}” | Opakowanie w języku naturalnym wokół nazw klas; uśrednianie wielu szablonów zwiększa dokładność zerowego strzału |
-| KLIPS | „Model obraz+tekst” | Model OpenAI 2021; słownictwo z zakresu 2026 |
-| SigLIP | „Sigmoidalny klip” | Zamienia softmax na sigmoid na parę; trenuje lepiej w małych partiach |
-| OpenCLIP | „Reprodukcja otwarta” | Warianty CLIP wyszkolone przez społeczność na LAION; domyślna produkcja dla potoków open source |
-| VLM | „Model wizjonersko-językowy” | Koder z rodziny CLIP plus LLM, przeszkolony w zakresie odpowiadania na pytania dotyczące obrazów |
+| Two-tower | "Podwójny enkoder" | Oddzielne enkodery obrazu i tekstu, zakończone głowicą projekcji do wspólnego wymiaru |
+| Zero-shot | "Brak treningu specyficznego dla zadania" | Klasyfikacja do klas opisanych jedynie tekstem podczas wnioskowania; żadne etykiety nie są używane |
+| Temperature / logit_scale | "tau" | Uczony skalar, który skaluje macierz podobieństwa przed softmax |
+| Prompt template | "A photo of a {}" | Wrapper w języku naturalnym wokół nazw klas; uśrednianie wielu szablonów zwiększa trafność zero-shot |
+| CLIP | "Model obraz+tekst" | Model OpenAI z 2021 roku; słownictwo tej dziedziny w 2026 roku |
+| SigLIP | "Sigmoid CLIP" | Zamienia softmax na sigmoid liczony dla każdej pary; lepiej trenuje się na małych batchach |
+| OpenCLIP | "Otwarta reprodukcja" | Warianty CLIP trenowane przez społeczność na LAION; domyślny wybór produkcyjny dla open-source'owych pipeline'ów |
+| VLM | "Model wizyjno-językowy" | Enkoder z rodziny CLIP plus LLM, trenowany do odpowiadania na pytania o obrazy |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-- [CLIP: Uczenie się możliwych do przeniesienia modeli wizualnych na podstawie nadzoru nad językiem naturalnym (Radford et al., 2021)](https://arxiv.org/abs/2103.00020)
-– [SigLIP: Utrata esicy na potrzeby wstępnego szkolenia obrazu językowego (Zhai i in., 2023)](https://arxiv.org/abs/2303.15343)
+- [CLIP: Learning Transferable Visual Models from Natural Language Supervision (Radford i in., 2021)](https://arxiv.org/abs/2103.00020)
+- [SigLIP: Sigmoid Loss for Language-Image Pre-Training (Zhai i in., 2023)](https://arxiv.org/abs/2303.15343)
 - [OpenCLIP](https://github.com/mlfoundations/open_clip) — baza kodu społeczności
-- [DINOv2 vs CLIP vs MAE: porównanie funkcji](https://huggingface.co/blog/dinov2) — Przewodnik HF z przykładami użycia obok siebie
+- [DINOv2 vs CLIP vs MAE: a features comparison](https://huggingface.co/blog/dinov2) — przewodnik HF z porównaniem przypadków użycia

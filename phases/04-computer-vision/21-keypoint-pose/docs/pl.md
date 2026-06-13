@@ -1,30 +1,30 @@
-# Wykrywanie kluczowych punktów i szacowanie pozycji
+# Wykrywanie punktów charakterystycznych i estymacja pozy
 
-> Poza to zbiór uporządkowanych punktów kluczowych. Detektorem punktu kluczowego jest regresor mapy cieplnej. Cała reszta to księgowość.
+> Poza to zbiór uporządkowanych punktów charakterystycznych. Detektor punktów charakterystycznych to regresor map ciepła (heatmap). Wszystko inne to księgowość.
 
-**Typ:** Kompilacja
+**Typ:** Build
 **Języki:** Python
-**Wymagania wstępne:** Faza 4 Lekcja 06 (Wykrywanie), Faza 4 Lekcja 07 (U-Net)
+**Wymagania wstępne:** Faza 4 Lekcja 06 (Detekcja), Faza 4 Lekcja 07 (U-Net)
 **Czas:** ~45 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Rozróżnij ocenę pozycji od góry do dołu i od dołu do góry oraz określ, kiedy każda z nich jest używana
-- Regresuj mapy cieplne dla K punktów kluczowych z docelowym współczynnikiem Gaussa na punkt kluczowy i wyodrębniaj współrzędne punktu kluczowego podczas wnioskowania
-- Wyjaśnij pola powinowactwa części (PAF) i sposób, w jaki potoki oddolne łączą punkty kluczowe z instancjami
-- Użyj MediaPipe Pose lub MMPose do oszacowania kluczowych punktów produkcyjnych i poznaj ich format wyjściowy
+- Rozróżnienie podejść top-down i bottom-up w estymacji pozy oraz wskazanie, kiedy stosuje się każde z nich
+- Regresja map ciepła dla K punktów charakterystycznych z celem w postaci gaussianu na każdy punkt oraz ekstrakcja współrzędnych punktów podczas inferencji
+- Wyjaśnienie Part Affinity Fields (PAF) i sposobu, w jaki potoki bottom-up łączą punkty charakterystyczne w instancje
+- Użycie MediaPipe Pose lub MMPose do produkcyjnej estymacji punktów charakterystycznych oraz zrozumienie formatu ich wyjścia
 
 ## Problem
 
-Zadania z punktami kluczowymi kryją się pod wieloma nazwami: pozycja człowieka (17 stawów ciała), punkty orientacyjne twarzy (68 lub 478 punktów), ręka (21 punktów), pozycja zwierzęcia, pozycja obiektu robota, punkty orientacyjne anatomii medycznej. Każdy z nich ma tę samą strukturę: wykrywa K dyskretnych punktów na obiekcie i wyprowadza ich współrzędne (x, y).
+Zadania związane z punktami charakterystycznymi kryją się pod wieloma nazwami: poza człowieka (17 stawów ciała), punkty charakterystyczne twarzy (68 lub 478 punktów), ręka (21 punktów), poza zwierzęcia, poza obiektu robotycznego, punkty anatomiczne w medycynie. Każde z tych zadań ma tę samą strukturę: wykryć K dyskretnych punktów na obiekcie i wyznaczyć ich współrzędne (x, y).
 
-Oszacowanie pozycji to podstawa przechwytywania ruchu, aplikacji fitness, analityki sportowej, kontroli gestów, animacji, próbowania AR i chwytania robotycznego. Sprawa 2D jest dojrzała; Pozycja 3D (szacowanie wspólnych pozycji we współrzędnych świata za pomocą jednej kamery) to obecna granica badań.
+Estymacja pozy jest podstawą motion capture, aplikacji fitness, analityki sportowej, kontroli gestami, animacji, AR przymierzania ubrań oraz chwytania obiektów przez roboty. Przypadek 2D jest dojrzały; poza 3D (estymacja pozycji stawów we współrzędnych świata na podstawie pojedynczej kamery) jest aktualnym frontem badawczym.
 
-Kwestią inżynierską jest skala. Pojedynczy obraz i poza jednej osoby to problem 20 ms. Pozycja wielu osób w tłumie przy 30 klatkach na sekundę to inny problem w przypadku różnych architektur.
+Pytanie inżynieryjne dotyczy skali. Poza jednej osoby na jednym obrazie to problem na poziomie 20ms. Poza wielu osób w tłumie przy 30 fps to zupełnie inny problem, wymagający innych architektur.
 
 ## Koncepcja
 
-### Od góry do dołu vs od dołu do góry
+### Top-down a bottom-up
 
 ```mermaid
 flowchart LR
@@ -41,30 +41,30 @@ flowchart LR
     style BU fill:#fef3c7,stroke:#d97706
 ```
 
-- **Z góry na dół** — najpierw wykryj ludzi, a następnie uruchom model kluczowych punktów dla każdej osoby w przypadku każdej uprawy. Najwyższa dokładność; skaluje się liniowo wraz z liczbą osób.
-- **Od dołu do góry** — jedno podanie w przód przewiduje wszystkie kluczowe punkty plus pole skojarzenia; pogrupuj je. Stały czas niezależnie od wielkości tłumu.
+- **Top-down** — najpierw wykrywane są osoby, a następnie na każdym wycinku obrazu uruchamiany jest model punktów charakterystycznych dla jednej osoby. Najwyższa dokładność; czas skaluje się liniowo z liczbą osób.
+- **Bottom-up** — jeden przebieg sieci przewiduje wszystkie punkty charakterystyczne wraz z polem asocjacji; następnie są one grupowane. Czas działania jest stały niezależnie od liczby osób w tłumie.
 
-Top-down (HRNet, ViTPose) jest liderem dokładności; oddolne (OpenPose, HigherHRNet) jest liderem przepustowości w przypadku zatłoczonych scen.
+Top-down (HRNet, ViTPose) prowadzi pod względem dokładności; bottom-up (OpenPose, HigherHRNet) prowadzi pod względem przepustowości w scenach z dużym tłumem.
 
-### Regresja mapy cieplnej
+### Regresja map ciepła
 
-Zamiast bezpośrednio regresować `(x, y)`, przewiduj mapę cieplną `H x W` na każdy punkt kluczowy z plamą Gaussa wyśrodkowaną w prawdziwej lokalizacji.
+Zamiast bezpośrednio regresować `(x, y)`, dla każdego punktu charakterystycznego przewidywana jest mapa ciepła o rozmiarze `H x W` z plamą gaussowską wycentrowaną w prawdziwej lokalizacji.
 
 ```
 target[k, y, x] = exp(-((x - cx_k)^2 + (y - cy_k)^2) / (2 sigma^2))
 ```
 
-Podsumowując, argmax każdej mapy cieplnej jest przewidywaną lokalizacją punktu kluczowego.
+Podczas inferencji argmax każdej mapy ciepła jest przewidywaną lokalizacją punktu charakterystycznego.
 
-Dlaczego mapy cieplne działają lepiej niż regresja bezpośrednia: struktura przestrzenna sieci (mapa funkcji konw.) w naturalny sposób dopasowuje się do wyników przestrzennych. Cele Gaussa również ulegają regularyzacji — mały błąd lokalizacji powoduje niewielką stratę, a nie zero.
+Dlaczego mapy ciepła działają lepiej niż bezpośrednia regresja: struktura przestrzenna sieci (mapa cech konwolucyjnych) naturalnie odpowiada przestrzennemu wyjściu. Cele gaussowskie wprowadzają również regularyzację — mały błąd lokalizacji generuje mały koszt (loss), a nie zero.
 
 ### Lokalizacja subpikselowa
 
-Argmax podaje współrzędne całkowite. Aby uzyskać precyzję subpikselową, dopracuj parabolę do argmax i jej sąsiadów lub użyj dobrze znanego kierunku przesunięcia `(dx, dy) = 0.25 * (heatmap[y, x+1] - heatmap[y, x-1], ...)`.
+Argmax daje współrzędne całkowite. Aby uzyskać precyzję subpikselową, można dopracować wynik, dopasowując parabolę do argmax i jego sąsiadów, lub wykorzystać dobrze znane przesunięcie `(dx, dy) = 0.25 * (heatmap[y, x+1] - heatmap[y, x-1], ...)`.
 
-### Pola powinowactwa części (PAF)
+### Part Affinity Fields (PAF)
 
-Sztuczka OpenPose polegająca na skojarzeniu oddolnym. Dla każdej pary połączonych punktów kluczowych (np. od lewego ramienia do lewego łokcia) przewiduj pole 2-kanałowe, które koduje wektor jednostkowy skierowany od jednego do drugiego. Aby powiązać ramię z łokciem, zintegruj PAF wzdłuż linii łączącej pary kandydatów; dopasowywana jest para z najwyższą całką.
+Sztuczka OpenPose dla asocjacji w podejściu bottom-up. Dla każdej pary połączonych punktów charakterystycznych (np. lewe ramię i lewy łokieć) przewidywane jest 2-kanałowe pole, które koduje wektor jednostkowy wskazujący od jednego punktu do drugiego. Aby przypisać ramię do jego łokcia, oblicza się całkę PAF wzdłuż linii łączącej kandydujące pary; para o najwyższej wartości całki zostaje dopasowana.
 
 ```
 For each connection (limb):
@@ -73,23 +73,23 @@ For each connection (limb):
   Higher integral = stronger match
 ```
 
-Eleganckie i skalowane do dowolnej wielkości tłumu bez upraw na osobę.
+Eleganckie podejście, skalujące się do dowolnej liczby osób w tłumie bez konieczności wycinania obrazu dla każdej osoby.
 
-### Kluczowe punkty COCO
+### Punkty charakterystyczne COCO
 
-Standardowy zestaw danych o pozycjach ciała: 17 kluczowych punktów na osobę, PCK (procent prawidłowych punktów kluczowych) i OKS (podobieństwo kluczowych punktów obiektu) jako metryki. OKS jest kluczowym odpowiednikiem IoU i to właśnie raportuje COCO mAP@OKS.
+Standardowy zbiór danych dla pozy ciała: 17 punktów charakterystycznych na osobę, z metrykami PCK (Percentage of Correct Keypoints) oraz OKS (Object Keypoint Similarity). OKS jest odpowiednikiem IoU dla punktów charakterystycznych i to właśnie tę miarę raportuje COCO mAP@OKS.
 
-### 2D kontra 3D
+### 2D a 3D
 
-- **Poza 2D** — współrzędne obrazu; rozwiązane przy jakości produkcyjnej (MediaPipe, HRNet, ViTPose).
-- **Poza 3D** — współrzędne świata/kamery; nadal aktywne badania. Typowe podejścia:
-  - Podnieś prognozy 2D do 3D za pomocą małego MLP (VideoPose3D).
+- **Poza 2D** — współrzędne obrazu; rozwiązane na poziomie produkcyjnym (MediaPipe, HRNet, ViTPose).
+- **Poza 3D** — współrzędne świata / kamery; wciąż aktywny obszar badań. Typowe podejścia:
+  - Podniesienie predykcji 2D do 3D za pomocą małego MLP (VideoPose3D).
   - Bezpośrednia regresja 3D z obrazu (PyMAF, MHFormer).
-  - Konfiguracje z wieloma widokami (CMU Panoptic) dla uzyskania prawdy o ziemi.
+  - Konfiguracje wielu kamer (CMU Panoptic) jako prawda referencyjna (ground truth).
 
 ## Zbuduj to
 
-### Krok 1: Docelowa mapa cieplna Gaussa
+### Krok 1: Cel w postaci gaussowskiej mapy ciepła
 
 ```python
 import numpy as np
@@ -103,11 +103,11 @@ hm = gaussian_heatmap(64, 32, 32, sigma=2.0)
 print(f"peak: {hm.max():.3f} at ({hm.argmax() % 64}, {hm.argmax() // 64})")
 ```
 
-Mapy cieplne poszczególnych punktów kluczowych ułożone wzdłuż osi kanału dają pełny tensor docelowy.
+Mapy ciepła dla poszczególnych punktów charakterystycznych, ułożone wzdłuż osi kanałów, dają pełny tensor celu.
 
-### Krok 2: Mała głowa typu keypoint
+### Krok 2: Mała głowica punktów charakterystycznych
 
-Model w stylu U-Net, który generuje K kanałów mapy cieplnej.
+Model w stylu U-Net, który zwraca K kanałów map ciepła.
 
 ```python
 import torch.nn as nn
@@ -130,9 +130,9 @@ class TinyKeypointNet(nn.Module):
         return self.up2(u1)
 ```
 
-Wejście `(N, 3, H, W)`, wyjście `(N, K, H, W)`. Strata to MSE na piksel w stosunku do celów Gaussa.
+Wejście `(N, 3, H, W)`, wyjście `(N, K, H, W)`. Funkcja kosztu to MSE per-piksel względem celów gaussowskich.
 
-### Krok 3: Wnioskowanie — wyodrębnij współrzędne punktu kluczowego
+### Krok 3: Inferencja — ekstrakcja współrzędnych punktów charakterystycznych
 
 ```python
 def heatmap_to_coords(heatmaps):
@@ -151,11 +151,11 @@ coords = heatmap_to_coords(torch.randn(2, 4, 32, 32))
 print(f"coords: {coords.shape}")  # (2, 4, 2)
 ```
 
-Jedna linia przy wnioskowaniu. Aby uzyskać udoskonalenie subpikseli, interpoluj wokół argmax.
+Jedna linia kodu podczas inferencji. Dla dopracowania subpikselowego należy interpolować wokół argmax.
 
-### Krok 4: Syntetyczny zbiór danych kluczowych punktów
+### Krok 4: Syntetyczny zbiór danych z punktami charakterystycznymi
 
-Proste: narysuj cztery punkty na białym płótnie i naucz się je przewidywać.
+Prosto: narysuj cztery punkty na białym płótnie i nauczyj model je przewidywać.
 
 ```python
 def make_synthetic_sample(size=64):
@@ -168,9 +168,9 @@ def make_synthetic_sample(size=64):
     return img, hms, kps
 ```
 
-Wystarczająco łatwe, aby mały model mógł się tego nauczyć w ciągu minuty.
+Wystarczająco łatwe, aby mały model nauczył się tego w ciągu minuty.
 
-### Krok 5: Trening
+### Krok 5: Trenowanie
 
 ```python
 model = TinyKeypointNet(num_keypoints=4)
@@ -189,40 +189,40 @@ for step in range(200):
 
 ## Użyj tego
 
-- **MediaPipe Pose** — narzędzie Google do szacowania pozycji produkcyjnych; udostępnia środowiska wykonawcze WebGL + dla urządzeń mobilnych z opóźnieniami poniżej 10 ms.
-- **MMPose** (OpenMMLab) — kompleksowa baza kodów badawczych; każda architektura SOTA z wstępnie wyszkolonymi wagami.
-- **YOLOv8-pose** — najszybsza pozycja wieloosobowa w czasie rzeczywistym z jednym podaniem do przodu.
-- **transformers HumanDPT / PoseAnything** — nowsze podejście do języka wizyjnego dla pozycji z otwartym słownictwem (dowolny obiekt, dowolny zestaw punktów kluczowych).
+- **MediaPipe Pose** — produkcyjny estymator pozy od Google; udostępnia środowiska wykonawcze WebGL oraz mobilne z latencją poniżej 10ms.
+- **MMPose** (OpenMMLab) — wszechstronna baza kodu badawczego; zawiera każdą architekturę SOTA wraz z wytrenowanymi wagami.
+- **YOLOv8-pose** — najszybsza realnoczasowa estymacja pozy wielu osób w jednym przebiegu sieci.
+- **transformers HumanDPT / PoseAnything** — nowsze podejścia wizyjno-językowe dla estymacji pozy w otwartym słownictwie (dowolny obiekt, dowolny zbiór punktów charakterystycznych).
 
-## Wyślij to
+## Wypchnij to
 
-Ta lekcja daje:
+Ta lekcja tworzy:
 
-- `outputs/prompt-pose-stack-picker.md` — monit, który wybiera MediaPipe / YOLOv8-pose / HRNet / ViTPose, biorąc pod uwagę opóźnienie, wielkość tłumu oraz potrzeby 2D i 3D.
-- `outputs/skill-heatmap-to-coords.md` — umiejętność polegająca na pisaniu subpikselowej procedury przekształcania mapy cieplnej w współrzędne używanej przez każdy model pozycji produkcyjnej.
+- `outputs/prompt-pose-stack-picker.md` — prompt, który wybiera MediaPipe / YOLOv8-pose / HRNet / ViTPose w oparciu o latencję, liczbę osób w tłumie oraz potrzebę 2D vs 3D.
+- `outputs/skill-heatmap-to-coords.md` — skill, który zapisuje subpikselową procedurę konwersji mapy ciepła na współrzędne, używaną przez każdy produkcyjny model pozy.
 
 ## Ćwiczenia
 
-1. **(Łatwy)** Wytrenuj mały model punktów kluczowych na syntetycznym 4-punktowym zestawie danych. Zgłoś średni błąd L2 między przewidywanymi i prawdziwymi punktami kluczowymi po 200 krokach.
-2. **(Średni)** Dodaj udoskonalenie subpikseli: biorąc pod uwagę pozycję argmax, dopasuj parabolę 1D wzdłuż x i y od sąsiednich pikseli. Zgłoś wzrost dokładności w funkcji całkowitej argmax.
-3. **(Trudny)** Zbuduj 2-osobowy syntetyczny zbiór danych, w którym każdy obraz przedstawia dwa wystąpienia wzoru składającego się z 4 kluczowych punktów. Trenuj potok oddolny za pomocą PAF, które przewidują, który punkt kluczowy należy do której instancji, i oceniaj OKS.
+1. **(Łatwe)** Wytrenuj mały model punktów charakterystycznych na syntetycznym zbiorze danych z 4 punktami. Podaj średni błąd L2 między przewidywanymi i prawdziwymi punktami charakterystycznymi po 200 krokach.
+2. **(Średnie)** Dodaj dopracowanie subpikselowe: mając pozycję argmax, dopasuj 1D parabolę wzdłuż osi x i y na podstawie sąsiednich pikseli. Podaj zysk dokładności względem argmax na liczbach całkowitych.
+3. **(Trudne)** Zbuduj syntetyczny zbiór danych z dwiema osobami, gdzie każdy obraz przedstawia dwie instancje wzorca z 4 punktami charakterystycznymi. Wytrenuj potok bottom-up z PAF, który przewiduje, do której instancji należy dany punkt charakterystyczny, i oceń wynik za pomocą OKS.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co się mówi | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Kluczowy punkt | „Punkt orientacyjny” | Określony uporządkowany punkt obiektu (połączenie, narożnik, element) |
-| Poza | „Szkielet” | Uporządkowany zbiór punktów kluczowych należących do jednej instancji |
-| Z góry na dół | „Wykryj, a następnie ułóż” | Dwuetapowy rurociąg: wykrywacz osób + model punktu kluczowego dla poszczególnych upraw; najwyższa dokładność |
-| Od dołu do góry | „Najpierw pozuj, później grupuj” | Jednoprzebiegowe przewidywanie wszystkich punktów kluczowych + grupowanie; stały czas wielkości tłumu |
-| Mapa cieplna | „Cel Gaussa” | Tensor wys. x szer. na punkt kluczowy ze szczytem w prawdziwym miejscu; preferowany cel regresji |
-| PAF | „Pole powinowactwa części” | 2-kanałowe pole wektora jednostkowego kodujące kierunki kończyn; używany do grupowania punktów kluczowych w instancje |
-| OK | „Kluczowy IoU” | Podobieństwo punktów kluczowych obiektu; metryka COCO dla pozy |
-| HRNet | „Sieć wysokiej rozdzielczości” | Dominująca architektura punktów kluczowych typu top-down; zachowuje funkcje wysokiej rozdzielczości przez cały czas |
+| Keypoint (punkt charakterystyczny) | "Punkt orientacyjny" | Konkretny, uporządkowany punkt na obiekcie (staw, narożnik, cecha charakterystyczna) |
+| Pose (poza) | "Szkielet" | Uporządkowany zbiór punktów charakterystycznych należących do jednej instancji |
+| Top-down | "Najpierw detekcja, potem poza" | Dwuetapowy potok: detektor osób + model punktów charakterystycznych dla każdego wycinka; najwyższa dokładność |
+| Bottom-up | "Najpierw poza, grupowanie później" | Jednoprzebiegowa predykcja wszystkich punktów charakterystycznych + grupowanie; czas stały niezależnie od liczby osób w tłumie |
+| Heatmap (mapa ciepła) | "Cel gaussowski" | Tensor H x W dla każdego punktu charakterystycznego z maksimum w prawdziwej lokalizacji; preferowany cel regresji |
+| PAF | "Part Affinity Field" | 2-kanałowe pole wektorów jednostkowych kodujące kierunki kończyn; używane do grupowania punktów charakterystycznych w instancje |
+| OKS | "IoU dla punktów charakterystycznych" | Object Keypoint Similarity; metryka COCO dla pozy |
+| HRNet | "High-Resolution Net" | Dominująca architektura punktów charakterystycznych typu top-down; zachowuje cechy o wysokiej rozdzielczości na każdym etapie |
 
-## Dalsze czytanie
+## Dalsze materiały
 
-- [OpenPose (Cao et al., 2017)](https://arxiv.org/abs/1812.08008) — oddolne z PAF; wciąż najlepszy opis podejścia
-- [HRNet (Sun et al., 2019)](https://arxiv.org/abs/1902.09212) — architektura referencyjna typu top-down
-- [ViTPose (Xu et al., 2022)](https://arxiv.org/abs/2204.12484) — zwykły ViT jako szkielet pozy; obecna SOTA w wielu benchmarkach
-- [MediaPipe Pose](https://developers.google.com/mediapipe/solutions/vision/pose_landmarker) — pozycja produkcyjna w czasie rzeczywistym; najszybciej wdrożony stos w 2026 r
+- [OpenPose (Cao et al., 2017)](https://arxiv.org/abs/1812.08008) — podejście bottom-up z PAF; wciąż najlepszy opis tej metody
+- [HRNet (Sun et al., 2019)](https://arxiv.org/abs/1902.09212) — referencyjna architektura top-down
+- [ViTPose (Xu et al., 2022)](https://arxiv.org/abs/2204.12484) — zwykły ViT jako backbone dla pozy; aktualny SOTA w wielu benchmarkach
+- [MediaPipe Pose](https://developers.google.com/mediapipe/solutions/vision/pose_landmarker) — produkcyjna estymacja pozy w czasie rzeczywistym; najszybszy wdrożony stos w 2026 roku
