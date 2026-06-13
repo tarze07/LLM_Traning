@@ -1,42 +1,42 @@
-# Wykrywanie obiektów — YOLO od podstaw
+# Detekcja obiektów — YOLO od podstaw
 
-> Wykrywanie to klasyfikacja plus regresja, przeprowadzane w każdej pozycji na mapie obiektów, a następnie oczyszczane przy użyciu tłumienia innego niż maksymalne.
+> Detekcja to klasyfikacja plus regresja, wykonywana w każdej pozycji mapy cech, a następnie czyszczona za pomocą non-maximum suppression.
 
-**Typ:** Kompilacja
+**Typ:** Budowa
 **Języki:** Python
-**Wymagania wstępne:** Faza 4 Lekcja 03 (CNN), Faza 4 Lekcja 04 (Klasyfikacja obrazu), Faza 4 Lekcja 05 (Przenoszenie nauki)
+**Wymagania wstępne:** Faza 4, lekcja 03 (CNN), Faza 4, lekcja 04 (Klasyfikacja obrazów), Faza 4, lekcja 05 (Transfer learning)
 **Czas:** ~75 minut
 
-## Cele nauczania
+## Cele nauki
 
-- Wyjaśnij konstrukcję siatki i kotwicy, która zamienia wykrywanie w gęsty problem przewidywania i określ, co oznacza każda liczba w tensorze wyjściowym
-- Oblicz przecięcie nad zjednoczeniem między pudełkami i zaimplementuj od zera tłumienie niemaksymalne
-- Zbuduj minimalną głowę w stylu YOLO na wstępnie wytrenowanym szkielecie, uwzględniając straty w klasyfikacji, obiektywności i regresji pudełkowej
-- Przeczytaj wiersz metryki wykrywania (precyzja @ 0,5, przywołanie, mAP @ 0,5, mAP @ 0,5: 0,95) i wybierz, które pokrętło obrócić jako następne
+- Wyjaśnić projekt opierający się na siatce i kotwicach (anchors), który zmienia detekcję w problem gęstej predykcji, oraz określić znaczenie każdej liczby w tensorze wyjściowym
+- Obliczyć Intersection-over-Union między ramkami i zaimplementować non-maximum suppression od podstaw
+- Zbudować minimalną głowicę w stylu YOLO na bazie wstępnie wytrenowanego backbone'u, włączając w to funkcje straty dla klasyfikacji, objectness i regresji ramek
+- Odczytać wiersz metryk detekcji (precision@0.5, recall, mAP@0.5, mAP@0.5:0.95) i wybrać, który parametr zmienić jako następny
 
 ## Problem
 
-Klasyfikacja mówi: „ten obraz to pies”. Wykrywanie mówi, że „w pikselach (112, 40, 280, 210) jest pies, w pikselach (400, 180, 560, 310) jest kot, a w kadrze nie ma nic więcej”. Ta jedna zmiana strukturalna — przewidywanie zmiennej liczby oznaczonych pudełek zamiast jednej etykiety na obraz — jest tym, od czego zależy każdy system autonomiczny, każdy produkt nadzoru, każdy parser układu dokumentów i każda linia widzenia w fabryce.
+Klasyfikacja mówi: "to zdjęcie przedstawia psa". Detekcja mówi: "jest pies w pikselach (112, 40, 280, 210), jest kot w (400, 180, 560, 310) i nic więcej w kadrze". Ta jedna strukturalna zmiana — predykcja zmiennej liczby oznaczonych ramek zamiast jednej etykiety na obraz — to fundament każdego systemu autonomicznego, każdego produktu do nadzoru, każdego parsera układu dokumentów i każdej fabrycznej linii wizyjnej.
 
-Wykrywanie to także miejsce, w którym wszystkie inżynieryjne kompromisy w zakresie widzenia ujawniają się natychmiast. Potrzebujesz pudełek, które są dokładne (głowa regresji), chcesz mieć odpowiednią klasę dla każdego pudełka (głowa klasyfikacji), chcesz, aby model wiedział, kiedy nie ma nic do wykrycia (wynik obiektywności) i chcesz dokładnie jednej prognozy na każdy rzeczywisty obiekt (tłumienie niemaksymalne). Pomiń którykolwiek z nich, a rurociąg albo pominie obiekty, zgłosi halucynacyjne pudełka lub przewidzi ten sam obiekt piętnaście razy w nieco innych pozycjach.
+Detekcja to także miejsce, w którym ujawniają się jednocześnie wszystkie kompromisy inżynieryjne w wizji komputerowej. Chcemy ramek, które są dokładne (głowica regresji), chcemy odpowiedniej klasy dla każdej ramki (głowica klasyfikacji), chcemy, by model wiedział, kiedy nie ma nic do wykrycia (wynik objectness), i chcemy dokładnie jednej predykcji na każdy rzeczywisty obiekt (non-maximum suppression). Pominięcie którejkolwiek z tych części powoduje, że pipeline albo gubi obiekty, albo zgłasza halucynowane ramki, albo przewiduje ten sam obiekt piętnaście razy w nieco innych pozycjach.
 
-YOLO (You Only Look Once, Redmon et al. 2016) to projekt, który sprawił, że wszystko to działało w czasie rzeczywistym, wykonując jedno przejście sieci konwergentnej do przodu, a te same decyzje strukturalne nadal stanowią podstawę nowoczesnych detektorów (YOLOv8, YOLOv9, YOLO-NAS, RT-DETR). Poznaj rdzeń, a każdy wariant stanie się przegrupowaniem tych samych części.
+YOLO (You Only Look Once, Redmon i in., 2016) był projektem, który pozwolił uruchomić to wszystko w czasie rzeczywistym za pomocą jednego przejścia w przód sieci konwolucyjnej, a te same decyzje strukturalne są wciąż fundamentem nowoczesnych detektorów (YOLOv8, YOLOv9, YOLO-NAS, RT-DETR). Naucz się jądra, a każdy wariant stanie się jedynie przearanżowaniem tych samych elementów.
 
 ## Koncepcja
 
-### Wykrywanie jako gęste przewidywanie
+### Detekcja jako gęsta predykcja
 
-Klasyfikator generuje liczby C na obraz. Detektor typu YOLO generuje `(S x S x (5 + C))` liczby na obraz, gdzie S to rozmiar siatki przestrzennej.
+Klasyfikator zwraca C liczb dla obrazu. Detektor w stylu YOLO zwraca `(S x S x (5 + C))` liczb dla obrazu, gdzie S to rozmiar siatki przestrzennej.
 
 ```mermaid
 flowchart LR
-    IMG["Input 416x416 RGB"] --> BB["Backbone<br/>(ResNet, DarkNet, ...)"]
-    BB --> FM["Feature map<br/>(C_feat, 13, 13)"]
-    FM --> HEAD["Detection head<br/>(1x1 convs)"]
-    HEAD --> OUT["Output tensor<br/>(13, 13, B * (5 + C))"]
-    OUT --> DEC["Decode<br/>(grid + sigmoid + exp)"]
+    IMG["Wejście 416x416 RGB"] --> BB["Backbone<br/>(ResNet, DarkNet, ...)"]
+    BB --> FM["Mapa cech<br/>(C_feat, 13, 13)"]
+    FM --> HEAD["Głowica detekcji<br/>(konwolucje 1x1)"]
+    HEAD --> OUT["Tensor wyjściowy<br/>(13, 13, B * (5 + C))"]
+    OUT --> DEC["Dekodowanie<br/>(siatka + sigmoid + exp)"]
     DEC --> NMS["Non-max suppression"]
-    NMS --> RESULT["Final boxes"]
+    NMS --> RESULT["Końcowe ramki"]
 
     style IMG fill:#dbeafe,stroke:#2563eb
     style HEAD fill:#fef3c7,stroke:#d97706
@@ -44,74 +44,74 @@ flowchart LR
     style RESULT fill:#dcfce7,stroke:#16a34a
 ```
 
-Każda z komórek siatki `S * S` przewiduje pola `B`. Dla każdego pudełka:
+Każda z `S * S` komórek siatki przewiduje `B` ramek. Dla każdej ramki:
 
 - 4 liczby opisują geometrię: `tx, ty, tw, th`.
-- 1 liczba to wynik obiektywności: „czy w tej komórce znajduje się obiekt?”
-- Liczby C są prawdopodobieństwami klasowymi.
+- 1 liczba to wynik objectness: "czy w tej komórce znajduje się środek jakiegoś obiektu?"
+- C liczb to prawdopodobieństwa klas.
 
-Łącznie na komórkę: `B * (5 + C)`. W przypadku VOC z `S=13, B=2, C=20` oznacza to 50 liczb na komórkę.
+Razem na komórkę: `B * (5 + C)`. Dla VOC z `S=13, B=2, C=20` to 50 liczb na komórkę.
 
-### Dlaczego siatki i kotwice
+### Dlaczego siatki i kotwice (anchors)
 
-Zwykła regresja przewidywałaby `(x, y, w, h)` dla każdego obiektu jako współrzędną bezwzględną. Jest to trudne dla sieci konwergencji, ponieważ tłumaczenie obrazu nie powinno przekładać wszystkich przewidywań w tym samym stopniu – każdy obiekt jest zakotwiczony przestrzennie. Siatka odpowiada na to pytanie, przypisując każde pole prawdy do komórki siatki, w której mieści się jego środek; tylko ta komórka jest odpowiedzialna za ten obiekt.
+Zwykła regresja przewidywałaby `(x, y, w, h)` dla każdego obiektu jako współrzędne absolutne. To trudne dla sieci konwolucyjnej, ponieważ przesunięcie obrazu nie powinno przesuwać wszystkich predykcji o tę samą wartość — każdy obiekt jest przestrzennie zakotwiczony. Siatka rozwiązuje ten problem, przypisując każdą ramkę z danymi referencyjnymi (ground truth) do komórki siatki, w której znajduje się jej środek; tylko ta komórka jest odpowiedzialna za ten obiekt.
 
-Kotwice rozwiązują drugi problem. Konwencja 3x3 nie może łatwo cofnąć prostokąta o szerokości 500 pikseli z 16-pikselowej komórki pola recepcyjnego. Zamiast tego wstępnie definiujemy `B` wcześniejsze kształty pudełek (kotwic) na komórkę i przewidujemy małe delty z każdej kotwicy. Model uczy się wybierać właściwą kotwicę i szturchać ją, zamiast cofać się od zera.
-
-```
-Anchor box priors (example for 416x416 input):
-
-  small:   (30,  60)
-  medium:  (75,  170)
-  large:   (200, 380)
-
-At each grid cell, every anchor emits (tx, ty, tw, th, obj, c_1, ..., c_C).
-```
-
-Nowoczesne detektory często wykorzystują FPN z różnymi zestawami kotwic w zależności od rozdzielczości — małe kotwice na płytkich mapach o wysokiej rozdzielczości, duże kotwice na głębokich mapach o niskiej rozdzielczości. Ten sam pomysł, więcej skal.
-
-### Dekodowanie przewidywań
-
-Surowe `tx, ty, tw, th` nie są współrzędnymi pudełkowymi; są to cele regresji, które należy przekształcić przed wykreśleniem:
+Kotwice (anchors) rozwiązują drugi problem. Konwolucja 3x3 nie może łatwo wyregresować ramki o szerokości 500 pikseli z komórki mapy cech o polu recepcyjnym 16 pikseli. Zamiast tego z góry definiujemy `B` priorytetowych kształtów ramek (kotwic) na komórkę i przewidujemy małe odchylenia (delty) względem każdej kotwicy. Model uczy się wybierać odpowiednią kotwicę i delikatnie ją korygować, a nie regresować od zera.
 
 ```
-centre x  = (sigmoid(tx) + cell_x) * stride
-centre y  = (sigmoid(ty) + cell_y) * stride
-width     = anchor_w * exp(tw)
-height    = anchor_h * exp(th)
+Priory kotwic (przykład dla wejścia 416x416):
+
+  mała:    (30,  60)
+  średnia: (75,  170)
+  duża:    (200, 380)
+
+Dla każdej komórki siatki, każda kotwica generuje (tx, ty, tw, th, obj, c_1, ..., c_C).
 ```
 
-`sigmoid` utrzymuje przesunięcia środka wewnątrz komórki. `exp` umożliwia swobodne skalowanie szerokości od kotwicy bez odwracania znaku. `stride` skaluje współrzędne siatki z powrotem do pikseli. Ten krok dekodowania jest taki sam w każdej wersji YOLO od v2.
+Nowoczesne detektory często wykorzystują FPN z różnymi zestawami kotwic dla różnych rozdzielczości — małe kotwice na płytkich mapach o wysokiej rozdzielczości, duże kotwice na głębokich mapach o niskiej rozdzielczości. Ta sama idea, więcej skal.
+
+### Dekodowanie predykcji
+
+Surowe `tx, ty, tw, th` nie są współrzędnymi ramki; są to cele regresji, które należy przekształcić przed wyrysowaniem:
+
+```
+środek x  = (sigmoid(tx) + cell_x) * stride
+środek y  = (sigmoid(ty) + cell_y) * stride
+szerokość = anchor_w * exp(tw)
+wysokość  = anchor_h * exp(th)
+```
+
+`sigmoid` utrzymuje przesunięcia środka wewnątrz komórki. `exp` pozwala szerokości swobodnie skalować się od kotwicy bez zmiany znaku. `stride` przeskalowuje współrzędne siatki z powrotem na piksele. Ten krok dekodowania jest taki sam w każdej wersji YOLO od v2.
 
 ### IoU
 
-Uniwersalna metryka podobieństwa wykrywania między dwoma pudełkami:
+Uniwersalna metryka podobieństwa między dwiema ramkami w detekcji:
 
 ```
 IoU(A, B) = area(A intersect B) / area(A union B)
 ```
 
-IoU = 1 oznacza identyczny; IoU = 0 oznacza brak nakładania się. IoU między przewidywaniem a polem prawdy decyduje o tym, czy przewidywanie liczy się jako prawdziwie pozytywne (zwykle IoU >= 0,5). IoU pomiędzy dwiema prognozami jest tym, czego NMS używa do deduplikacji.
+IoU = 1 oznacza identyczność; IoU = 0 oznacza brak nakładania się. IoU między predykcją a ramką ground-truth decyduje o tym, czy predykcja zostaje uznana za prawdziwie pozytywną (zwykle IoU >= 0.5). IoU między dwiema predykcjami jest wykorzystywane przez NMS do usuwania duplikatów.
 
-### Tłumienie inne niż maksymalne
+### Non-maximum suppression
 
-Sieć konwersji trenowana na sąsiadujących kotwicach często przewiduje nakładające się pola dla tego samego obiektu. NMS utrzymuje przewidywania o najwyższej pewności i usuwa wszelkie inne przewidywania, których IoU przekracza próg.
+Sieć konwolucyjna wytrenowana na sąsiadujących kotwicach często przewiduje nakładające się ramki dla tego samego obiektu. NMS zachowuje predykcję o najwyższej pewności i usuwa każdą inną predykcję, której IoU przekracza próg.
 
 ```
 NMS(boxes, scores, iou_threshold):
-    sort boxes by score descending
+    sortuj ramki według wyniku, malejąco
     keep = []
     while boxes not empty:
-        pick the top-scoring box, add to keep
-        remove every box with IoU > iou_threshold to the picked box
+        wybierz ramkę z najwyższym wynikiem, dodaj do keep
+        usuń każdą ramkę, której IoU > iou_threshold względem wybranej ramki
     return keep
 ```
 
-Typowy próg: 0,45 dla wykrywania obiektów. Najnowsze detektory zastępują standardowe NMS przez `soft-NMS`, `DIoU-NMS` lub bezpośrednio uczą się tłumienia (RT-DETR), ale cel konstrukcyjny jest ten sam.
+Typowy próg: 0.45 dla detekcji obiektów. Nowsze detektory zastępują standardowe NMS przez `soft-NMS`, `DIoU-NMS` lub uczą się suppresji bezpośrednio (RT-DETR), ale strukturalny cel pozostaje taki sam.
 
-### Strata
+### Funkcja straty
 
-Strata YOLO to trzy straty dodane z ciężarkami:
+Strata YOLO to suma trzech strat z wagami:
 
 ```
 L = lambda_coord * L_box(pred, target, where obj=1)
@@ -120,26 +120,26 @@ L = lambda_coord * L_box(pred, target, where obj=1)
   + lambda_cls   * L_cls(pred, target, where obj=1)
 ```
 
-Tylko komórki zawierające obiekt przyczyniają się do strat regresji pudełkowej i klasyfikacji. Komórki pozbawione obiektów przyczyniają się jedynie do utraty obiektywności (ucząc model milczenia). `lambda_noobj` jest zwykle mały (~0,5), ponieważ zdecydowana większość komórek jest pusta i w przeciwnym razie zdominowałaby całkowitą stratę.
+Tylko komórki zawierające obiekt wnoszą wkład do strat regresji ramek i klasyfikacji. Komórki bez obiektów wnoszą wkład tylko do straty objectness (ucząc model "milczenia"). `lambda_noobj` jest zwykle małe (~0.5), ponieważ ogromna większość komórek jest pusta i w innym przypadku zdominowałaby całkowitą stratę.
 
-Nowoczesne warianty zamieniają utratę skrzynki MSE na CIoU / DIoU (która bezpośrednio optymalizuje IoU), wykorzystują utratę ogniskową w celu uzyskania braku równowagi klas i równoważą obiektywność z utratą ogniskowej jakości. Trójskładnikowa struktura pozostaje niezmieniona.
+Nowoczesne warianty zastępują stratę MSE dla ramek przez CIoU / DIoU (które optymalizują IoU bezpośrednio), wykorzystują focal loss dla niezbalansowanych klas i balansują objectness za pomocą quality focal loss. Struktura trzech komponentów pozostaje niezmieniona.
 
-### Metryki wykrywania
+### Metryki detekcji
 
-Dokładność nie przekłada się na wykrywanie. Cztery liczby, które to robią:
+Dokładność (accuracy) nie przenosi się na detekcję. Cztery liczby, które się przenoszą:
 
-- **Precision@IoU=0,5** — z przewidywań uznanych za pozytywne, ile jest faktycznie poprawnych.
-- **Recall@IoU=0,5** — ile znaleźliśmy rzeczywistych obiektów.
-- **AP@0,5** — obszar krzywej przypomnienia precyzji przy progu IoU 0,5; jeden numer na klasę.
-- **mAP@0,5:0,95** — średnia AP powyżej progów IoU 0,5, 0,55, ..., 0,95. Wskaźnik COCO; najbardziej rygorystyczne i najbardziej pouczające.
+- **Precision@IoU=0.5** — z predykcji uznanych za pozytywne, ile jest faktycznie prawidłowych.
+- **Recall@IoU=0.5** — z rzeczywistych obiektów, ile znaleźliśmy.
+- **AP@0.5** — powierzchnia pod krzywą precision-recall przy progu IoU 0.5; jedna liczba na klasę.
+- **mAP@0.5:0.95** — średnia AP po progach IoU 0.5, 0.55, ..., 0.95. Metryka COCO; najbardziej rygorystyczna i informatywna.
 
-Zgłoś całą czwórkę. Detektor silny na mAP@0,5, ale słaby na mAP@0,5:0,95 lokalizuje z grubsza, ale nie ciasno; napraw z lepszą utratą regresji pudełkowej. Detektor o dużej precyzji i niskiej zdolności przypominania jest zbyt konserwatywny; obniżyć próg ufności lub zwiększyć wagę obiektywności.
+Raportuj wszystkie cztery. Detektor, który jest silny w mAP@0.5, ale słaby w mAP@0.5:0.95, lokalizuje obiekty z grubsza, ale nieprecyzyjnie; popraw to lepszą funkcją straty regresji ramek. Detektor o wysokiej precyzji i niskim recall jest zbyt konserwatywny; zmniejsz próg pewności lub zwiększ wagę objectness.
 
-## Zbuduj to
+## Budowa
 
 ### Krok 1: IoU
 
-Koń pociągowy całej lekcji. Działa na dwóch tablicach pudełek w formacie `(x1, y1, x2, y2)`.
+Koń roboczy całej lekcji. Działa na dwóch tablicach ramek w formacie `(x1, y1, x2, y2)`.
 
 ```python
 import numpy as np
@@ -163,9 +163,9 @@ def box_iou(boxes_a, boxes_b):
     return inter / np.clip(union, 1e-8, None)
 ```
 
-Zwraca macierz `(N_a, N_b)` par IoU. Użyj go w odniesieniu do pojedynczego pola prawdy, nadając jednej z tablic kształt `(1, 4)`.
+Zwraca macierz `(N_a, N_b)` parami obliczonych IoU. Użyj jej dla pojedynczej ramki ground-truth, podając jedną z tablic o kształcie `(1, 4)`.
 
-### Krok 2: Tłumienie inne niż maksymalne
+### Krok 2: Non-max suppression
 
 ```python
 def nms(boxes, scores, iou_threshold=0.45):
@@ -182,11 +182,11 @@ def nms(boxes, scores, iou_threshold=0.45):
     return np.array(keep, dtype=np.int64)
 ```
 
-Deterministyczny, `O(N log N)` z sortowania i odpowiada zachowaniu `torchvision.ops.nms` na identycznych danych wejściowych.
+Deterministyczne, `O(N log N)` z sortowania, i odpowiada zachowaniu `torchvision.ops.nms` na identycznych wejściach.
 
-### Krok 3: Kodowanie i dekodowanie skrzynki
+### Krok 3: Kodowanie i dekodowanie ramek
 
-Konwertuj współrzędne pikseli na cele `(tx, ty, tw, th)`, aby sieć faktycznie uległa regresji.
+Konwersja między współrzędnymi pikselowymi a celami `(tx, ty, tw, th)`, które sieć faktycznie regresuje.
 
 ```python
 def encode(box_xyxy, cell_x, cell_y, stride, anchor_wh):
@@ -201,6 +201,7 @@ def encode(box_xyxy, cell_x, cell_y, stride, anchor_wh):
     th = np.log(h / anchor_wh[1] + 1e-8)
     return np.array([tx, ty, tw, th])
 
+
 def decode(tx_ty_tw_th, cell_x, cell_y, stride, anchor_wh):
     tx, ty, tw, th = tx_ty_tw_th
     cx = (sigmoid(tx) + cell_x) * stride
@@ -209,15 +210,16 @@ def decode(tx_ty_tw_th, cell_x, cell_y, stride, anchor_wh):
     h = anchor_wh[1] * np.exp(th)
     return np.array([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2])
 
+
 def sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
 ```
 
-Test: zakoduj pudełko, a następnie zdekoduj — powinieneś otrzymać coś bardzo zbliżonego do oryginału (aż do odwrotności sigmoidalnej, która nie jest idealnie odwracalna, gdy `tx` nie znajduje się w zakresie post-esigmoidalnym).
+Test: zakoduj ramkę, a następnie zdekoduj ją — powinieneś otrzymać wynik bardzo bliski oryginałowi (z dokładnością do tego, że odwrotność sigmoidy nie jest idealnie odwracalna, gdy `tx` nie znajduje się w zakresie po sigmoidzie).
 
-### Krok 4: Minimalna głowa YOLO
+### Krok 4: Minimalna głowica YOLO
 
-Jedna konw. 1 x 1 na mapie obiektów, zmieniająca się na `(B, S, S, num_anchors, 5 + C)`.
+Jedna konwolucja 1x1 na mapie cech, z przekształceniem do kształtu `(B, S, S, num_anchors, 5 + C)`.
 
 ```python
 import torch
@@ -238,11 +240,11 @@ class YOLOHead(nn.Module):
         return y
 ```
 
-Kształt wyjściowy: `(N, H, W, num_anchors, 5 + C)`. Ostatni wymiar zawiera `[tx, ty, tw, th, obj, cls_0, ..., cls_{C-1}]`.
+Kształt wyjścia: `(N, H, W, num_anchors, 5 + C)`. Ostatni wymiar zawiera `[tx, ty, tw, th, obj, cls_0, ..., cls_{C-1}]`.
 
-### Krok 5: Przypisanie prawdy
+### Krok 5: Przypisanie ground-truth
 
-W przypadku każdego pola prawdy zdecyduj, które `(cell, anchor)` jest odpowiedzialne.
+Dla każdej ramki ground-truth zdecyduj, która para `(komórka, kotwica)` jest za nią odpowiedzialna.
 
 ```python
 def assign_targets(boxes_xyxy, classes, anchors, stride, grid_size, num_classes):
@@ -273,21 +275,21 @@ def assign_targets(boxes_xyxy, classes, anchors, stride, grid_size, num_classes)
     return target, has_obj
 ```
 
-Wybór kotwicy to „najlepszy kształt IoU z podstawową prawdą” — tani serwer proxy pasujący do przypisania YOLOv2/v3. v5 i nowsze wykorzystują bardziej wyrafinowane strategie (dopasowywanie dopasowane do zadań, dynamiczne k), które udoskonalają ten sam pomysł.
+Wybór kotwicy to "najlepszy kształt według IoU z ground truth" — niedrogie przybliżenie odpowiadające przypisaniu z YOLOv2/v3. v5 i nowsze wersje używają bardziej zaawansowanych strategii (task-aligned matching, dynamiczne k), które dopracowują tę samą ideę.
 
-### Krok 6: Trzy straty
+### Krok 6: Trzy funkcje straty
 
 ```python
 def yolo_loss(pred, target, has_obj, lambda_coord=5.0, lambda_obj=1.0, lambda_noobj=0.5, lambda_cls=1.0):
     has_obj_t = torch.from_numpy(has_obj).bool()
     target_t = torch.from_numpy(target).float()
 
-    # box-regression loss: only on cells with objects
+    # strata regresji ramek: tylko dla komórek z obiektami
     box_pred = pred[..., :4][has_obj_t]
     box_true = target_t[..., :4][has_obj_t]
     loss_box = torch.nn.functional.mse_loss(box_pred, box_true, reduction="sum")
 
-    # objectness loss
+    # strata objectness
     obj_pred = pred[..., 4]
     obj_true = target_t[..., 4]
     loss_obj_pos = torch.nn.functional.binary_cross_entropy_with_logits(
@@ -295,7 +297,7 @@ def yolo_loss(pred, target, has_obj, lambda_coord=5.0, lambda_obj=1.0, lambda_no
     loss_obj_neg = torch.nn.functional.binary_cross_entropy_with_logits(
         obj_pred[~has_obj_t], obj_true[~has_obj_t], reduction="sum")
 
-    # classification loss on cells with objects
+    # strata klasyfikacji dla komórek z obiektami
     cls_pred = pred[..., 5:][has_obj_t]
     cls_true = target_t[..., 5:][has_obj_t]
     loss_cls = torch.nn.functional.binary_cross_entropy_with_logits(
@@ -309,11 +311,11 @@ def yolo_loss(pred, target, has_obj, lambda_coord=5.0, lambda_obj=1.0, lambda_no
                    "obj_neg": loss_obj_neg.item(), "cls": loss_cls.item()}
 ```
 
-Pięć hiperparametrów, które każdy samouczek YOLO albo koduje na stałe, albo przegląda. Proporcje mają znaczenie: `lambda_coord=5, lambda_noobj=0.5` odzwierciedla oryginalną pracę YOLOv1 i nadal działa jako rozsądna wartość domyślna.
+Pięć hiperparametrów, które każdy tutorial o YOLO albo zakodowuje na sztywno, albo przeszukuje. Liczy się stosunek między nimi: `lambda_coord=5, lambda_noobj=0.5` odzwierciedla oryginalny artykuł o YOLOv1 i wciąż działa jako rozsądna wartość domyślna.
 
-### Krok 7: Potok wnioskowania
+### Krok 7: Pipeline inferencji
 
-Zdekoduj surowe dane wyjściowe głowy, zastosuj sigmoid/exp, próg obiektywności i NMS.
+Zdekoduj surowe wyjście głowicy, zastosuj sigmoid/exp, ustal próg na objectness i wykonaj NMS.
 
 ```python
 def postprocess(pred_tensor, anchors, stride, img_size, conf_threshold=0.25, iou_threshold=0.45):
@@ -347,11 +349,11 @@ def postprocess(pred_tensor, anchors, stride, img_size, conf_threshold=0.25, iou
     return boxes[keep], scores[keep], classes[keep]
 ```
 
-To jest pełna ścieżka eval: głowa -> dekodowanie -> próg -> NMS.
+To kompletna ścieżka ewaluacji: głowica -> dekodowanie -> próg -> NMS.
 
-## Użyj tego
+## Zastosowanie
 
-`torchvision.models.detection` dostarcza detektory produkcyjne o tej samej strukturze koncepcyjnej. Ładowanie wstępnie wytrenowanego modelu zajmuje trzy linie.
+`torchvision.models.detection` dostarcza produkcyjne detektory o tej samej strukturze koncepcyjnej. Wczytanie wstępnie wytrenowanego modelu zajmuje trzy linie.
 
 ```python
 import torch
@@ -367,37 +369,37 @@ print(f"scores: {predictions[0]['scores'].shape}")
 print(f"labels: {predictions[0]['labels'].shape}")
 ```
 
-W przypadku potoków wnioskowania w czasie rzeczywistym standardem jest `ultralytics` (YOLOv8/v9): `from ultralytics import YOLO; model = YOLO('yolov8n.pt'); model(img)`. Model obsługuje wewnętrznie dekodowanie i NMS i zwraca tę samą `boxes / scores / labels` potrójną wartość, którą zbudowałeś powyżej.
+Dla pipeline'ów inferencji w czasie rzeczywistym standardem jest `ultralytics` (YOLOv8/v9): `from ultralytics import YOLO; model = YOLO('yolov8n.pt'); model(img)`. Model obsługuje dekodowanie i NMS wewnętrznie i zwraca tę samą trójkę `boxes / scores / labels`, którą zbudowałeś powyżej.
 
-## Wyślij to
+## Co dalej
 
-Ta lekcja daje:
+Ta lekcja tworzy:
 
-- `outputs/prompt-detection-metric-reader.md` — podpowiedź, która zamienia wiersz `precision, recall, AP, mAP@0.5:0.95` w jednowierszową diagnozę i pojedynczy, najbardziej przydatny następny eksperyment.
-- `outputs/skill-anchor-designer.md` — umiejętność polegająca na tym, że na podstawie zbioru danych pól prawdy podstawowej oblicza k-średnie na `(w, h)` i zwraca zestawy kotwic według poziomu FPN plus statystyki pokrycia potrzebne do wybrania właściwej liczby kotwic.
+- `outputs/prompt-detection-metric-reader.md` — prompt, który zamienia wiersz `precision, recall, AP, mAP@0.5:0.95` w jednoliniową diagnozę i najbardziej przydatny kolejny eksperyment.
+- `outputs/skill-anchor-designer.md` — skill, który dla danego zbioru ramek ground-truth uruchamia k-means na `(w, h)` i zwraca zestawy kotwic dla poszczególnych poziomów FPN wraz ze statystykami pokrycia potrzebnymi do wyboru właściwej liczby kotwic.
 
 ## Ćwiczenia
 
-1. **(Łatwe)** Zaimplementuj `box_iou` i uruchom go względem `torchvision.ops.box_iou` na 1000 losowych parach pudełek. Sprawdź, czy maksymalna różnica bezwzględna jest poniżej `1e-6`.
-2. **(Średni)** Przenieś `yolo_loss` do wersji, która wykorzystuje utratę skrzynek `CIoU` zamiast MSE. Pokaż na syntetycznym zestawie danych składającym się ze 100 obrazów, że CIoU osiąga lepszy końcowy mAP@0,5:0,95 niż MSE w tej samej liczbie epok.
-3. **(Trudne)** Zaimplementuj wnioskowanie wieloskalowe: przeprowadź ten sam obraz w trzech rozdzielczościach przez model, połącz przewidywania pudełkowe i na koniec uruchom pojedynczy NMS. Zmierz wzrost mAP w porównaniu z wnioskowaniem w pojedynczej skali na odrzuconym zestawie.
+1. **(Łatwe)** Zaimplementuj `box_iou` i porównaj wynik z `torchvision.ops.box_iou` na 1000 losowych par ramek. Sprawdź, czy maksymalna różnica absolutna jest mniejsza niż `1e-6`.
+2. **(Średnie)** Przepisz `yolo_loss` na wersję, która używa straty `CIoU` dla ramek zamiast MSE. Pokaż na syntetycznym zbiorze danych liczącym 100 obrazów, że CIoU zbiega do lepszego końcowego mAP@0.5:0.95 niż MSE w tej samej liczbie epok.
+3. **(Trudne)** Zaimplementuj inferencję wieloskalową: przepuść ten sam obraz przez model w trzech rozdzielczościach, połącz (union) predykcje ramek i wykonaj jedno NMS na końcu. Zmierz przyrost mAP względem inferencji jednoskalowej na zbiorze walidacyjnym.
 
 ## Kluczowe terminy
 
-| Termin | Co ludzie mówią | Co to właściwie oznacza |
+| Termin | Co mówią ludzie | Co to faktycznie znaczy |
 |------|----------------|----------------------|
-| Kotwica | „Pudełko przed” | Wstępnie zdefiniowany kształt ramki w każdej komórce siatki, na podstawie którego sieć przewiduje delty zamiast współrzędnych bezwzględnych |
-| IoU | „Nakładanie się” | Przecięcie przez połączenie dwóch pudełek; uniwersalna miara podobieństwa w wykrywaniu |
-| NMS | „Deduplikuj” | Zachłanny algorytm, który utrzymuje przewidywania o najwyższych wynikach i usuwa nakładające się prognozy powyżej progu |
-| Obiektywizm | „Czy coś tu jest” | Na kotwicę, skalar na komórkę przewidujący, czy obiekt jest wyśrodkowany w tej komórce |
-| Krok siatki | „Współczynnik próbkowania” | Piksele na komórkę siatki; wejście o rozdzielczości 416 pikseli z głowicą o 13 siatkach ma krok 32 |
-| MAPA | „Średnia średnia precyzja” | Średnia powierzchni pod krzywą precyzji przypomnienia, uśredniona dla klas i (w przypadku COCO) progów IoU |
-| AP@0,5 | „PASCAL VOC AP” | Średnia precyzja przy progu IoU 0,5; łagodna wersja metryki |
-| mAP@0,5:0,95 | „COCO AP” | Średnia powyżej progów IoU 0,5...0,95, krok 0,05; wersja ścisła i aktualny standard społeczności |
+| Anchor (kotwica) | "Priorytet ramki" | Wstępnie zdefiniowany kształt ramki w każdej komórce siatki, z którego sieć przewiduje delty zamiast współrzędnych absolutnych |
+| IoU | "Nakładanie się" | Intersection-over-union dwóch ramek; uniwersalna miara podobieństwa w detekcji |
+| NMS | "Deduplikacja" | Zachłanny algorytm, który zachowuje predykcje o najwyższym wyniku i usuwa nakładające się powyżej progu |
+| Objectness | "Czy tu coś jest" | Skalar dla każdej kotwicy w każdej komórce, przewidujący, czy w tej komórce znajduje się środek obiektu |
+| Grid stride (krok siatki) | "Współczynnik downsamplingu" | Liczba pikseli na komórkę siatki; wejście 416 px z głowicą o siatce 13 ma stride 32 |
+| mAP | "Mean average precision" | Średnia z powierzchni pod krzywą precision-recall, uśredniona po klasach i (dla COCO) progach IoU |
+| AP@0.5 | "PASCAL VOC AP" | Average precision przy progu IoU 0.5; łagodniejsza wersja metryki |
+| mAP@0.5:0.95 | "COCO AP" | Średnia po progach IoU 0.5..0.95 z krokiem 0.05; rygorystyczna wersja i aktualny standard społeczności |
 
-## Dalsze czytanie
+## Dalsza lektura
 
-- [YOLOv1: You Only Look Once (Redmon et al., 2016)](https://arxiv.org/abs/1506.02640) — dokument założycielski; od tego czasu każde YOLO jest udoskonaleniem tej struktury
-- [YOLOv3 (Redmon & Farhadi, 2018)](https://arxiv.org/abs/1804.02767) — artykuł, w którym wprowadzono wieloskalowe głowice w stylu FPN; nadal najbardziej przejrzysty schemat
-- [Dokumentacja Ultralytics YOLOv8](https://docs.ultralytics.com) — aktualne odniesienie do produkcji; obejmuje formaty zbiorów danych, rozszerzenia, receptury szkoleniowe
-– [Ilustrowany przewodnik po wykrywaniu obiektów (Jonathan Hui)](https://jonathan-hui.medium.com/object-detection-series-24d03a12f904) — najlepsza wycieczka po zoo z pełnym detektorem w prostym języku angielskim; bezcenne dla zrozumienia powiązań DETR, RetinaNet, FCOS i YOLO
+- [YOLOv1: You Only Look Once (Redmon i in., 2016)](https://arxiv.org/abs/1506.02640) — artykuł założycielski; każdy YOLO od tego czasu jest udoskonaleniem tej struktury
+- [YOLOv3 (Redmon i Farhadi, 2018)](https://arxiv.org/abs/1804.02767) — artykuł, który wprowadził wieloskalowe głowice w stylu FPN; wciąż najbardziej przejrzysty diagram
+- [Dokumentacja Ultralytics YOLOv8](https://docs.ultralytics.com) — aktualne odniesienie produkcyjne; obejmuje formaty zbiorów danych, augmentacje, przepisy treningowe
+- [The Illustrated Guide to Object Detection (Jonathan Hui)](https://jonathan-hui.medium.com/object-detection-series-24d03a12f904) — najlepszy przegląd całego zoo detektorów w prostym języku; bezcenny do zrozumienia, jak DETR, RetinaNet, FCOS i YOLO odnoszą się do siebie
